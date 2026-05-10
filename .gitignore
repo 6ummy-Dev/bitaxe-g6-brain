@@ -1,0 +1,7 @@
+build/
+sdkconfig*
+**/.DS_Store
+*.o
+*.a
+*.bin
+*.elf

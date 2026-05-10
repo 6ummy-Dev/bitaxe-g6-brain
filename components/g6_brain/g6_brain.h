@@ -2,12 +2,17 @@
 
 #include "esp_err.h"
 
-#define G6_BRAIN_VERSION "1.8.0"
+#define G6_BRAIN_VERSION "1.8.5"
+
+#define G6_PARAMS 6
+#define G6_MAX_TEMP_C 70.0f
+#define G6_MAX_VOLTAGE_MV 1350.0f
 
 typedef struct {
-    float theta[6];           // [a, b, c, d, e, g] for HR = a*f² + b*v² + c*f*v + d*f + e*v + g
-    float P[6][6];            // Covariance matrix
-    float lambda;             // Forgetting factor
+    float theta[G6_PARAMS];           // [a, b, c, d, e, g] for HR = a*f² + b*v² + c*f*v + d*f + e*v + g
+    float P[G6_PARAMS][G6_PARAMS];    // Covariance matrix
+    float lambda;                     // Forgetting factor
+    float ridge_epsilon;              // Ridge regularization
     float best_f, best_v;
     float best_score;
     float model_quality;
@@ -36,3 +41,14 @@ uint32_t g6_brain_get_recommended_nonce_start(G6BrainState *brain);
 uint32_t g6_brain_get_recommended_nonce_range(G6BrainState *brain);
 
 void g6_brain_predict_thermal_rise(G6BrainState *brain, float hr, float power, float *rise_c);
+
+// Safety integration (new in v1.8.5)
+typedef enum {
+    G6_SAFETY_OK,
+    G6_SAFETY_VOLTAGE_HIGH,
+    G6_SAFETY_TEMP_HIGH,
+    G6_SAFETY_DIVERGENCE
+} g6_safety_status_t;
+
+// Safety hook
+void g6_brain_apply_safety_clamps(G6BrainState *brain, float *f, float *v);

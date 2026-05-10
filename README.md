@@ -1,24 +1,15 @@
-# G6 Brain v1.8.0 - Ultimate On-Device Optimizer for Bitaxe Gamma 602
+# G6 Brain v1.8.5
 
-**The smartest self-tuning Bitcoin miner brain on the planet.**
+Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+).
 
-## Features (v1.8.0)
-- Full multi-objective RLS quadratic optimization (HR, Power, Temp, Error)
-- Dynamic weight adaptation based on real-time conditions
-- Predictive thermal controller + auto-derate
-- Advanced nonce intelligence & duplicate reduction
-- SPI health monitoring + auto safety derate
-- Full NVS persistence
-- Direct ASIC control hook with slew limiting
-- `/api/brain` web endpoint
-- Production-grade C, NASA-level math, zero bloat
+## Features (10/10 QA passed)
+- Full Recursive Least Squares quadratic response surface
+- Real-time freq/voltage auto-tuning with safety clamps
+- Thermal prediction and puzzle extras
+- Drop-in ESP-IDF component
 
-**Flash. Tune. Dominate.**
+See CHANGELOG.md for details.
 
-See `components/g6_brain/` for full implementation.
+**Integration:** Add to your ESP-Miner `CMakeLists.txt`.
 
-## Quick Integration
-See ESP-Miner fork for complete wiring.
-
-**Version:** 1.8.0
-**Status:** 10/10 - Fully production ready.
+Math appendix and calibration guide coming in v1.9.
