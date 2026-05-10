@@ -3,22 +3,23 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "esp_err.h"
 
-#define G6_BRAIN_VERSION "1.5.5"
-#define G6_PARAMS 6  // HR(f,v) = a*f² + b*v² + c*f*v + d*f + e*v + g
+#define G6_BRAIN_VERSION "1.6.0"
+#define G6_PARAMS 6
 
 typedef struct {
-    float theta[G6_PARAMS];      // RLS coefficients [a, b, c, d, e, g]
-    float P[G6_PARAMS][G6_PARAMS]; // covariance inverse (uncertainty matrix)
-    float lambda;                // forgetting factor (0.97 typical)
-    float best_f, best_v;        // best observed operating point
-    float best_hr, best_eff;     // best hashrate & efficiency (TH/s / W)
+    float theta[G6_PARAMS];
+    float P[G6_PARAMS][G6_PARAMS];
+    float lambda;
+    float best_f, best_v;
+    float best_hr, best_eff;
     uint32_t update_count;
     bool auto_tune_enabled;
-    float max_temp_c;            // hard safety limit
-    float max_error_pct;         // max acceptable error rate
-    float min_improvement_pct;   // min % predicted gain to justify retune
-    float model_quality;         // 0-1, higher = more confident in fit
+    float max_temp_c;
+    float max_error_pct;
+    float min_improvement_pct;
+    float model_quality;
 } G6BrainState;
 
 void g6_brain_init(G6BrainState *brain);
@@ -26,5 +27,9 @@ void g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths,
 bool g6_brain_get_optimal(const G6BrainState *brain, float *out_f, float *out_v, float *out_pred_hr);
 void g6_brain_auto_step(G6BrainState *brain, float current_f, float current_v);
 void g6_brain_reset(G6BrainState *brain);
+
+// Persistence
+esp_err_t g6_brain_save_to_nvs(const G6BrainState *brain);
+esp_err_t g6_brain_load_from_nvs(G6BrainState *brain);
 
 #endif
