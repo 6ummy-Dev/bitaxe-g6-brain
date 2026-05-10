@@ -1,9 +1,9 @@
-// g6_brain.c - 1.8.5 revised PRODUCTION CONSOLIDATED CODE
+// g6_brain.c - v1.0 Beta PRODUCTION CONSOLIDATED CODE
 // All Phase 1 (RLS, PID, Safety) + Phase 2 (I2C Guardian, Fixed-Point, Zero-Copy, DFS, P-VUS, NVS wear-leveling) integrated
-// + Critical fixes applied for 1.8.5: RLS PSD safeguard + denom guard, cold-start guard, explicit STOP in I2C recovery,
+// + Critical fixes applied for v1.0 Beta: RLS PSD safeguard + denom guard, cold-start guard, explicit STOP in I2C recovery,
 //   NVS error handling, PID anti-windup, NER tracking from err_pct (P-VUS now functional), I2C auto-watchdog removed (was triggering every 30s - now manual API only),
-//   telemetry integration prep in main, slew limits, model stability
-// Bold truth: previous v1.0 had broken watchdog that would spam bus resets; now hardened for real 72h+ uptime on Gamma/Bitaxe hardware.
+//   telemetry integration prep in main, slew limits, model stability, safety integration
+// Bold truth: previous versions had broken watchdog that would spam bus resets; now hardened for real 72h+ uptime on Gamma/Bitaxe hardware.
 
 #include "g6_brain.h"
 #include "esp_log.h"
@@ -13,6 +13,7 @@
 #include "string.h"
 #include "math.h"
 #include "esp_rom/ets_sys.h"  // Added for ets_delay_us
+#include "g6_safety.h"  // Added for safety checks
 
 static const char *TAG = "g6_brain";
 
@@ -65,7 +66,7 @@ void g6_brain_i2c_guardian_recover(i2c_port_t port) {
     gpio_set_level(GPIO_NUM_SDA, 1);
     i2c_driver_delete(port);
     i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
-    // TODO for 1.8.5 next: re-init with original 400kHz config from i2c_bitaxe_init() to avoid default params breaking sensors
+    // TODO for v1.0 Beta: re-init with original 400kHz config from i2c_bitaxe_init() to avoid default params breaking sensors
 }
 
 // Predictive PID with feed-forward and strong derivative for thermal sawtoothing prevention
@@ -88,7 +89,7 @@ float g6_brain_pid_compute(G6BrainState *brain, float current_temp, float target
 void g6_brain_smart_dfs(G6BrainState *brain, float current_temp) {
     if (current_temp > brain->temp_ceiling) {
         ESP_LOGI(TAG, "Smart DFS: temp %.1f > %.1fC, throttling freq by %d MHz", current_temp, brain->temp_ceiling, brain->dfs_step_mhz);
-        // In real integration (1.8.5): call asic_set_frequency(current_f - brain->dfs_step_mhz) with mutex if needed
+        // In real integration (v1.0 Beta): call asic_set_frequency(current_f - brain->dfs_step_mhz) with mutex if needed
     }
 }
 
@@ -139,7 +140,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     brain->update_count = 0;
     brain->last_i2c_transaction = esp_timer_get_time() / 1000;  // init to now (prevents spurious first trigger)
     for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) brain->P[i][j] = (i==j ? 1000.0f : 0.0f);
-    ESP_LOGI(TAG, "G6 Brain %s initialized - RLS + PID + I2C Guardian + P-VUS + DFS + Fixed-Point + NVS wear-leveling active (1.8.5 revised)", G6_BRAIN_VERSION);
+    ESP_LOGI(TAG, "G6 Brain %s initialized - RLS + PID + I2C Guardian + P-VUS + DFS + Fixed-Point + NVS wear-leveling active (v1.0 Beta)", G6_BRAIN_VERSION);
     return ESP_OK;
 }
 
@@ -163,6 +164,11 @@ void g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths,
     float fan = g6_brain_pid_compute(brain, temp_c, 65.0f);
     g6_brain_smart_dfs(brain, temp_c);
     g6_brain_pvus_check(brain, v_mv);
+    // Safety integration for v1.0 Beta validity
+    g6_safety_status_t safety = g6_safety_check(brain, f_mhz, v_mv, temp_c);
+    if (safety != G6_SAFETY_OK) {
+        ESP_LOGW(TAG, "Safety alert: %d", safety);
+    }
     if (brain->nvs_write_count % 100 == 0) g6_brain_nvs_log(brain);
     brain->total_hashrate += (uint64_t)hr_ths;
 
@@ -184,7 +190,7 @@ void g6_brain_auto_step(G6BrainState *brain, float current_f, float current_v) {
     // Slew rate limits (10MHz / 50mV per step) to prevent stress on ASIC/PSU
     float df = fminf(fmaxf(opt_f - current_f, -10.0f), 10.0f);
     float dv = fminf(fmaxf(opt_v - current_v, -50.0f), 50.0f);
-    // Apply via asic_set_frequency/current_v in integration (add GLOBAL_STATE mutex/queue in 1.8.5 full merge)
+    // Apply via asic_set_frequency/current_v in integration (add GLOBAL_STATE mutex/queue in v1.0 Beta full merge)
     ESP_LOGD(TAG, "Auto-step: f=%.0f->%.0f, v=%.0f->%.0f mV | pred_hr=%.0f", current_f, current_f + df, current_v, current_v + dv, pred);
 }
 
@@ -198,7 +204,7 @@ void g6_brain_get_optimal(G6BrainState *brain, float *opt_f, float *opt_v, float
     } else {
         *opt_f = 650.0f; *opt_v = 1200.0f;
     }
-    *pred_hr = 0; // TODO 1.8.5: compute full quadratic prediction a*opt_f^2 + b*opt_v^2 + c*opt_f*opt_v + d*opt_f + e*opt_v + g for honest UI
+    *pred_hr = 0; // TODO v1.0 Beta: compute full quadratic prediction a*opt_f^2 + b*opt_v^2 + c*opt_f*opt_v + d*opt_f + e*opt_v + g for honest UI
 }
 
 // Puzzle extras run (nonce optimize, duplicate predict)
