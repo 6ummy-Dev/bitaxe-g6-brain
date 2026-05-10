@@ -204,7 +204,8 @@ void g6_brain_get_optimal(G6BrainState *brain, float *opt_f, float *opt_v, float
     } else {
         *opt_f = 650.0f; *opt_v = 1200.0f;
     }
-    *pred_hr = 0; // TODO v1.0 Beta: compute full quadratic prediction a*opt_f^2 + b*opt_v^2 + c*opt_f*opt_v + d*opt_f + e*opt_v + g for honest UI
+    float g = brain->theta[5];
+    *pred_hr = a*(*opt_f)*(*opt_f) + b*(*opt_v)*(*opt_v) + c*(*opt_f)*(*opt_v) + d*(*opt_f) + e*(*opt_v) + g; // full quadratic prediction for honest UI - v1.0 Beta code fix C
 }
 
 // Puzzle extras run (nonce optimize, duplicate predict)

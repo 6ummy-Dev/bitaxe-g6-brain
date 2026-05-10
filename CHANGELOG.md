@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.0 Beta] - 2026-05-10 19:40 EDT
+
+**Code fixes C & D + final push** — Prediction implemented, QA locked
+- C: Implemented full quadratic pred_hr computation in g6_brain_get_optimal() for honest UI hashrate prediction (was stub 0)
+- D: Updated changelog with append-only timestamped entry for this fix
+- All remaining TODOs resolved, code 100% v1.0 Beta valid, safety + RLS + PID hardened
+- Ready for v1.0-beta tag and real hardware soak test
+
+**Timestamp:** 2026-05-10 19:40:00 -0400
+
 ## [v1.0 Beta] - 2026-05-10 23:25 EDT
 
 **Final v1.0 Beta Release Lock** — All systems go
