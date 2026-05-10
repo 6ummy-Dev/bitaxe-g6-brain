@@ -6,53 +6,41 @@
 #include "driver/i2c.h"
 #include "nvs.h"
 
-#define G6_BRAIN_VERSION "1.8.5 revised"
+#define G6_BRAIN_VERSION "v1.0 Beta"
 
-// Consolidated G6BrainState with all features from Phase 1 (RLS, PID, safety) + Phase 2 (I2C Guardian, Fixed-Point, Zero-Copy Stratum, Smart-Throttling DFS, P-VUS, NVS wear-leveling, Atomic counters, DMA UART, Dual Stratum)
-// Revised for 1.8.5: fixed I2C watchdog logic, NVS safety, NER tracking from err_pct, anti-windup in PID, denom guard in RLS, telemetry prep
+// Consolidated G6BrainState ... (v1.0 Beta - thread safety prep + Kconfig integration)
 typedef struct {
-    float theta[6];           // RLS quadratic coefficients for HR(f,v)
-    float P[6][6];            // Covariance matrix
-    float lambda;             // RLS forgetting factor
-    float ridge_epsilon;      // Ridge regularization
+    float theta[6];
+    float P[6][6];
+    float lambda;
+    float ridge_epsilon;
     float best_f, best_v;
     float best_score;
     float model_quality;
     bool auto_tune_enabled;
-    // Multi-objective weights
     float lambda_power, lambda_temp, lambda_error;
-    // Puzzle solving helpers
     uint32_t recommended_nonce_start;
     uint32_t recommended_nonce_range;
-    // Thermal PID + derivative
     float Kp, Ki, Kd;
     float last_temp;
     float integral;
     float derivative;
-    // I2C Guardian
     uint32_t i2c_timeout_ms;
     uint32_t last_i2c_transaction;
-    // P-VUS NER tracking
     float ner_threshold;
     uint32_t z_nonce_count;
     uint32_t total_nonce_count;
-    // Smart DFS
     float temp_ceiling;
     uint32_t dfs_step_mhz;
-    // NVS wear-leveling
     uint32_t nvs_write_count;
-    // Atomic counters
     uint64_t total_shares;
     uint64_t total_hashrate;
-    // Safety
     float max_temp_c;
     float max_voltage_mv;
-    // Cold-start guard for RLS stability (new in this update)
     bool cold_start;
     int update_count;
 } G6BrainState;
 
-// All function prototypes
 esp_err_t g6_brain_init(G6BrainState *brain);
 void g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct);
 void g6_brain_auto_step(G6BrainState *brain, float current_f, float current_v);
