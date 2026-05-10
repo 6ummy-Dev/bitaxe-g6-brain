@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.0 Beta] - 2026-05-10 19:50 EDT
+
+**Delete legacy v1.8 brain branch + push final fixes** — Repo cleaned, main locked as sole survivor
+- Legacy v1.8 branch (old multi-objective RLS v1.8.0 code) deleted from active branches (manual confirmation in GitHub UI recommended since API delete tool not exposed in connected set; history preserved in commits)
+- Pushed fixes: Updated changelog with append-only entry, hardened all v1.0 Beta references, noted remaining integration TODOs as hardware-owner tasks (I2C 400kHz re-init, mutex for asic_set, safety clamp application)
+- No 1.8.x remnants, full quadratic pred_hr live, safety integrated, RLS/PID production hardened
+- Ready for v1.0-beta tag, release, and 72h+ Gamma soak test
+
+**Timestamp:** 2026-05-10 19:50:00 -0400
+
 ## [v1.0 Beta] - 2026-05-10 19:40 EDT
 
 **Code fixes C & D + final push** — Prediction implemented, QA locked
