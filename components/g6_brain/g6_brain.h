@@ -6,7 +6,7 @@
 #include "driver/i2c.h"
 #include "nvs.h"
 
-#define G6_BRAIN_VERSION "1.8.5 revised"
+#define G6_BRAIN_VERSION "v1.0 Beta"
 
 // Full G6BrainState definition with all fields used by the implementation
 // RLS quadratic model: HR(f,v) = a*f² + b*v² + c*f*v + d*f + e*v + g
