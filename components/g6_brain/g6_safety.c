@@ -7,7 +7,7 @@ static const char *TAG = "g6_safety";
 g6_safety_status_t g6_safety_check(const G6BrainState *brain, float f, float v, float temp_c) {
     if (v > 1350.0f) return G6_SAFETY_VOLTAGE_HIGH;
     if (temp_c > 80.0f) return G6_SAFETY_TEMP_HIGH;
-    if (brain->ner_threshold > 0.01f) return G6_SAFETY_DIVERGENCE;
+    if (brain->model_quality < 0.5f) return G6_SAFETY_DIVERGENCE;
     return G6_SAFETY_OK;
 }
 
