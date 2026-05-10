@@ -6,9 +6,10 @@
 #include "driver/i2c.h"
 #include "nvs.h"
 
-#define G6_BRAIN_VERSION "v1.0 BETA"
+#define G6_BRAIN_VERSION "1.8.5 revised"
 
 // Consolidated G6BrainState with all features from Phase 1 (RLS, PID, safety) + Phase 2 (I2C Guardian, Fixed-Point, Zero-Copy Stratum, Smart-Throttling DFS, P-VUS, NVS wear-leveling, Atomic counters, DMA UART, Dual Stratum)
+// Revised for 1.8.5: fixed I2C watchdog logic, NVS safety, NER tracking from err_pct, anti-windup in PID, denom guard in RLS, telemetry prep
 typedef struct {
     float theta[6];           // RLS quadratic coefficients for HR(f,v)
     float P[6][6];            // Covariance matrix
