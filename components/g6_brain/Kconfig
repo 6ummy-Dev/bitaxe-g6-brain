@@ -1,5 +1,27 @@
-menu "G6 Brain Configuration"
-    config G6_BRAIN_VERSION
-        string
-        default "v1.0 BETA"
+menu "G6 Brain Configuration (v1.0 BETA)"
+    config G6_RLS_LAMBDA
+        float "RLS forgetting factor"
+        default 0.98
+        range 0.9 0.999
+    config G6_TEMP_CEILING
+        int "Smart DFS thermal ceiling (C)"
+        default 70
+    config G6_DFS_STEP
+        int "DFS frequency step (MHz)"
+        default 25
+    config G6_NER_THRESHOLD
+        float "P-VUS NER threshold"
+        default 0.001
+    config G6_I2C_TIMEOUT
+        int "I2C watchdog timeout (ms)"
+        default 10
+    config G6_KP
+        float "PID Kp"
+        default 2.0
+    config G6_KI
+        float "PID Ki"
+        default 0.1
+    config G6_KD
+        float "PID Kd"
+        default 0.5
 endmenu
