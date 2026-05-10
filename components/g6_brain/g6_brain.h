@@ -6,6 +6,86 @@
 #include "driver/i2c.h"
 #include "nvs.h"
 
-#define G6_BRAIN_VERSION "v1.0 BETA"
+#define G6_BRAIN_VERSION "1.8.5 revised"
 
-// ... (rest of the file same, only version changed for this push)
+// Full G6BrainState definition with all fields used by the implementation
+// RLS quadratic model: HR(f,v) = a*f² + b*v² + c*f*v + d*f + e*v + g
+// Optimized for ESP32 Bitaxe Gamma 602+ with safety, PID thermal, P-VUS, DFS, I2C guardian
+
+typedef struct {
+    float theta[6];           // RLS quadratic coefficients for HR(f,v)
+    float P[6][6];            // Covariance matrix
+    float lambda;             // RLS forgetting factor
+    float ridge_epsilon;      // Ridge regularization
+
+    float best_f, best_v;     // Last computed optimal point
+    float best_score;
+    float model_quality;
+    bool auto_tune_enabled;
+
+    // Multi-objective weights (reserved for future)
+    float lambda_power, lambda_temp, lambda_error;
+
+    // Puzzle solving helpers
+    uint32_t recommended_nonce_start;
+    uint32_t recommended_nonce_range;
+
+    // Thermal PID + derivative
+    float Kp, Ki, Kd;
+    float last_temp;
+    float integral;
+    float derivative;
+
+    // I2C Guardian
+    uint32_t i2c_timeout_ms;
+    uint32_t last_i2c_transaction;
+
+    // P-VUS NER tracking
+    float ner_threshold;
+    uint32_t z_nonce_count;
+    uint32_t total_nonce_count;
+
+    // Smart DFS
+    float temp_ceiling;
+    uint32_t dfs_step_mhz;
+
+    // NVS wear-leveling
+    uint32_t nvs_write_count;
+
+    // Atomic counters
+    uint64_t total_shares;
+    uint64_t total_hashrate;
+
+    // Safety
+    float max_temp_c;
+    float max_voltage_mv;
+
+    // Cold-start guard for RLS stability
+    bool cold_start;
+    int update_count;
+} G6BrainState;
+
+// Core API
+esp_err_t g6_brain_init(G6BrainState *brain);
+void g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct);
+void g6_brain_auto_step(G6BrainState *brain, float current_f, float current_v);
+void g6_brain_get_optimal(G6BrainState *brain, float *opt_f, float *opt_v, float *pred_hr);
+
+// Helpers
+void g6_brain_print_full_status(const G6BrainState *brain);
+uint32_t g6_brain_get_recommended_nonce_start(G6BrainState *brain);
+uint32_t g6_brain_get_recommended_nonce_range(G6BrainState *brain);
+void g6_brain_predict_thermal_rise(G6BrainState *brain, float hr, float power, float *rise_c);
+float g6_brain_pid_compute(G6BrainState *brain, float current_temp, float target_temp);
+
+// I2C Guardian (call manually from i2c_bitaxe wrapper on real hang detection)
+void g6_brain_i2c_guardian_recover(i2c_port_t port);
+
+// Puzzle extras
+void g6_puzzle_extras_run(G6BrainState *brain);
+
+// Fixed-point efficiency helper (zero-drift W/TH reporting)
+void g6_brain_fixed_point_efficiency(uint64_t power_mw, uint64_t hashrate_ghs, char *output);
+
+// NVS log helper
+void g6_brain_nvs_log(G6BrainState *brain);
