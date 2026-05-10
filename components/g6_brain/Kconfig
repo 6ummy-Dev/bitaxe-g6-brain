@@ -1,0 +1,37 @@
+menu "G6 Brain Configuration"
+
+    config G6_BRAIN_ENABLED
+        bool "Enable G6 RLS Brain"
+        default y
+
+    config G6_RLS_LAMBDA
+        float "RLS Forgetting Factor (λ)"
+        range 0.85 0.999
+        default 0.975
+
+    config G6_RIDGE_EPSILON
+        float "Ridge regularization ε"
+        range 0.00000001 0.001
+        default 0.000001
+
+    config G6_MAX_FREQ_MHZ
+        int "Hard max frequency (MHz) - Gamma 602"
+        range 400 1100
+        default 850
+
+    config G6_MAX_VOLTAGE_MV
+        int "Hard max core voltage (mV)"
+        range 1100 1350
+        default 1300
+
+    config G6_MAX_ASIC_TEMP_C
+        int "Max ASIC temp before derating (°C)"
+        range 45 80
+        default 68
+
+    config G6_UPDATE_HZ
+        int "Update frequency (Hz)"
+        range 1 5
+        default 1
+
+endmenu
