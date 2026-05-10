@@ -1,15 +1,9 @@
-# G6 Brain v1.8.5
+# G6 Brain v1.0 BETA
 
-Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+).
+Advanced RLS-based self-optimizing brain for Bitaxe Gamma miners.
 
-## Features (10/10 QA passed)
-- Full Recursive Least Squares quadratic response surface
-- Real-time freq/voltage auto-tuning with safety clamps
-- Thermal prediction and puzzle extras
-- Drop-in ESP-IDF component
+Full implementation with stable RLS, quadratic solver, safety, and puzzle extras.
 
-See CHANGELOG.md for details.
+See components/g6_brain/ for source.
 
-**Integration:** Add to your ESP-Miner `CMakeLists.txt`.
-
-Math appendix and calibration guide coming in v1.9.
+Status: BETA - Ready for testing.
