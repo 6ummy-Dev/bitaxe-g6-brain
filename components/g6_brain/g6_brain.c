@@ -12,6 +12,7 @@
 #include "nvs.h"
 #include "string.h"
 #include "math.h"
+#include "esp_rom/ets_sys.h"  // Added for ets_delay_us
 
 static const char *TAG = "g6_brain";
 
@@ -197,7 +198,7 @@ void g6_brain_get_optimal(G6BrainState *brain, float *opt_f, float *opt_v, float
     } else {
         *opt_f = 650.0f; *opt_v = 1200.0f;
     }
-    *pred_hr = 0; // TODO 1.8.5: compute full quadratic prediction a*opt_f^2 + b*opt_v^2 + c*opt_f*opt_v + d*opt_f + e*opt_v + f for honest UI
+    *pred_hr = 0; // TODO 1.8.5: compute full quadratic prediction a*opt_f^2 + b*opt_v^2 + c*opt_f*opt_v + d*opt_f + e*opt_v + g for honest UI
 }
 
 // Puzzle extras run (nonce optimize, duplicate predict)
