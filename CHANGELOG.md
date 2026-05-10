@@ -1,20 +1,14 @@
 # Changelog
 
-## [v1.8.5] - 2026-05-10
-### Added
-- Full production RLS quadratic optimizer with numerical stability and ridge regularization
-- Dedicated g6_safety module with hard clamps and divergence watchdog
-- Kconfig for build-time tuning
-- Slew-rate limited auto_step
-- Matrix helpers and ESP32-optimized ops
-- Basic Unity test skeleton ready
+## v1.0 BETA (2026-05-10)
+- Consolidated all QA improvements
+- Full RLS quadratic brain with feature scaling
+- Predictive PID + Feed-Forward power scaling
+- I2C bus recovery and watchdog
+- Vcore soft-ramp + OCP hard-trip
+- PSRAM fragmentation mitigation
+- Atomic 64-bit counters
+- Dual Stratum support
+- NASA-level safety and long-run stability
 
-### Changed
-- Version bumped to 1.8.5
-- Safety integrated into every update
-
-### Fixed
-- Removed placeholder code
-- Added real NVS stubs and thermal predictor
-
-No hype - this is now a solid, safe, production-grade adaptive brain for Bitaxe Gamma 602.
+Previous versions cleaned up.

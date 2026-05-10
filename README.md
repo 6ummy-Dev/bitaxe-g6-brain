@@ -1,9 +1,14 @@
-# G6 Brain v1.0 BETA
+# Bitaxe G6 Brain
 
-Advanced RLS-based self-optimizing brain for Bitaxe Gamma miners.
+**v1.0 BETA** — Production-grade adaptive control system for Bitaxe Gamma 602+ miners.
 
-Full implementation with stable RLS, quadratic solver, safety, and puzzle extras.
+Full Recursive Least Squares (RLS) quadratic response surface + Predictive PID thermals + I2C recovery + Vcore soft-ramp + long-run stability features.
 
-See components/g6_brain/ for source.
+## Features
+- RLS-based frequency/voltage optimization
+- Predictive thermal management with feed-forward
+- I2C bus recovery for EMI resilience
+- Atomic counters and PSRAM job pool for 72h+ uptime
+- Dual Stratum failover
 
-Status: BETA - Ready for testing.
+See CHANGELOG.md for full details.
