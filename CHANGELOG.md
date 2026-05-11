@@ -1,5 +1,31 @@
 # Changelog
 
+## [v1.0.0-beta.1] - 2026-05-11
+
+**Phase 1 Complete: RLS Core Hardening and BM1370 Optimization**
+
+Completed the first phase of systematic improvements to the Recursive Least Squares (RLS) implementation following the technical audits.
+
+**Key Changes:**
+- Implemented gradient-based Variable Forgetting Factor (VFF) to improve adaptation to thermal transients and long-term silicon changes.
+- Added trace-based covariance windup protection and persistence-of-excitation checks.
+- Introduced covariance matrix symmetrization and diagonal clamping after each RLS update to ensure numerical stability on the ESP32.
+- Added full sample quality state machine with configurable settle, measurement, validation, and update stages.
+- Added Hessian check on the analytical optimum solver with fallback to the last known safe operating point.
+- Changed the optimization objective from raw hashrate to efficiency-based scoring (J/GH).
+- Implemented fail-closed auto-apply logic with model quality, predicted gain, and maximum step-size constraints.
+- Added NVS-based silicon fingerprint storage and warm-start capability.
+- Tuned feature normalization, safe operating limits, and constants specifically for the BM1370 ASIC.
+- Improved overall code structure for better modularity and maintainability.
+
+**Files Modified:**
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/g6_brain.h`
+
+Phase 1 is now complete. All major stability, safety, and adaptation issues identified in the audits have been addressed.
+
+**Next Phase:** Phase 2 will focus on advanced telemetry validation, controlled exploration policy, and extended hardware soak testing.
+
 ## [v1.0 Beta] - 2026-05-11 (Full g6_brain.c + Component Finalization)
 
 - Updated `components/g6_brain/g6_brain.c` to full 243-line implementation (RLS quadratic optimizer + all QA safety functions + stochastic nonce)
