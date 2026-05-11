@@ -203,31 +203,3 @@ MIT License — see [LICENSE](LICENSE) file.
 **G6 Brain v1.0 Beta** — *The brain your Bitaxe always wanted.*
 
 *Built with ❤️ and way too much math by 6ummy-Dev & Grok (xAI) • May 2026*
-
----
-
-## ⚠️ Current QA Status (v5 — May 2026)
-
-**Overall Score: 68/100** (5 audit rounds)
-
-**Top Open Risks (see full report):**
-- No automated tests for g6_brain logic (RLS, PID, safety paths)
-- Single 30s control loop (safety + optimization) — target: separate 2s watchdog task
-- `SPIRAM_IGNORE_NOTFOUND=y` still active in some configs (silent PSRAM failure risk)
-- NER acronym and P-VUS algorithm still need formal definition + benchmarks
-- Deployment pipeline (merge_bin_all.sh) has address-ordering bugs in upstream fork
-
-**Recent v6 Improvements (this push):**
-- Enhanced feed-forward with junction-temp estimation + hard 1200 mV software fuse
-- Strengthened I2C 9-clock Guardian + heartbeat at init
-- Clean LED/status indicator (modular, non-intrusive)
-- GLOSSARY.md defining all custom terms (NER, P-VUS, PD vs PSD, etc.)
-- AGENTS.md with explicit G6 Brain safety invariants for AI-assisted development
-- `components/g6_brain/test/` stub + placeholder Unity tests
-- Branch protection rule JSON ready for manual enable on `main`
-
-**Full Cumulative QA Report:** `docs/G6_Brain_QA_Report_v5.docx` (54 KB, professional formatting with color-coded severity, action plan, and tracker)
-
-**Path to v1.0:** 17 well-defined tasks. Top 7 (P1–P7) can be completed in <2 days and raise score to ~87/100. See report section 6 for prioritized list with effort estimates.
-
-**We are transparent about current limitations.** The architecture is sound and the developer is actively shipping fixes. Claims of "satellite-grade reliability" have been removed pending measured 72h+ soak data.
