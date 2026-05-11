@@ -2,24 +2,24 @@
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
-**Phase 1 Complete: Full RLS Hardening + All Auditor v3 Fixes**
+**Phase 1 Complete: Full RLS Hardening + All Auditor v3/v4 Fixes**
 
-Final polish of Phase 1 based on independent technical audit v3.
+Final polish of Phase 1 based on the latest independent technical audit.
 
 **Key Improvements:**
-- Fixed dead `limit_step` call (proper slew-rate limiting from previous to target setpoint)
+- Fixed dead `limit_step` call (proper slew-rate limiting from previous best to new optimal target)
 - `is_sample_valid` now respects configurable `MIN_SHARE_COUNT` from Kconfig
 - Bierman-Thornton U-D Factorization with collapse guard and periodic NVS save
 - Sample quality state machine with proper timeouts
 - Hessian-guarded optimum solver with negative-definite check
-- Efficiency (J/GH) objective + fail-closed logic
+- Efficiency (J/GH) objective with fail-closed logic
 - Functional safety stubs (thermal derate, voltage ripple, NER handling)
 - Clean modular architecture with no external safety component
 
 **Files Modified:**
 - `components/g6_brain/g6_brain.c`
 
-Phase 1 is now complete. The core RLS engine is numerically stable, safety-hardened, and ready for hardware testing.
+Phase 1 is now complete. The core RLS engine is numerically stable, safety-hardened, and ready for hardware testing next week.
 
 **Next Phase:** Phase 2 will focus on advanced telemetry, controlled exploration policy, PID integration, and extended soak testing.
 
