@@ -1,5 +1,14 @@
 # Changelog
-# Changelog
+
+## [v1.0 Beta] - 2026-05-11 (Full g6_brain.c + Component Finalization)
+
+- Updated `components/g6_brain/g6_brain.c` to full 243-line implementation (RLS quadratic optimizer + all QA safety functions + stochastic nonce)
+- Completed clean ESP-IDF component structure with no root-level duplicates
+- g6_brain.h, g6_safety.c/h, CMakeLists.txt, and Kconfig all synced
+- Added test stub folder for future validation
+- Repo is now a proper, reusable ESP-IDF component
+
+**Timestamp:** 2026-05-11 10:27 EDT
 
 ## [v1.0 Beta] - 2026-05-11 (Stochastic Nonce + RLS Core)
 
