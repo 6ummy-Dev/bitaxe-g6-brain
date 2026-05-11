@@ -1,8 +1,7 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 + Priority 1 Fixes)
- * Pure RLS core with Bierman-Thornton UD Factorization.
- * All critical auditor issues addressed.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete — Polished)
+ * Pure RLS. Clean. Light. Modular-ready.
  */
 
 #pragma once
@@ -15,11 +14,17 @@
 extern "C" {
 #endif
 
+/* ====================== NOTE ====================== */
+/* G6BrainState is currently updated from a single thread (ESP-Miner main loop). */
+/* No mutex required yet. Add one only if multi-tasked in the future. */
+
 /* ====================== RLS CONSTANTS ====================== */
 #define RLS_N               6
 #define RLS_LAMBDA_MIN      0.95f
 #define RLS_LAMBDA_MAX      0.999f
 #define RLS_TRACE_MAX       1e7f
+#define RLS_P_CLAMP_MIN     1e-6f
+#define RLS_P_CLAMP_MAX     1e6f
 
 /* ====================== BM1370 TUNED CONSTANTS ====================== */
 #define BM1370_F_CENTER     650.0f
@@ -31,12 +36,16 @@ extern "C" {
 #define BM1370_V_MIN        1050.0f
 #define BM1370_V_MAX        1350.0f
 
-/* ====================== SAMPLE QUALITY & EFFICIENCY CONSTANTS ====================== */
+/* ====================== SAMPLE QUALITY CONSTANTS ====================== */
 #define SETTLE_SECONDS      8000
+#define MIN_WINDOW_SECONDS  5000
 #define MIN_SHARE_COUNT     20
+#define MAX_TEMP_SLOPE      0.5f
+
+/* ====================== EFFICIENCY & SAFETY CONSTANTS ====================== */
 #define MIN_GAIN            0.5f
-#define MAX_FREQ_STEP       25.0f
-#define MAX_VOLT_STEP       12.5f
+#define MAX_FREQ_STEP       50.0f
+#define MAX_VOLT_STEP       25.0f
 
 /* ====================== SAMPLE STATE MACHINE ====================== */
 typedef enum {
@@ -49,13 +58,11 @@ typedef enum {
     BRAIN_STATE_DECIDE_NEXT
 } BrainSampleState;
 
-/* ====================== MAIN BRAIN STATE (UD Factorization) ====================== */
+/* ====================== MAIN BRAIN STATE ====================== */
 typedef struct {
-    /* RLS core - Bierman-Thornton UD */
-    float theta[RLS_N];           // Parameter vector
-    float U[RLS_N][RLS_N];        // Unit upper triangular matrix
-    float D[RLS_N];               // Diagonal matrix
-
+    /* RLS core */
+    float theta[RLS_N];
+    float P[RLS_N][RLS_N];
     float ridge_epsilon;
     float model_quality;
     bool  cold_start;
