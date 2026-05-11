@@ -50,7 +50,7 @@ The core RLS implementation meets the stability, safety, and modularity requirem
 
 **Next Phase (Phase 2):** Advanced telemetry buffering, controlled exploration policy, and extended soak testing.
 
-## [v1.0 Beta] - 2026-05-11
+## [v1.0.0-beta.0] - 2026-05-11
 
 **Major RLS Hardening**
 
@@ -60,7 +60,7 @@ The core RLS implementation meets the stability, safety, and modularity requirem
 - Added NVS-based per-chip warm-start (silicon fingerprint)
 - BM1370 tuning and safety limits applied
 
-## [v1.0 Beta] - 2026-05-10
+## [v1.0.0-beta.0] - 2026-05-10
 
 **Initial RLS Core and Safety Foundations**
 
