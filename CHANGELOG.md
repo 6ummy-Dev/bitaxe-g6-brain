@@ -2,28 +2,29 @@
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
-**Phase 1 Complete: RLS Core Hardening & Bierman-Thornton UD Factorization**
+**Phase 1 Complete: Full RLS Hardening + All Auditor Priority 1 & 2 Fixes**
 
-Completed the first major hardening phase of the G6 Brain RLS implementation based on independent technical audits.
+Completed the first major hardening phase of the G6 Brain RLS implementation.
 
 **Key Improvements:**
-- Corrected Bierman-Thornton U-D Factorization for covariance matrix updates (eliminates subtraction-induced numerical instability in single-precision floating-point)
-- Added gradient-based Variable Forgetting Factor (VFF)
-- Implemented trace-based covariance windup protection and persistence-of-excitation checks
-- Full sample quality state machine with settle, measurement, validation and update stages
-- Hessian-guarded analytical optimum solver with proper negative-definite check
-- Switched to efficiency-based objective (J/GH) with fail-closed auto-apply logic
-- Added NVS silicon fingerprinting with periodic save for warm-start capability per chip
-- BM1370-specific feature normalization, slew-rate limiting, and safe operating limits
-- Improved overall code modularity and maintainability
+- Bierman-Thornton U-D Factorization (corrected implementation, subtraction-free, guaranteed positive-definiteness)
+- Gradient-based Variable Forgetting Factor with online noise variance estimation (EWMA residual)
+- Trace-based covariance windup protection and persistence-of-excitation checks
+- Full sample quality state machine with configurable settle/measurement/validation stages
+- Hessian-guarded analytical optimum solver with proper negative-definite check (`quadratic_has_valid_maximum`)
+- Efficiency-based objective (J/GH) with fail-closed auto-apply logic
+- Slew-rate limiting on optimal setpoints
+- Minimal functional safety stubs (thermal scale, voltage ripple, error handling)
+- NVS silicon fingerprinting with periodic save for warm-start capability per chip
+- BM1370-specific normalization, safe limits, and clamps
 
 **Files Modified:**
 - `components/g6_brain/g6_brain.c`
 - `components/g6_brain/g6_brain.h`
 
-Phase 1 is now complete. The RLS core is production-hardened and numerically robust for long-term BM1370 operation.
+Phase 1 is now complete. The RLS core is numerically robust, safety-hardened, and ready for long-term BM1370 operation.
 
-**Next Phase:** Phase 2 will focus on advanced telemetry validation, controlled exploration policy, and extended hardware soak testing.
+**Next Phase:** Phase 2 will focus on advanced telemetry buffer, controlled exploration policy, and extended hardware soak testing.
 
 ## [v1.0 Beta] - 2026-05-11 (Full g6_brain.c + Component Finalization)
 
