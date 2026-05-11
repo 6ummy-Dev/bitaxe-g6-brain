@@ -72,12 +72,6 @@ Pull requests are welcome. Please:
 
 ---
 
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
 Built for the Bitaxe community with focus on mathematical correctness, reliability, and hardware safety.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
