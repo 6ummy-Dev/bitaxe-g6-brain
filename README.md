@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0 Beta** — Professional Adaptive RLS Control for Bitaxe ESP-Miner
+**v1.0 Beta** — Professional Adaptive RLS Control for Bitaxe ESP-Miner (BM1370)
 
 The G6 Brain is a high-performance Recursive Least Squares (RLS) optimizer that dynamically models the quadratic relationship between frequency, voltage, and hashrate in real time. It continuously learns the unique characteristics of your ASIC and selects the most efficient operating point while maintaining strict numerical stability and hardware safety constraints.
 
