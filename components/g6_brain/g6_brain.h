@@ -1,7 +1,7 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 COMPLETE — Beast RLS + BM1370 + Full Hardening)
- * Pure RLS. Clean. Light. Modular-ready. All audits addressed.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete)
+ * Pure RLS core. Clean. Light. Modular-ready.
  */
 
 #pragma once
@@ -34,10 +34,7 @@ extern "C" {
 
 /* ====================== SAMPLE QUALITY & EFFICIENCY CONSTANTS ====================== */
 #define SETTLE_SECONDS      8000
-#define MIN_WINDOW_SECONDS  5000
 #define MIN_SHARE_COUNT     20
-#define MAX_TEMP_SLOPE      0.5f
-
 #define MIN_GAIN            0.5f
 #define MAX_FREQ_STEP       50.0f
 #define MAX_VOLT_STEP       25.0f
