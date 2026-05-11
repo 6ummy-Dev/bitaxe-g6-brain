@@ -7,13 +7,13 @@
 Completed the first major hardening phase of the G6 Brain RLS implementation based on independent technical audits.
 
 **Key Improvements:**
-- Integrated Bierman-Thornton U-D Factorization for covariance matrix updates (eliminates subtraction-induced numerical instability in single-precision floating-point)
+- Corrected Bierman-Thornton U-D Factorization for covariance matrix updates (eliminates subtraction-induced numerical instability in single-precision floating-point)
 - Added gradient-based Variable Forgetting Factor (VFF)
 - Implemented trace-based covariance windup protection and persistence-of-excitation checks
 - Full sample quality state machine with settle, measurement, validation and update stages
-- Hessian-guarded analytical optimum solver with safe fallback
+- Hessian-guarded analytical optimum solver with proper negative-definite check
 - Switched to efficiency-based objective (J/GH) with fail-closed auto-apply logic
-- Added NVS silicon fingerprinting for warm-start capability per chip
+- Added NVS silicon fingerprinting with periodic save for warm-start capability per chip
 - BM1370-specific feature normalization, slew-rate limiting, and safe operating limits
 - Improved overall code modularity and maintainability
 
