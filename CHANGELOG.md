@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.0 Beta] - 2026-05-11 (Aerospace QA Hardening Push)
+
+**Senior QA Audit (aerospace electronics) fully incorporated**
+- Proactive ΔT/dt thermal frequency scaling (>2°C/s instant throttle)
+- Voltage ripple/undershoot detection + response (>5% variance throttle)
+- BM1366 non-blocking error auto +5mV tune (unhappy-path defense)
+- NVS wear-leveling via RTC RAM temp counters (flash lifecycle protection)
+- I2C guardian + READY pin WDT hooks + full ASIC re-init placeholders
+- 64-bit integer foundations + Kalman stub notes for hashrate smoothing
+- Triple-8 Test certification path documented in README
+- All changes native inside main brain files — full modularity preserved
+- g6_brain.c / g6_brain.h / README.md / Kconfig synced
+
+**Timestamp:** 2026-05-11 09:XX EDT
+
 ## [v1.0 Beta] - 2026-05-11 08:15 EDT
 
 **v6 Release: GLOSSARY + AGENTS invariants + PSRAM guard + test stub + LED indicator**
