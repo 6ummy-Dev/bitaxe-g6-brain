@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete)
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 + Bierman-Thornton UD Factorization)
  * Pure RLS core. Clean. Light. Modular-ready.
  */
 
@@ -19,8 +19,6 @@ extern "C" {
 #define RLS_LAMBDA_MIN      0.95f
 #define RLS_LAMBDA_MAX      0.999f
 #define RLS_TRACE_MAX       1e7f
-#define RLS_P_CLAMP_MIN     1e-6f
-#define RLS_P_CLAMP_MAX     1e6f
 
 /* ====================== BM1370 TUNED CONSTANTS ====================== */
 #define BM1370_F_CENTER     650.0f
@@ -50,11 +48,13 @@ typedef enum {
     BRAIN_STATE_DECIDE_NEXT
 } BrainSampleState;
 
-/* ====================== MAIN BRAIN STATE ====================== */
+/* ====================== MAIN BRAIN STATE (UD Factorization) ====================== */
 typedef struct {
-    /* RLS core */
-    float theta[RLS_N];
-    float P[RLS_N][RLS_N];
+    /* RLS core - Bierman-Thornton UD */
+    float theta[RLS_N];           // Parameter vector
+    float U[RLS_N][RLS_N];        // Unit upper triangular matrix
+    float D[RLS_N];               // Diagonal matrix
+
     float ridge_epsilon;
     float model_quality;
     bool  cold_start;
