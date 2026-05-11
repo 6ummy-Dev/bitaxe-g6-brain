@@ -1,6 +1,6 @@
-# G6 Brain ⚡
+# Bitaxe G6 Brain ⚡
 
-**v1.0 Beta** — Advanced Recursive Least Squares (RLS) Self-Optimizing Brain Module for Bitaxe ESP-Miner Firmware (Gamma 602+)
+**v1.0 Beta → v1.1 Modular** — Fully Modular Adaptive Control Brain for Bitaxe ESP-Miner (Gamma 602+)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
@@ -10,69 +10,41 @@
 
 ---
 
-## 📋 Table of Contents
+## 🚀 Modular Design — The Bitaxe Brains Project
 
-- [Overview](#-overview)
-- [Key Features](#-key-features)
-- [Installation & Integration](#-installation--integration)
-- [Technical Deep Dive](#-technical-deep-dive)
-- [Performance & Validation](#-performance--validation)
-- [Roadmap & Status](#-roadmap--status)
-- [Building](#-building)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Credits](#-credits--acknowledgments)
+**G6 Brain is the flagship module of the Bitaxe Brains Project** — a fully modular, swappable architecture for advanced miner intelligence.
 
----
+### Core Modularity Principles (locked in for all future brains)
+- **Clean interface**: One `G6BrainInterface` struct — any brain (RLS, ML, heuristic, multi-ASIC, etc.) implements the same 5 functions.
+- **Zero coupling**: The miner firmware only talks to the interface. Swap brains at compile time or runtime.
+- **Extensible**: Add new optimization algorithms, safety models, or hardware variants without touching ESP-Miner core.
+- **Production Beta**: Real-time RLS quadratic modeling + predictive safety + self-testing + telemetry — all native, all modular.
 
-## 🚀 Overview
-
-**G6 Brain** is a production-grade, drop-in firmware component that transforms your Bitaxe Gamma 602+ into an intelligent, self-tuning mining powerhouse. Built on a **quadratic Recursive Least Squares (RLS)** response surface model, it continuously learns the optimal frequency/voltage sweet spot in real-time while enforcing strict thermal, power, and stability guardrails.
-
-**GitHub**: [6ummy-Dev/bitaxe-g6-brain](https://github.com/6ummy-Dev/bitaxe-g6-brain) — Star it, fork it, PR it!
-
-This is not a simple overclocker — it's a **multi-objective adaptive optimizer** with predictive safety, puzzle intelligence, and long-term reliability features designed for 24/7/365 operation.
-
-### Core Philosophy
-- **Learn fast, tune safely**: RLS with forgetting factor + ridge regularization + PSD safeguard
-- **Never brick your board**: Multi-layer safety (voltage clamps, temp ceilings, model divergence detection, cold-start guards)
-- **Puzzle-aware**: G6 Puzzle Extras for smarter nonce ranges, duplicate prediction, and on-device enhancements
-- **Zero-maintenance**: Persistent NVS logging with wear-leveling, I2C auto-recovery, thermal PID with anti-windup
+This is not a one-off hack. This is the foundation for an entire ecosystem of autonomous miner brains.
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features (now fully modular)
 
-### 1. Quadratic RLS Optimizer
-- Models **HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g**
-- Real-time coefficient adaptation (λ = 0.98 default, cold-start boost to 0.995)
-- Analytical optimum solver for instantaneous best (f, v) recommendation
-- Model quality tracking (1 - |err| / (HR + 1)) with divergence protection
+### 1. Quadratic RLS Optimizer (core module)
+- Models HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g
+- Real-time RLS with cold-start, ridge, PSD safeguard, denom guards
+- Analytical optimum solver
+- Model quality tracking
 
-### 2. Predictive Thermal & Power Safety
-- **PID Fan Controller** with integral anti-windup, derivative kick suppression, and feed-forward on rapid temp rise
-- **Smart DFS** (Dynamic Frequency Scaling): soft throttle instead of hard shutdown
-- **P-VUS** (Predictive Voltage Undershoot): bump Vcore before NER spikes cause crashes
-- **Safety Matrix**: Voltage >1350mV, Temp >80°C, Model Quality <50% → immediate alerts + clamps
+### 2. Integrated Predictive Safety (native to main brain)
+- I2C hard-fault escalation + voltage undershoot history ring buffer
+- PID fan with feed-forward + anti-windup
+- P-VUS, Smart DFS, thermal clamps
 
-### 3. G6 Puzzle Extras
-- Dynamic nonce start/range recommendation
-- Duplicate share prediction
-- On-device puzzle solver demo hooks
-- NER (Nonce Error Rate) driven voltage compensation
+### 3. Self-Test Mode (first-class citizen)
+- Synthetic data injection + sanity checks on optimum solver
 
-### 4. Robustness & Observability
-- **I2C Guardian**: 9-clock recovery + explicit STOP condition for EMI from ASIC switching
-- **NVS Wear-Leveling**: Circular buffer logging (write count, hashrate, uptime, W/TH)
-- **Fixed-Point Efficiency**: Zero-drift W/TH reporting
-- **Full Telemetry**: Exposes best_f, best_v, model_quality, NER, total_shares, etc. via GlobalState
+### 4. Full Telemetry (WebUI-ready)
+- Live θ matrix, P covariance, model quality, undershoot history
 
-### 5. Production Hardening (v1.0 Beta)
-- Cold-start RLS stability (higher λ for first 30 updates)
-- Denominator guard + PSD matrix safeguard against numerical explosion
-- Slew-rate limiting on auto-step (10 MHz / 50 mV per cycle)
-- All magic numbers moved to Kconfig for easy tuning
-- **Avionics v6**: Enhanced Feed-Forward (K_ff + dP/dt), I2C Heartbeat + 9-clock sanitization, Voltage-Floor Interlock, Brown-out logging
+### 5. Production Hardening
+- NVS wear-leveling, I2C guardian, slew limits, cold-start logic
 
 ---
 
