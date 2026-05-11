@@ -2,6 +2,19 @@
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
+**Phase 1 Polish Complete**
+
+Final cleanup after Phase 1 hardening:
+- Centralized all RLS, BM1370, and safety constants in `g6_brain.h` (removed duplicates from `.c`)
+- Added explicit single-threaded usage note for `G6BrainState`
+- Minor code cleanup and self-test update
+
+All constants are now defined once in the header. No functional changes — purely maintainability and consistency improvements.
+
+Phase 1 is now fully polished and auditor-clean.
+
+## [v1.0.0-beta.1] - 2026-05-11
+
 **Phase 1 Complete: Full RLS Hardening + All Auditor v3/v4 Fixes**
 
 Final polish of Phase 1 based on the latest independent technical audit.
