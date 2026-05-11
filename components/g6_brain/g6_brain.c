@@ -1,13 +1,14 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete + Priority 2 Fixes)
- * Pure RLS core with Bierman-Thornton UD Factorization.
- * All auditor Priority 1 + Priority 2 items addressed.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete + All Priority 1 & 2 Fixes)
+ * Pure RLS core with corrected Bierman-Thornton UD Factorization.
  */
 
 #include "g6_brain.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <string.h>
@@ -149,13 +150,12 @@ static bool can_apply_new_settings(const G6BrainState *brain, float new_f, float
 /* ====================== MINIMAL SAFETY STUBS (Priority 2) ====================== */
 void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c) {
     if (temp_c > brain->temp_ceiling) {
-        ESP_LOGW(TAG, "Thermal safety: temp %.1f°C > ceiling, clamping", temp_c);
-        brain->best_f = BM1370_F_MIN;  // aggressive derate
+        ESP_LOGW(TAG, "Thermal safety: %.1f°C > ceiling — aggressive derate", temp_c);
+        brain->best_f = BM1370_F_MIN;
     }
 }
 
 void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
-    // Minimal ripple guard — expand later with ADC sampling
     if (v_mv < BM1370_V_MIN + 20.0f || v_mv > BM1370_V_MAX - 20.0f) {
         ESP_LOGW(TAG, "Voltage near limit: %.0f mV", v_mv);
     }
@@ -163,7 +163,7 @@ void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
 
 void g6_asic_error_handle_non_blocking(G6BrainState *brain) {
     ESP_LOGW(TAG, "High NER detected — safety derate triggered");
-    brain->best_f = BM1370_F_MIN;  // safe fallback
+    brain->best_f = BM1370_F_MIN;
 }
 
 /* ====================== PUBLIC API ====================== */
@@ -189,7 +189,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     g6_brain_load_nvs_fingerprint(brain);
 
-    ESP_LOGI(TAG, "G6 Brain v1.0 Beta (Phase 1 Complete + Priority 2 Fixes) initialized");
+    ESP_LOGI(TAG, "G6 Brain v1.0 Beta (Phase 1 + All Priority 1 & 2 Fixes) initialized");
     return ESP_OK;
 }
 
@@ -198,6 +198,8 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     uint32_t now = xTaskGetTickCount();
+
+    float err = 0.0f;   // Priority 1 fix: declare at top of function
 
     if (!isfinite(hr_ths) || !isfinite(f_mhz) || !isfinite(v_mv) || hr_ths <= 0.0f) {
         brain->model_quality = 0.0f;
@@ -215,7 +217,7 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
 
     float y_pred = 0.0f;
     for (int i = 0; i < RLS_N; i++) y_pred += brain->theta[i] * x[i];
-    float err = hr_ths - y_pred;
+    err = hr_ths - y_pred;
 
     if (has_significant_innovation(brain, x)) {
         float lambda_eff = brain->cold_start ? 0.995f : compute_gradient_vff(fabsf(err), 0.01f);
