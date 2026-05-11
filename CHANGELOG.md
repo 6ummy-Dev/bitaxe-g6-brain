@@ -2,29 +2,26 @@
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
-**Phase 1 Complete: Full RLS Hardening + All Auditor Priority 1 & 2 Fixes**
+**Phase 1 Complete: Full RLS Hardening + All Auditor v3 Fixes**
 
-Completed the first major hardening phase of the G6 Brain RLS implementation based on independent technical audits (v1 and v2).
+Final polish of Phase 1 based on independent technical audit v3.
 
 **Key Improvements:**
-- Corrected Bierman-Thornton U-D Factorization (canonical ordering, proper alpha/lambda propagation, collapse guard)
-- Fixed critical C scope bug (`err` variable now declared at function top)
-- Gradient-based Variable Forgetting Factor with innovation gate
-- Full sample quality state machine
-- Hessian-guarded analytical optimum solver with proper negative-definite check
-- Efficiency-based objective (J/GH) with fail-closed auto-apply logic
-- Slew-rate limiting on optimal setpoints
-- Functional safety stubs (thermal scale, voltage ripple, NER handling with real derates)
-- NVS silicon fingerprinting with periodic save
-- BM1370-specific normalization, safe limits, and clamps
-- FreeRTOS tick header added for clean builds
+- Fixed dead `limit_step` call (proper slew-rate limiting from previous to target setpoint)
+- `is_sample_valid` now respects configurable `MIN_SHARE_COUNT` from Kconfig
+- Bierman-Thornton U-D Factorization with collapse guard and periodic NVS save
+- Sample quality state machine with proper timeouts
+- Hessian-guarded optimum solver with negative-definite check
+- Efficiency (J/GH) objective + fail-closed logic
+- Functional safety stubs (thermal derate, voltage ripple, NER handling)
+- Clean modular architecture with no external safety component
 
 **Files Modified:**
 - `components/g6_brain/g6_brain.c`
 
-Phase 1 is now complete. The RLS core is numerically robust, safety-hardened, and production-ready for long-term BM1370 operation.
+Phase 1 is now complete. The core RLS engine is numerically stable, safety-hardened, and ready for hardware testing.
 
-**Next Phase:** Phase 2 will focus on advanced telemetry buffer, controlled exploration policy, PID integration, and extended hardware soak testing.
+**Next Phase:** Phase 2 will focus on advanced telemetry, controlled exploration policy, PID integration, and extended soak testing.
 
 ## [v1.0 Beta] - 2026-05-11 (Full g6_brain.c + Component Finalization)
 
