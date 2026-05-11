@@ -1,4 +1,25 @@
 # Changelog
+# Changelog
+
+## [v1.0 Beta] - 2026-05-11 (Stochastic Nonce + RLS Core)
+
+- Added Stochastic Nonce Offsetting using ESP32-S3 hardware RNG for unique random start nonce per job
+- Added low-latency job hook (double-buffering placeholder)
+- RLS quadratic optimizer and all previous QA hardening preserved
+- g6_brain.h + g6_brain.c updated
+- README.md and Kconfig synced for full consistency
+
+**Timestamp:** 2026-05-11 10:05 EDT
+
+## [v1.0 Beta] - 2026-05-11 (QA Hardening Push)
+
+- Proactive ΔT/dt thermal frequency scaling
+- Voltage ripple/undershoot detection + response
+- BM1366 non-blocking error auto +5mV tune
+- NVS wear-leveling via RTC RAM
+- I2C guardian + READY pin WDT hooks
+
+**Timestamp:** 2026-05-11 09:45 EDT
 
 ## [v1.0 Beta] - 2026-05-11 (Aerospace QA Hardening Push)
 
