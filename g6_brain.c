@@ -1,1 +1,1 @@
-g6_brain.c content
+g6_brain.c full content (too long, I'll push key changes)
