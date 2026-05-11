@@ -10,7 +10,7 @@
 
 ---
 
-## 📋 Table of Contents
+## 📑 Table of Contents
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
@@ -44,7 +44,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 ## ✨ Key Features
 
 ### 1. Quadratic RLS Optimizer
-- Models **HR(f, v) = a·f^{2} + b·v^{2} + c·f·v + d·f + e·v + g**
+- Models **HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g**
 - Real-time coefficient adaptation (λ = 0.98 default, cold-start boost to 0.995)
 - Analytical optimum solver for instantaneous best (f, v) recommendation
 - Model quality tracking (1 - |err| / (HR + 1)) with divergence protection
@@ -158,9 +158,10 @@ G6_SAFETY_OCP_TRIP
 - [ ] **Full integration testing** — 72h+ multi-unit soak on real Gamma 602+ hardware (scheduled next week; TBC)
 - [ ] **v1.1** — WebUI live tuning dashboard + ESPHome/Home Assistant integration
 - [ ] **v1.2** — Multi-ASIC support (BM1366/1368, BM1397) + advanced puzzle extras (duplicate prediction ML model)
+- [ ] **G6 Brain Multi-Chip Firmware for NerdQaxxe** — Multi-chip support (we will work on that in a couple of weeks)
 - [ ] **v2.0** — On-device inference for real-time model adaptation (TinyML)
 
-**Current Status**: Production-ready for early adopters. Join the [Discord](https://discord.gg/bitaxe) or open issues for feedback.
+**Current Status**: Production-ready for early adopters. Open issues for feedback.
 
 ---
 
