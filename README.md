@@ -79,7 +79,7 @@ Pull requests are welcome. Keep the modular interface intact and make sure the s
 
 MIT License — see LICENSE file.
 
-Built for the Bitaxe community by 6ummy+Grok.  
+Built for the Bitaxe community.  
 May 2026
 
 **G6 Brain v1.0 Beta** — *The brain your Bitaxe always wanted.*
