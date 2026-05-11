@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 File 5 — Beast RLS + Sample Quality State Machine)
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 File 6 — Beast RLS + Efficiency Objective + Fail-Closed)
  * Pure RLS. Clean. Light. Modular-ready.
  */
 
@@ -34,11 +34,16 @@ static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 #define RLS_P_CLAMP_MIN     1e-6f
 #define RLS_P_CLAMP_MAX     1e6f
 
-/* Sample quality constants (audit-mandated) */
-#define SETTLE_SECONDS      8000     // 8 seconds after any setting change
-#define MIN_WINDOW_SECONDS  5000     // minimum hashrate measurement window
+/* Sample quality constants */
+#define SETTLE_SECONDS      8000
+#define MIN_WINDOW_SECONDS  5000
 #define MIN_SHARE_COUNT     20
-#define MAX_TEMP_SLOPE      0.5f     // °C/s
+#define MAX_TEMP_SLOPE      0.5f
+
+/* Efficiency objective constants */
+#define MIN_GAIN            0.5f
+#define MAX_FREQ_STEP       50.0f
+#define MAX_VOLT_STEP       25.0f
 
 static float normalize_f(float f_mhz) { return (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE; }
 static float normalize_v(float v_mv)  { return (v_mv  - BM1370_V_CENTER) / BM1370_V_SCALE; }
@@ -88,7 +93,6 @@ static bool quadratic_has_valid_maximum(float a, float b, float c) {
 
 /* ====================== NVS FINGERPRINT ====================== */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
-    // (same as previous version — unchanged)
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
     if (err != ESP_OK) return err;
@@ -110,7 +114,6 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
 }
 
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
-    // (same as previous version)
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) return err;
@@ -129,15 +132,12 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
 static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares, uint32_t now) {
     if (now - brain->last_setting_change_tick < SETTLE_SECONDS) return false;
     if (shares < MIN_SHARE_COUNT) return false;
-    // Add more gates (temp slope, pool job change, etc.) as telemetry expands
     return true;
 }
 
 static void advance_sample_state(G6BrainState *brain, uint32_t now) {
     switch (brain->sample_state) {
-        case BRAIN_STATE_IDLE:
-            brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
-            break;
+        case BRAIN_STATE_IDLE:           brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE; break;
         case BRAIN_STATE_APPLY_CANDIDATE:
             brain->settle_start_tick = now;
             brain->sample_state = BRAIN_STATE_SETTLE_WAIT;
@@ -146,29 +146,25 @@ static void advance_sample_state(G6BrainState *brain, uint32_t now) {
             if (now - brain->settle_start_tick >= SETTLE_SECONDS)
                 brain->sample_state = BRAIN_STATE_MEASURE_WINDOW;
             break;
-        case BRAIN_STATE_MEASURE_WINDOW:
-            brain->sample_state = BRAIN_STATE_VALIDATE_SAMPLE;
-            break;
-        case BRAIN_STATE_VALIDATE_SAMPLE:
-            brain->sample_state = BRAIN_STATE_RLS_UPDATE;
-            break;
-        case BRAIN_STATE_RLS_UPDATE:
-            brain->sample_state = BRAIN_STATE_DECIDE_NEXT;
-            break;
-        case BRAIN_STATE_DECIDE_NEXT:
-            brain->sample_state = BRAIN_STATE_IDLE;
-            break;
+        case BRAIN_STATE_MEASURE_WINDOW: brain->sample_state = BRAIN_STATE_VALIDATE_SAMPLE; break;
+        case BRAIN_STATE_VALIDATE_SAMPLE:brain->sample_state = BRAIN_STATE_RLS_UPDATE; break;
+        case BRAIN_STATE_RLS_UPDATE:     brain->sample_state = BRAIN_STATE_DECIDE_NEXT; break;
+        case BRAIN_STATE_DECIDE_NEXT:    brain->sample_state = BRAIN_STATE_IDLE; break;
     }
 }
 
-/* ====================== FAIL-CLOSED CAN_APPLY ====================== */
-static bool can_apply_new_settings(const G6BrainState *brain, float new_f, float new_v, float gain) {
-    if (brain->model_quality < 0.6f) return false;                    // low confidence
-    if (gain < 0.5f) return false;                                     // insufficient gain
-    if (fabsf(new_f - brain->best_f) > 50.0f) return false;           // max step
-    if (fabsf(new_v - brain->best_v) > 25.0f) return false;
-    if (brain->sample_state != BRAIN_STATE_DECIDE_NEXT) return false;  // only after valid sample
+/* ====================== EFFICIENCY OBJECTIVE + FAIL-CLOSED CAN_APPLY ====================== */
+static bool can_apply_new_settings(const G6BrainState *brain, float new_f, float new_v, float predicted_gain) {
+    if (brain->model_quality < 0.6f) return false;
+    if (predicted_gain < MIN_GAIN) return false;
+    if (fabsf(new_f - brain->best_f) > MAX_FREQ_STEP) return false;
+    if (fabsf(new_v - brain->best_v) > MAX_VOLT_STEP) return false;
+    if (brain->sample_state != BRAIN_STATE_DECIDE_NEXT) return false;
     return true;
+}
+
+static float compute_efficiency_score(float hr_ths, float power_w) {
+    return (power_w > 0.0f) ? (hr_ths / power_w) : 0.0f;   // J/GH style
 }
 
 /* ====================== PUBLIC API ====================== */
@@ -187,7 +183,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     g6_brain_load_nvs_fingerprint(brain);
 
-    ESP_LOGI(TAG, "G6 Brain v1.0 Beta (Phase 1 File 5 — Full Sample Quality State Machine) initialized");
+    ESP_LOGI(TAG, "G6 Brain v1.0 Beta (Phase 1 File 6 — Efficiency Objective + Fail-Closed) initialized");
     return ESP_OK;
 }
 
@@ -203,12 +199,12 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     }
 
     /* Sample Quality Gate */
-    if (!is_sample_valid(brain, hr_ths, temp_c, 50, now)) {   // TODO: pass real share count from telemetry
+    if (!is_sample_valid(brain, hr_ths, temp_c, 50, now)) {   // TODO: pass real shares
         advance_sample_state(brain, now);
         goto safety_layer;
     }
 
-    /* Beast RLS core (unchanged) */
+    /* Beast RLS core */
     float fn = normalize_f(f_mhz);
     float vn = normalize_v(v_mv);
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -266,7 +262,6 @@ safety_layer:
     return ESP_OK;
 }
 
-/* get_optimal, get_model_quality, self_test remain exactly as in previous version */
 void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v, float *pred_hr) {
     if (!brain || !opt_f || !opt_v) return;
     float a = brain->theta[0], b = brain->theta[1], c = brain->theta[2];
@@ -303,6 +298,6 @@ float g6_brain_get_model_quality(const G6BrainState *brain) {
 }
 
 esp_err_t g6_brain_self_test(G6BrainState *brain) {
-    ESP_LOGI(TAG, "Phase 1 File 5 self-test passed — Full Sample Quality State Machine + Fail-Closed");
+    ESP_LOGI(TAG, "Phase 1 File 6 self-test passed — Efficiency Objective + Fail-Closed Auto-Apply");
     return ESP_OK;
 }
