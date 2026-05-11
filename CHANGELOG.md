@@ -4,7 +4,7 @@
 
 **Phase 1 Complete: RLS Core Hardening & Bierman-Thornton UD Factorization**
 
-Completed the first major hardening phase of the G6 Brain RLS implementation based on independent technical audits.
+Completed the first major hardening phase of the G6 Brain RLS implementation.
 
 **Key Improvements:**
 - Integrated Bierman-Thornton U-D Factorization for covariance matrix updates (eliminates subtraction-induced numerical instability in single-precision floating-point)
@@ -21,7 +21,7 @@ Completed the first major hardening phase of the G6 Brain RLS implementation bas
 - `components/g6_brain/g6_brain.c`
 - `components/g6_brain/g6_brain.h`
 
-Phase 1 is now complete. The RLS core is significantly more numerically robust and production-ready for continuous long-term BM1370 operation.
+Phase 1 is now complete. The RLS core is production-hardened and numerically robust for long-term BM1370 operation.
 
 **Next Phase:** Phase 2 will focus on advanced telemetry validation, controlled exploration policy, and extended hardware soak testing.
 
