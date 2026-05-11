@@ -22,7 +22,7 @@ menu "G6 Brain Configuration (v1.0 Beta QA Hardened)"
         default 5
         range 3 20
 
-    # === QA HARDENING KNOBS ===
+    # QA HARDENING KNOBS
     config G6_PROACTIVE_DFS_THRESHOLD
         float "Proactive ΔT/dt threshold (°C/s)"
         default 2.0
@@ -47,7 +47,7 @@ menu "G6 Brain Configuration (v1.0 Beta QA Hardened)"
         float "PID Kd"
         default 0.5
 
-    # === NEW STOCHASTIC NONCE FEATURES ===
+    # STOCHASTIC NONCE FEATURES
     config G6_LOW_LATENCY_JOBS
         bool "Enable low-latency job mode (double-buffering hook)"
         default y
