@@ -5,19 +5,17 @@
 #include "freertos/task.h"
 #include "driver/i2c.h"
 #include "nvs.h"
+#include <stdint.h>
 
 /* =============================================
-   Bitaxe Brains Project — FULLY MODULAR DESIGN
-   G6 Brain is the first swappable module.
-   Future brains implement the exact same interface.
+   Bitaxe Brains Project — v1.0 Beta
+   Fully Modular + Aerospace QA Hardened
    ============================================= */
 
-#define G6_BRAIN_VERSION "v1.1 Beta (Modular)"
+#define G6_BRAIN_VERSION "v1.0 Beta"
 
-// Forward declare
+// Modular brain interface (unchanged contract)
 typedef struct G6BrainState G6BrainState;
-
-// Modular brain interface — this is the contract for the entire Brains Project
 typedef struct {
     esp_err_t (*init)(G6BrainState *brain);
     esp_err_t (*update)(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths,
@@ -28,9 +26,8 @@ typedef struct {
     bool      (*self_test)(G6BrainState *brain);
 } G6BrainInterface;
 
-// Main Brain State — kept clean, extensible, and modular
 struct G6BrainState {
-    // RLS quadratic model
+    // RLS quadratic model (preserved)
     float theta[6];
     float P[6][6];
     float lambda;
@@ -38,41 +35,40 @@ struct G6BrainState {
     float model_quality;
     int update_count;
     bool cold_start;
-
-    // Optimal setpoints
     float best_f;
     float best_v;
 
-    // Safety hardening (now native & modular)
+    // QA Hardening — Thermal & Voltage
+    float last_temp_c;
+    float temp_rise_rate;           // °C/s for proactive ΔT/dt scaling
+    uint32_t last_update_timestamp;
+
+    // Voltage ripple / undershoot tracking (64-bit friendly)
+    float voltage_history[8];
+    uint8_t voltage_hist_idx;
+    float voltage_variance;
+
+    // I2C/ASIC guardian + unhappy path
     uint32_t i2c_timeout_count;
     uint32_t i2c_hard_fault_threshold;
-    float    voltage_undershoot_history[16];
-    uint8_t  undershoot_idx;
-    float    last_measured_v;
-    bool     i2c_hard_fault_triggered;
+    bool i2c_hard_fault_triggered;
 
-    // PID + thermal
+    // NVS wear-leveling (RTC RAM strategy)
+    uint32_t nvs_last_write_tick;
+    uint32_t nvs_write_interval;
+
+    // PID + safety
     float Kp, Ki, Kd;
-    float last_temp;
     float integral;
-
-    // Config (Kconfig driven)
     float temp_ceiling;
     uint32_t dfs_step_mhz;
     float ner_threshold;
 
-    // Puzzle / extras
-    uint32_t recommended_nonce_start;
-    uint32_t recommended_nonce_range;
-
-    // NVS
-    uint32_t nvs_write_count;
-
-    // Modular interface pointer (for future multi-brain runtime swap)
+    // Modular interface pointer
     const G6BrainInterface *interface;
 };
 
-// Public modular API — these are the only calls the miner firmware ever sees
+// Public API
 esp_err_t g6_brain_init(G6BrainState *brain);
 esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths,
                          float power_w, float temp_c, float err_pct);
@@ -81,5 +77,8 @@ float g6_brain_get_model_quality(const G6BrainState *brain);
 void g6_brain_get_full_telemetry(const G6BrainState *brain, char *json_buf, size_t buf_size);
 bool g6_brain_self_test(G6BrainState *brain);
 
-// I2C Guardian (still public for manual calls from i2c_bitaxe wrapper)
+// QA-hardened functions (modular)
+void g6_safety_proactive_thermal_scale(G6BrainState *brain, float current_temp);
+void g6_safety_check_voltage_ripple(G6BrainState *brain, float measured_v);
+void g6_asic_error_handle_non_blocking(G6BrainState *brain);  // +5mV tune on BM1366 non-blocking
 void g6_brain_i2c_guardian_recover(i2c_port_t port);
