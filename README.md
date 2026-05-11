@@ -47,6 +47,8 @@ This keeps everything maintainable and future-proof.
 - Full telemetry output (JSON) ready for WebUI or external monitoring
 - NVS persistence of model parameters
 - All settings exposed via Kconfig
+- **Stochastic Nonce Offsetting** — hardware RNG sets a unique random start nonce for every new job (better search diversity, zero overlap risk)
+- Low-latency job hook (double-buffering ready for zero-stale-work)
 
 ---
 
