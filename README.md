@@ -8,71 +8,79 @@
 
 > **"Maximize hashrate. Minimize risk. Evolve autonomously."**
 
----
+The G6 Brain replaces dumb fixed frequency/voltage tables with real-time quadratic modeling of hashrate vs frequency vs voltage. It runs an online recursive least squares estimator that actually learns your ASIC’s response surface and analytically solves for the best operating point under power and temperature limits.
 
-## Modular Design — The Bitaxe Brains Project
-
-**G6 Brain is the flagship module of the Bitaxe Brains Project** — a fully modular, swappable architecture for advanced miner intelligence.
-
-### Core Modularity Principles (locked in for all future brains)
-- **Clean interface**: One `G6BrainInterface` struct — any brain (RLS, ML, heuristic, multi-ASIC, etc.) implements the same 5 functions.
-- **Zero coupling**: The miner firmware only talks to the interface. Swap brains at compile time or runtime.
-- **Extensible**: Add new optimization algorithms, safety models, or hardware variants without touching ESP-Miner core.
-- **Production Beta**: Real-time RLS quadratic modeling + predictive safety + self-testing + telemetry — all native, all modular.
-
-This is not a one-off hack. This is the foundation for an entire ecosystem of autonomous miner brains.
+This is the first module of the Bitaxe Brains Project — a clean modular architecture so different optimization strategies can share the same interface and the miner firmware doesn’t have to care which brain is plugged in.
 
 ---
 
-## 🛡️ Aerospace QA Hardening (Senior QA Audit — Fully Incorporated)
+## Modular Design — Bitaxe Brains Project
 
-Senior QA audit (aerospace electronics background) actioned end-to-end:
+G6 Brain is built on a simple, strict contract:
 
-- **Signal Integrity & ASIC comms**: I2C/SPI re-init sequence + hardware WDT hooks for BM1366 READY pin monitoring (full power-cycle on zombie state).
-- **Unhappy-path engineering**: Proactive ΔT/dt thermal scaling, voltage ripple/undershoot detection, BM1366 non-blocking error auto +5mV tune.
-- **Mathematical integrity**: 64-bit integer share counting foundation + Kalman filter stub (ESP-DSP ready) for hashrate smoothing.
-- **Reliability**: NVS wear-leveling via RTC RAM temp counters, explicit heap hygiene for WebUI/WebSocket.
-- **Production certification**: Triple-8 Test documented (8h @ 105% clock, 8h WiFi interference, 8 dirty power cycles).
+- One `G6BrainInterface` struct with six functions (`init`, `update`, `get_optimal`, `get_model_quality`, `get_full_telemetry`, `self_test`).
+- The rest of ESP-Miner only ever talks to this interface.
+- Swap in a new brain (ML, heuristic, multi-ASIC, whatever) at compile time or runtime without touching the core miner code.
 
-The brain is no longer “happy path only.” It now defends against real-world BM1366 edge cases while preserving full modularity.
+This keeps everything maintainable and future-proof.
 
 ---
 
-## Key Features (now fully modular + QA-hardened)
+## Implemented Features
 
-### 1. Quadratic RLS Optimizer (core module)
-- Models HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g
-- Real-time RLS with cold-start, ridge, PSD safeguard, denom guards
-- Analytical optimum solver + model quality tracking
+### Core Optimizer
+- Quadratic model: HR = a·f² + b·v² + c·f·v + d·f + e·v + g
+- Real-time recursive least squares with cold-start, ridge regularization, and covariance safeguards
+- Analytical optimum solver that respects power and temperature constraints
+- Live model quality metric
 
-### 2. Integrated Predictive Safety (native to main brain)
-- I2C hard-fault escalation + voltage undershoot history
-- PID fan with feed-forward + anti-windup
-- P-VUS, Smart DFS, thermal clamps + proactive ΔT/dt
+### Safety and Control
+- I2C guardian with hard-fault escalation
+- Proactive frequency scaling on rapid temperature rise (ΔT/dt)
+- Voltage ripple detection and automatic response
+- +5 mV voltage auto-tune on BM1366 non-blocking errors
+- NVS writes throttled to protect flash lifetime (RTC RAM for temporary counters)
+- PID fan control with feed-forward
 
-### 3. Self-Test Mode (first-class citizen)
-- Synthetic data injection + sanity checks on optimum solver
-
-### 4. Full Telemetry (WebUI-ready)
-- Live θ matrix, P covariance, model quality, undershoot history
-
-### 5. Production Hardening
-- NVS wear-leveling (RTC RAM), I2C guardian, slew limits, cold-start logic
-
----
-
-## Installation & Integration
-
-(unchanged from previous — see original sections for drop-in instructions, Kconfig options, Technical Deep Dive, Performance & Validation, Building, Contributing, License, Credits)
+### Additional Capabilities
+- Self-test mode with synthetic data injection
+- Full telemetry output (JSON) ready for WebUI or external monitoring
+- NVS persistence of model parameters
+- All settings exposed via Kconfig
 
 ---
 
-## The "Golden" QA Test Suite — Triple-8 Certification Path
+## Installation and Integration
 
-To certify production:
-1. **8 Hours** at 105% rated clock speed (stress test)
-2. **8 Hours** of intermittent WiFi interference (connectivity resilience)
-3. **8 "Dirty" Power Cycles** (recoverability test)
+1. Drop the component into your ESP-Miner project.
+2. Enable it in CMakeLists.txt.
+3. Configure via menuconfig → “G6 Brain Configuration”.
+4. Call `g6_brain_init()` once and `g6_brain_update()` in the main miner loop (example in docs).
+
+Full build and flash instructions are in the docs folder.
+
+---
+
+## Roadmap
+
+- WebUI integration exposing live θ matrix, P covariance and model quality
+- **G6 Brain Quad** — multi-ASIC support for quad Gamma 602+ boards
+- Additional brain modules (ML-based optimizer, heuristic variants)
+
+---
+
+## Contributing
+
+Pull requests are welcome. Keep the modular interface intact and make sure the self-test still passes.
+
+---
+
+## License
+
+MIT License — see LICENSE file.
+
+Built for the Bitaxe community by 6ummy+Grok.  
+May 2026
 
 **G6 Brain v1.0 Beta** — *The brain your Bitaxe always wanted.*
 
