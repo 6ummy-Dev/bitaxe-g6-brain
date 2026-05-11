@@ -87,9 +87,6 @@ Built for the Bitaxe community with focus on reliability, mathematical correctne
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
 [![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 
-Built for the Bitaxe community.  
-May 2026
-
 **G6 Brain v1.0 Beta** — *The brain your Bitaxe always wanted.*
 
-*Built with ❤️ and way too much math by 6ummy-Dev & Grok (xAI) • May 2026*
+*With ❤️ and way too much math by 6ummy & Grok • May 2026*
