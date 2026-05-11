@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 + Bierman-Thornton UD Factorization)
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete + Bierman-Thornton UD Factorization)
  * Pure RLS core. Clean. Light. Modular-ready.
  */
 
@@ -34,8 +34,8 @@ extern "C" {
 #define SETTLE_SECONDS      8000
 #define MIN_SHARE_COUNT     20
 #define MIN_GAIN            0.5f
-#define MAX_FREQ_STEP       50.0f
-#define MAX_VOLT_STEP       25.0f
+#define MAX_FREQ_STEP       25.0f
+#define MAX_VOLT_STEP       12.5f
 
 /* ====================== SAMPLE STATE MACHINE ====================== */
 typedef enum {
