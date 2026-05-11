@@ -1,7 +1,7 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 — Beast RLS + BM1370 + Sample Quality State Machine)
- * Pure RLS. Clean. Light. Modular-ready.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 COMPLETE — Beast RLS + BM1370 + Full Hardening)
+ * Pure RLS. Clean. Light. Modular-ready. All audits addressed.
  */
 
 #pragma once
@@ -32,7 +32,17 @@ extern "C" {
 #define BM1370_V_MIN        1050.0f
 #define BM1370_V_MAX        1350.0f
 
-/* ====================== SAMPLE QUALITY STATE MACHINE (Audit Critical) ====================== */
+/* ====================== SAMPLE QUALITY & EFFICIENCY CONSTANTS ====================== */
+#define SETTLE_SECONDS      8000
+#define MIN_WINDOW_SECONDS  5000
+#define MIN_SHARE_COUNT     20
+#define MAX_TEMP_SLOPE      0.5f
+
+#define MIN_GAIN            0.5f
+#define MAX_FREQ_STEP       50.0f
+#define MAX_VOLT_STEP       25.0f
+
+/* ====================== SAMPLE STATE MACHINE ====================== */
 typedef enum {
     BRAIN_STATE_IDLE,
     BRAIN_STATE_APPLY_CANDIDATE,
@@ -68,7 +78,7 @@ typedef struct {
     uint32_t nonce_offset;
     bool enable_low_latency_jobs;
 
-    /* Timestamps & modular telemetry */
+    /* Timestamps & telemetry */
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
     uint32_t last_setting_change_tick;
@@ -93,7 +103,7 @@ float g6_brain_get_model_quality(const G6BrainState *brain);
 
 esp_err_t g6_brain_self_test(G6BrainState *brain);
 
-/* NVS fingerprint */
+/* NVS silicon fingerprint */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
