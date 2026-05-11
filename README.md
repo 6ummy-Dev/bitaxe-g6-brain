@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0 Beta — Fully Modular Adaptive Control Brain for Bitaxe ESP-Miner (Gamma 602+)
+**v1.0 Beta** — Fully Modular Adaptive Control Brain for Bitaxe ESP-Miner (Gamma 602+)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
