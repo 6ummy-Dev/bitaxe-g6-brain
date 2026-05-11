@@ -11,26 +11,28 @@ This is the flagship module of the **Bitaxe Brains Project** — a clean, modula
 ## Key Features
 
 - Quadratic RLS response surface modeling with gradient-based Variable Forgetting Factor
-- Robust numerical stability (covariance windup protection, matrix symmetrization, and clamping)
+- Bierman-Thornton U-D Factorization for guaranteed numerical stability in single-precision floating-point
+- Covariance windup protection and persistence-of-excitation checks
 - Hessian-guarded analytical optimum solver with safe fallback
 - Sample quality state machine ensuring only high-quality, settled telemetry is used
 - Efficiency-focused optimization (J/GH objective) with fail-closed auto-apply logic
 - NVS silicon fingerprinting for warm-start capability per chip
 - BM1370-specific tuning, normalization, and safe operating limits
-- Clean modular interface (`G6BrainInterface`) ready for future extensions
+- Clean modular interface (`G6BrainInterface`) for future brain variants
 
 ---
 
 ## Phase 1 Complete (May 2026)
 
-All major stability, safety, and adaptation improvements identified in independent technical audits have been implemented. The core RLS engine is now production-hardened for continuous 24/7 operation.
+All major stability, safety, and adaptation improvements identified in independent technical audits have been implemented. The core RLS engine now uses Bierman-Thornton UD Factorization and is production-hardened for continuous 24/7 operation.
 
 ---
 
 ## Roadmap
 
 ### Phase 1 — Core RLS Hardening **(Completed)**
-- Numerical stability suite and Variable Forgetting Factor
+- Bierman-Thornton U-D Factorization for numerical stability
+- Gradient-based Variable Forgetting Factor (VFF)
 - Sample quality state machine and telemetry validation
 - Efficiency objective and fail-closed auto-apply
 - NVS silicon fingerprint warm-start
@@ -43,7 +45,6 @@ All major stability, safety, and adaptation improvements identified in independe
 - Extended hardware soak testing
 
 ### Phase 3 — Ecosystem & Modularity
-- Optional Bierman-Thornton UD factorization
 - Full "Ghost Brain" external MCU support
 - Multi-ASIC capability
 
@@ -85,5 +86,5 @@ Built for the Bitaxe community with focus on mathematical correctness, reliabili
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
 [![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 
-**G6 Brain** — *The brain your Bitaxe always wanted.*  
+**G6 Brain v1.0 Beta** — *The brain your Bitaxe always wanted.*  
 *With ❤️ and way too much math by 6ummy & Grok • May 2026*
