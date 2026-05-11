@@ -1,7 +1,8 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete + Bierman-Thornton UD Factorization)
- * Pure RLS core. Clean. Light. Modular-ready.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 + Priority 1 Fixes)
+ * Pure RLS core with Bierman-Thornton UD Factorization.
+ * All critical auditor issues addressed.
  */
 
 #pragma once
