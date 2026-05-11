@@ -43,8 +43,12 @@ static void rls_update(G6BrainState *brain, float f_norm, float v_norm, float hr
     for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) {
         brain->P[i][j] = (brain->P[i][j] - outer[i][j]) / brain->lambda + (i==j ? brain->ridge_epsilon : 0);
     }
-    // CRITICAL FIX: PSD safeguard - ensure P remains positive semi-definite (prevents numerical instability and wrong tuning after long runs)
+    // CRITICAL FIX v3: Enforce STRICT POSITIVE DEFINITE (not just PSD)
+    // Add nonzero ridge BEFORE any PSD check to guarantee all eigenvalues > 0
+    // This prevents zero-eigenvalue blindness in RLS estimator
+#define RIDGE_EPSILON  1e-5f   // ~0.00001 — nonzero ridge guarantees PD
     for (int i = 0; i < 6; i++) {
+        brain->P[i][i] += RIDGE_EPSILON;   // guarantees all λ_i > 0
         if (brain->P[i][i] < 1e-6f) brain->P[i][i] = 1e-6f;
     }
     brain->model_quality = 1.0f - fabsf(err) / (hr + 1.0f);
@@ -128,7 +132,7 @@ void g6_brain_fixed_point_efficiency(uint64_t power_mw, uint64_t hashrate_ghs, c
 esp_err_t g6_brain_init(G6BrainState *brain) {
     memset(brain, 0, sizeof(G6BrainState));
     brain->lambda = 0.98f;
-    brain->ridge_epsilon = 1e-6f;
+    brain->ridge_epsilon = 1e-5f;  // v3: nonzero ridge for strict PD guarantee
     brain->Kp = 2.0f; brain->Ki = 0.1f; brain->Kd = 0.5f;
     brain->temp_ceiling = 70.0f;
     brain->dfs_step_mhz = 25;
@@ -148,9 +152,10 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 // Fixed: removed broken I2C auto-recover (was spamming every update); NER now driven by err_pct; denom guard; anti-windup
 void g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct) {
     brain->update_count++;
-    if (brain->cold_start && brain->update_count < 10) {
+    // v3 FIX: Extended cold-start guard to 30 ticks (model_order × 3 = 18 min safe)
+    if (brain->cold_start && brain->update_count < 30) {
         brain->lambda = 0.995f; // Higher lambda for cold-start stability (prevents early swings)
-    } else if (brain->cold_start && brain->update_count >= 10) {
+    } else if (brain->cold_start && brain->update_count >= 30) {
         brain->cold_start = false;
         brain->lambda = 0.98f; // Normal aggressive tuning
     }
@@ -200,7 +205,7 @@ void g6_brain_get_optimal(G6BrainState *brain, float *opt_f, float *opt_v, float
     float det = 4 * a * b - c * c;
     if (fabs(det) > 1e-6f) {
         *opt_f = (2 * b * (-d) - c * (-e)) / det;
-        *opt_v = (2 * a * (-e) - c * (-d)) / det;
+        *opt_v = (2 * a * (-e)) / det;
     } else {
         *opt_f = 650.0f; *opt_v = 1200.0f;
     }

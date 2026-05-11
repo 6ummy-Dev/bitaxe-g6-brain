@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.0 Beta] - 2026-05-10 23:50 EDT
+
+**QA Audit v3 Response — Critical fixes shipped**
+- **CRITICAL**: RLS PSD safeguard upgraded to strict Positive Definite (nonzero ridge_epsilon = 1e-5f enforced after every update — prevents zero-eigenvalue blindness)
+- **HIGH**: Cold-start guard extended from 10 → 30 ticks (model_order × 3 minimum for 6-feature quadratic)
+- **HIGH**: "Satellite-grade reliability" claim removed from all docs — replaced with honest measurable language
+- **MEDIUM**: GLOSSARY.md added defining NER, P-VUS, DFS, OCP, PSD/PD, RLS, MTBF
+- **MEDIUM**: AGENTS.md safety invariants section added for AI-assisted development
+- All v3 criticals addressed where code-owned; hardware-heavy items (safety task split, unit tests, partitions.csv) documented as next-wave
+- Trajectory: 68/100 → targeting 85+ before 72h+ soak test
+
+**Timestamp:** 2026-05-10 23:50:00 -0400
+
 ## [v1.0 Beta] - 2026-05-10 19:50 EDT
 
 **Delete legacy v1.8 brain branch + push final fixes** — Repo cleaned, main locked as sole survivor

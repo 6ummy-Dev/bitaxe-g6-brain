@@ -10,7 +10,7 @@
 
 ---
 
-## 📑 Table of Contents
+## 📋 Table of Contents
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
@@ -44,7 +44,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 ## ✨ Key Features
 
 ### 1. Quadratic RLS Optimizer
-- Models **HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g**
+- Models **HR(f, v) = a·f^{2} + b·v^{2} + c·f·v + d·f + e·v + g**
 - Real-time coefficient adaptation (λ = 0.98 default, cold-start boost to 0.995)
 - Analytical optimum solver for instantaneous best (f, v) recommendation
 - Model quality tracking (1 - |err| / (HR + 1)) with divergence protection
@@ -68,7 +68,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 - **Full Telemetry**: Exposes best_f, best_v, model_quality, NER, total_shares, etc. via GlobalState
 
 ### 5. Production Hardening (v1.0 Beta)
-- Cold-start RLS stability (higher λ for first 10 updates)
+- Cold-start RLS stability (higher λ for first 30 updates)
 - Denominator guard + PSD matrix safeguard against numerical explosion
 - Slew-rate limiting on auto-step (10 MHz / 50 mV per cycle)
 - All magic numbers moved to Kconfig for easy tuning
@@ -124,9 +124,9 @@ See `docs/main_integration_v1.0_beta.c` for a complete, battle-tested integratio
 ### RLS Quadratic Model
 The core is a 6-parameter quadratic fit updated every 30s via the standard RLS recursion with:
 - Forgetting factor λ
-- Ridge regularization (ε = 1e-6)
+- Ridge regularization (ε = 1e-5)
 - Positive semi-definite (PSD) safeguard on covariance matrix P
-- Cold-start λ boost for first 10 samples
+- Cold-start λ boost for first 30 samples
 
 Optimum is solved analytically from the 2×2 linear system derived from partial derivatives = 0.
 
