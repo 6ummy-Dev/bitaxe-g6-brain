@@ -72,6 +72,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 - Denominator guard + PSD matrix safeguard against numerical explosion
 - Slew-rate limiting on auto-step (10 MHz / 50 mV per cycle)
 - All magic numbers moved to Kconfig for easy tuning
+- Avionics interlocks: I2C Heartbeat + Feed-Forward Predictive Cooling
 
 ---
 
