@@ -2,13 +2,15 @@
 
 ## [v1.0 Beta] - 2026-05-10 23:55 EDT
 
-**Avionics-Class Hardening (Beta v4) — Feed-Forward + I2C Heartbeat**
-- Added **I2C Heartbeat** (5ms ping on INA260 to detect silent bus hang before thermal runaway)
-- Added **Feed-Forward Predictive Cooling** (dP/dt preemption: spool fan instantly on power rise >2%)
-- Hardened **Atomic V-Limits** as const float G6_BRAIN_VCORE_MAX_MV in IROM (survives UI glitches)
-- Added **Brown-out RTC Logging** stub for post-mortem power-failure analysis
-- Integrated both new interlocks into g6_brain_update()
-- All previous v3 criticals (strict PD ridge, 30-tick cold-start, honest claims) retained
+**Avionics-Class Hardening (Beta v5) — Feed-Forward + I2C Heartbeat + Voltage-Floor Interlock**
+
+- Added **Enhanced Feed-Forward Predictive Cooling** (dP/dt + K_ff term for Vcore prediction)
+- Added **I2C Heartbeat + 9-clock sanitization** at init (detects silent bus hangs early)
+- Added **Voltage-Floor Interlock** (hard 400mV–1200mV clamp for BM1366 safety)
+- Added **Brown-out RTC Logging** stub for post-mortem analysis
+- Added IRAM_ATTR comments on hot paths for zero-wait-state execution
+- Integrated all v5 interlocks into g6_brain_update()
+- All previous v4/v3 criticals retained (strict PD ridge, 30-tick cold-start, honest claims)
 - Still pure Beta — no new unit tests or safety task split yet
 
 **Timestamp:** 2026-05-10 23:55:00 -0400
@@ -16,6 +18,7 @@
 ## [v1.0 Beta] - 2026-05-10 23:50 EDT
 
 **QA Audit v3 Response — Critical fixes shipped**
+
 - **CRITICAL**: RLS PSD safeguard upgraded to strict Positive Definite (nonzero ridge_epsilon = 1e-5f enforced after every update — prevents zero-eigenvalue blindness)
 - **HIGH**: Cold-start guard extended from 10 → 30 ticks (model_order × 3 minimum for 6-feature quadratic)
 - **HIGH**: "Satellite-grade reliability" claim removed from all docs — replaced with honest measurable language
@@ -72,5 +75,5 @@
 **Timestamp:** 2026-05-10 19:15:00 -0400
 
 ## Previous entries (archived for reference)
-(Older 1.8.5 development notes moved to v1.8 branch history)
 
+(Older 1.8.5 development notes moved to v1.8 branch history)
