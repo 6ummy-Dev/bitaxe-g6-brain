@@ -1,7 +1,7 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Header — Beast RLS + BM1370)
- * Pure RLS core. Modular-ready.
+ * Bitaxe G6 Brain — v1.0 Beta (Phase 1 — Beast RLS + BM1370 + Sample Quality State Machine)
+ * Pure RLS. Clean. Light. Modular-ready.
  */
 
 #pragma once
@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-/* ====================== RLS CONSTANTS (Beast-tuned) ====================== */
+/* ====================== RLS CONSTANTS ====================== */
 #define RLS_N               6
 #define RLS_LAMBDA_MIN      0.95f
 #define RLS_LAMBDA_MAX      0.999f
@@ -32,15 +32,27 @@ extern "C" {
 #define BM1370_V_MIN        1050.0f
 #define BM1370_V_MAX        1350.0f
 
-/* ====================== MAIN BRAIN STATE (modular & NVS-ready) ====================== */
+/* ====================== SAMPLE QUALITY STATE MACHINE (Audit Critical) ====================== */
+typedef enum {
+    BRAIN_STATE_IDLE,
+    BRAIN_STATE_APPLY_CANDIDATE,
+    BRAIN_STATE_SETTLE_WAIT,
+    BRAIN_STATE_MEASURE_WINDOW,
+    BRAIN_STATE_VALIDATE_SAMPLE,
+    BRAIN_STATE_RLS_UPDATE,
+    BRAIN_STATE_DECIDE_NEXT
+} BrainSampleState;
+
+/* ====================== MAIN BRAIN STATE ====================== */
 typedef struct {
     /* RLS core */
-    float theta[RLS_N];           // Quadratic coefficients
-    float P[RLS_N][RLS_N];        // Covariance matrix
+    float theta[RLS_N];
+    float P[RLS_N][RLS_N];
     float ridge_epsilon;
     float model_quality;
     bool  cold_start;
     uint32_t update_count;
+    bool  nvs_valid;
 
     /* Best safe setpoint */
     float best_f;
@@ -48,20 +60,23 @@ typedef struct {
 
     /* Safety & config */
     float ner_threshold;
-    float Kp, Ki, Kd;             // PID fallback if needed
+    float Kp, Ki, Kd;
     float temp_ceiling;
     float dfs_step_mhz;
 
-    /* Nonce / extras (keep for compatibility) */
+    /* Nonce / extras */
     uint32_t nonce_offset;
     bool enable_low_latency_jobs;
 
-    /* Timestamps for modular / telemetry */
+    /* Timestamps & modular telemetry */
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
+    uint32_t last_setting_change_tick;
 
-    /* Future NVS silicon fingerprint (warm-start) */
-    bool nvs_valid;
+    /* Sample quality state machine */
+    BrainSampleState sample_state;
+    uint32_t settle_start_tick;
+    uint32_t valid_sample_count;
 } G6BrainState;
 
 /* ====================== PUBLIC INTERFACE ====================== */
@@ -78,7 +93,7 @@ float g6_brain_get_model_quality(const G6BrainState *brain);
 
 esp_err_t g6_brain_self_test(G6BrainState *brain);
 
-/* Optional: NVS warm-start / silicon fingerprint (Phase 2) */
+/* NVS fingerprint */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
