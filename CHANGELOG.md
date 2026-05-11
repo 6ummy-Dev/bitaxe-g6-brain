@@ -4,7 +4,7 @@
 
 **Phase 1 Complete: RLS Core Hardening & Bierman-Thornton UD Factorization**
 
-Completed the first major hardening phase of the G6 Brain RLS implementation.
+Completed the first major hardening phase of the G6 Brain RLS implementation based on independent technical audits.
 
 **Key Improvements:**
 - Integrated Bierman-Thornton U-D Factorization for covariance matrix updates (eliminates subtraction-induced numerical instability in single-precision floating-point)
@@ -14,7 +14,7 @@ Completed the first major hardening phase of the G6 Brain RLS implementation.
 - Hessian-guarded analytical optimum solver with safe fallback
 - Switched to efficiency-based objective (J/GH) with fail-closed auto-apply logic
 - Added NVS silicon fingerprinting for warm-start capability per chip
-- BM1370-specific feature normalization and safe operating limits
+- BM1370-specific feature normalization, slew-rate limiting, and safe operating limits
 - Improved overall code modularity and maintainability
 
 **Files Modified:**
