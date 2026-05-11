@@ -1,4 +1,4 @@
-menu "G6 Brain Configuration (v1.0 BETA)"
+menu "G6 Brain Configuration (v1.1 Modular Beta)"
     config G6_RLS_LAMBDA
         float "RLS forgetting factor"
         default 0.98
@@ -24,4 +24,8 @@ menu "G6 Brain Configuration (v1.0 BETA)"
     config G6_KD
         float "PID Kd"
         default 0.5
+    config G6_I2C_HARD_FAULT_THRESHOLD
+        int "I2C hard fault threshold (consecutive timeouts)"
+        default 5
+        range 3 20
 endmenu
