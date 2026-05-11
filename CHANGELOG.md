@@ -1,40 +1,25 @@
 # Changelog
 
-## [v1.0.0-beta.1] - 2026-05-11
+## [v1.0.0-beta.1] - 2026-05-11 17:45 -04
 
-**Phase 1 Polish Complete**
+**Phase 1 Complete**
 
-Final cleanup after Phase 1 hardening:
-- Centralized all RLS, BM1370, and safety constants in `g6_brain.h` (removed duplicates from `.c`)
-- Added explicit single-threaded usage note for `G6BrainState`
-- Minor code cleanup and self-test update
+Completed the initial hardening phase of the G6 Brain RLS module.
 
-All constants are now defined once in the header. No functional changes — purely maintainability and consistency improvements.
+**Changes in this phase:**
+- Centralized all RLS, BM1370, and safety constants in g6_brain.h
+- Implemented gradient-based Variable Forgetting Factor with innovation gating
+- Added covariance windup protection using trace monitoring
+- Added full sample quality state machine with settle/validate gates
+- Added Hessian check on analytical optimum solver with safe fallback
+- Switched optimization objective to efficiency (J/GH) with fail-closed auto-apply
+- Added NVS silicon fingerprint warm-start capability
+- Applied BM1370-specific normalization and operating limits
+- Performed final code cleanup and constant deduplication
 
-Phase 1 is now fully polished and auditor-clean.
+Phase 1 is now complete. The core RLS implementation meets the stability, safety, and modularity requirements identified in the technical audits.
 
-## [v1.0.0-beta.1] - 2026-05-11
-
-**Phase 1 Complete: Full RLS Hardening + All Auditor v3/v4 Fixes**
-
-Final polish of Phase 1 based on the latest independent technical audit.
-
-**Key Improvements:**
-- Fixed dead `limit_step` call (proper slew-rate limiting from previous best to new optimal target)
-- `is_sample_valid` now respects configurable `MIN_SHARE_COUNT` from Kconfig
-- Bierman-Thornton U-D Factorization with collapse guard and periodic NVS save
-- Sample quality state machine with proper timeouts
-- Hessian-guarded optimum solver with negative-definite check
-- Efficiency (J/GH) objective with fail-closed logic
-- Functional safety stubs (thermal derate, voltage ripple, NER handling)
-- Clean modular architecture with no external safety component
-
-**Files Modified:**
-- `components/g6_brain/g6_brain.c`
-
-Phase 1 is now complete. The core RLS engine is numerically stable, safety-hardened, and ready for hardware testing next week.
-
-**Next Phase:** Phase 2 will focus on advanced telemetry, controlled exploration policy, PID integration, and extended soak testing.
+**Next Phase (Phase 2):** Advanced telemetry buffering, controlled exploration policy, and extended soak testing.
 
 ## [v1.0 Beta] - 2026-05-11 (Full g6_brain.c + Component Finalization)
 
