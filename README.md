@@ -10,7 +10,7 @@
 
 ---
 
-## 📋 Table of Contents
+## 📑 Table of Contents
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
@@ -44,7 +44,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 ## ✨ Key Features
 
 ### 1. Quadratic RLS Optimizer
-- Models **HR(f, v) = a·f^{2} + b·v^{2} + c·f·v + d·f + e·v + g**
+- Models **HR(f, v) = a·f² + b·v² + c·f·v + d·f + e·v + g**
 - Real-time coefficient adaptation (λ = 0.98 default, cold-start boost to 0.995)
 - Analytical optimum solver for instantaneous best (f, v) recommendation
 - Model quality tracking (1 - |err| / (HR + 1)) with divergence protection
@@ -72,7 +72,7 @@ This is not a simple overclocker — it's a **multi-objective adaptive optimizer
 - Denominator guard + PSD matrix safeguard against numerical explosion
 - Slew-rate limiting on auto-step (10 MHz / 50 mV per cycle)
 - All magic numbers moved to Kconfig for easy tuning
-- Avionics interlocks: I2C Heartbeat + Feed-Forward Predictive Cooling
+- **Avionics v5**: Enhanced Feed-Forward (K_ff + dP/dt), I2C Heartbeat + 9-clock sanitization, Voltage-Floor Interlock, Brown-out logging
 
 ---
 
@@ -155,7 +155,7 @@ G6_SAFETY_OCP_TRIP
 
 ## 🗺️ Roadmap & Status
 
-- [x] **v1.0 Beta** — Core RLS quadratic optimizer + PID thermal + predictive safety + I2C Guardian + NVS logging (shipped)
+- [x] **v1.0 Beta** — Core RLS quadratic optimizer + PID thermal + predictive safety + I2C Guardian + NVS logging + Avionics v5 hardening (shipped)
 - [ ] **Full integration testing** — 72h+ multi-unit soak on real Gamma 602+ hardware (scheduled next week; TBC)
 - [ ] **v1.1** — WebUI live tuning dashboard + ESPHome/Home Assistant integration
 - [ ] **v1.2** — Multi-ASIC support (BM1366/1368, BM1397) + advanced puzzle extras (duplicate prediction ML model)
