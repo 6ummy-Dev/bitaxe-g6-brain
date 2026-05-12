@@ -1,4 +1,4 @@
-# G6 Brain Safety & Unhappy-Path Engineering — v1.0 Beta
+# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta1
 
 **This is not a happy-path optimizer.**  
 The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
@@ -32,13 +32,13 @@ The brain will **never** sacrifice hardware longevity or stability for marginal 
 ### 4. Mathematical & Model Integrity
 - Ridge regression + PSD safeguard to prevent singular matrices
 - Denominator guards in the quadratic solver
-- `g6_brain_self_test()` — synthetic data validation of the optimum finder
+- `g6_brain_self_test()` — synthetic data validation of the optimum finder + covariance condition number
 - Model quality gating (`g6_brain_get_model_quality()`) — poor models (< 0.6) force conservative behavior
 
 ### 5. Sample Quality State Machine
 The brain only trusts data after:
-- Sufficient settle time (`SETTLE_SECONDS`)
-- Minimum valid share count (`MIN_SHARE_COUNT`)
+- Sufficient settle time (`SETTLE_MS`)
+- Minimum valid share count (`MIN_VALID_SHARES`)
 - Stable temperature slope
 
 Invalid or noisy windows are discarded without affecting the model.
@@ -46,7 +46,7 @@ Invalid or noisy windows are discarded without affecting the model.
 ### 6. NVS Wear-Leveling & Persistence
 - RTC RAM counters for temp tracking (reduces NVS writes)
 - Explicit heap hygiene
-- Per-chip fingerprint stored only when model has converged
+- Per-chip fingerprint (theta + full covariance P) stored only when model has converged
 
 ### 7. Nonce / Puzzle Extras Safeguards
 - `nonce_offset` and low-latency job mode are gated behind safety checks
@@ -99,19 +99,21 @@ Log and alert on these values (exposed via WebUI / WebSocket):
 - Voltage undershoot count
 - `update_count` (should increase steadily)
 - `sample_state` (should cycle through `MEASURE_WINDOW` → `RLS_UPDATE` → `DECIDE_NEXT`)
+- Covariance condition number (via self-test or future getter)
 
 Set alerts if:
 - `model_quality` stays < 0.65 for > 2 hours
 - Temperature repeatedly hits ceiling
 - Brain stops calling `update()` (task watchdog)
+- Condition number > 1e6 (ill-conditioned covariance warning)
 
 ---
 
 ## File References
 
-- Safety logic: `components/g6_brain/g6_safety.c` + `g6_safety.h`
-- Core RLS + guards: `g6_brain.c`
-- Constants: `g6_brain.h` (RLS_*, BM1370_*, MAX_*_STEP, etc.)
+- Safety logic: fully integrated inside `components/g6_brain/g6_brain.c` (no separate g6_safety.* files)
+- Core RLS + guards + self-test: `g6_brain.c`
+- Constants + public API: `g6_brain.h` (RLS_*, BM1370_*, MAX_*_STEP, etc.)
 - Agents / invariants: root `AGENTS.md`
 
 ---
@@ -126,5 +128,5 @@ Every line of the safety layer was written with the explicit goal of surviving r
 
 ---
 
-**Version:** v1.0 Beta — May 2026  
+**Version:** v1.0.0-beta1 — May 2026  
 **Philosophy:** Fail safe. Learn fast. Never compromise the hardware.
