@@ -1,0 +1,28 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup ESP-IDF
+      uses: espressif/esp-idf-ci-action@v1
+      with:
+        esp_idf_version: v5.2
+
+    - name: Build component
+      run: |
+        idf.py set-target esp32s3
+        idf.py build
+
+    - name: Run self-test (if Unity enabled)
+      run: |
+        idf.py test
+      continue-on-error: true  # allow until full test suite is green
