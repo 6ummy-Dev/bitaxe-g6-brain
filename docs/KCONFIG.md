@@ -1,7 +1,7 @@
-# G6 Brain Kconfig Options — v1.0 Beta
+# G6 Brain Kconfig Options — v1.0.0-beta1
 
 All options live under:  
-**Component config → G6 Brain Configuration**
+**Component config → G6 Brain Configuration (v1.0 Beta QA Hardened)**
 
 These control behavior, safety limits, debug output, and persistence.
 
@@ -9,124 +9,116 @@ These control behavior, safety limits, debug output, and persistence.
 
 ## Core Options
 
-### `CONFIG_G6_BRAIN_ENABLE`
+### `G6_RLS_LAMBDA`
+- **Type:** float (0.90–0.999)  
+- **Default:** `0.98`  
+- **Description:** Forgetting factor for the stabilized RLS. Lower = faster adaptation to silicon changes; higher = more stable model.  
+- **Recommendation:** Start at 0.98. Drop to 0.95 only during initial 24 h tuning on a new chip.
+
+### `G6_LOW_LATENCY_JOBS`
 - **Type:** bool  
 - **Default:** `y`  
-- **Description:** Master switch for the entire G6 Brain component.  
-- **When to disable:** Only for pure benchmarking or when you want to completely remove the brain without deleting files.  
-- **Effect:** When `n`, all brain code is compiled out (zero overhead).
-
----
-
-### `CONFIG_G6_BRAIN_DEBUG`
-- **Type:** bool  
-- **Default:** `n`  
-- **Description:** Enables verbose `ESP_LOGD` output from the RLS core, safety module, and sample state machine.  
-- **Recommended:**  
-  - `y` during first integration and tuning  
-  - `n` in production (saves ~2–3 KB flash and reduces log spam)
+- **Description:** Enables low-latency job mode hook (double-buffering placeholder for future stochastic nonce improvements).  
+- **Recommendation:** Leave enabled unless you have a specific reason to disable.
 
 ---
 
 ## Safety & Thermal Limits
 
-### `CONFIG_G6_BRAIN_TEMP_CEILING`
+### `G6_TEMP_CEILING`
 - **Type:** int (0–120)  
 - **Default:** `70` (°C)  
-- **Description:** Hard thermal limit. The brain will **never** increase frequency or voltage if ASIC temperature ≥ this value. It will also proactively down-tune if temperature is rising too fast (`ΔT/dt`).  
+- **Description:** Hard thermal limit. The brain will **never** increase frequency or voltage if ASIC temperature ≥ this value. It will also proactively down-tune on fast temperature rise (`ΔT/dt > G6_PROACTIVE_DFS_THRESHOLD`).  
 - **Recommendation:**  
   - Stock heatsink + good airflow: `68–72`  
   - Upgraded heatsink / Noctua / immersion: `75–80`  
   - Always leave 3–5 °C headroom below your observed max stable temp.
 
----
+### `G6_PROACTIVE_DFS_THRESHOLD`
+- **Type:** float  
+- **Default:** `2.0` (°C/s)  
+- **Description:** Temperature rise rate that triggers proactive frequency/voltage derate.  
+- **Recommendation:** Default is conservative and safe for most Gamma 602+ boards.
 
-### `CONFIG_G6_BRAIN_MAX_FREQ_STEP`
+### `G6_DFS_STEP`
 - **Type:** int (1–100)  
 - **Default:** `25` (MHz)  
-- **Description:** Maximum single-step frequency change the brain is allowed to request per update cycle.  
-- **Purpose:** Prevents thermal shock and voltage droop on the BM1370.  
-- **Recommendation:**  
-  - Conservative / long-term stability: `15–20`  
-  - Aggressive tuning (first 24 h): `25–40`  
-  - Do **not** exceed `50` unless you have excellent power delivery and cooling.
+- **Description:** Maximum single-step frequency change the brain is allowed to request per update cycle (slew-rate limit).  
+- **Recommendation:** Conservative: `15–20`. Aggressive first 24 h: `25–40`. Do not exceed 50 unless you have excellent power delivery and cooling.
 
----
+### `G6_VOLTAGE_RIPPLE_MAX`
+- **Type:** float  
+- **Default:** `5.0` (%)  
+- **Description:** Maximum allowed voltage ripple/undershoot before the brain logs a warning and clamps the setpoint.  
+- **Recommendation:** Default 5% is excellent. Noisy USB-C or long cables: lower to 3–4%.
 
-### `CONFIG_G6_BRAIN_MAX_VOLT_STEP`
-- **Type:** float (0.5–50.0)  
-- **Default:** `12.5` (mV)  
-- **Description:** Maximum single-step voltage change (in millivolts).  
-- **Purpose:** Protects against voltage undershoot and BM1370 brown-out.  
-- **Recommendation:**  
-  - Default `12.5` is excellent for most boards.  
-  - Very clean power: you can raise to `15–20`.  
-  - Noisy USB-C or long cables: lower to `8–10`.
+### `G6_NER_THRESHOLD`
+- **Type:** float  
+- **Default:** `0.001`  
+- **Description:** P-VUS / NER (nonce error rate) threshold. Above this the brain triggers conservative back-off.  
+- **Recommendation:** Leave at default unless you see excessive NER on your specific board.
+
+### `G6_I2C_HARD_FAULT_THRESHOLD`
+- **Type:** int (3–20)  
+- **Default:** `5`  
+- **Description:** Consecutive I2C timeouts before the brain considers the ASIC link degraded (future guardian hook).  
+- **Recommendation:** Default is fine for most boards.
 
 ---
 
 ## Persistence & Learning
 
-### `CONFIG_G6_BRAIN_NVS_FINGERPRINT`
-- **Type:** bool  
-- **Default:** `y`  
-- **Description:** Enables per-chip NVS storage of learned RLS coefficients (`theta`), best setpoint, and model quality.  
-- **Benefits:**  
-  - Warm-start on every reboot (no 10–15 min cold-start)  
-  - Each physical Bitaxe learns its own silicon characteristics  
-- **Recommendation:** **Always leave enabled** unless you are doing controlled lab experiments.
-
-**Storage cost:** ~256 bytes per chip in NVS (negligible).
+### `G6_NVS_WRITE_INTERVAL`
+- **Type:** int  
+- **Default:** `30000` (ticks)  
+- **Description:** How often to persist the learned RLS coefficients + covariance to NVS (wear-leveling).  
+- **Recommendation:** Default is good. Lower = more flash wear; higher = longer cold-start after power loss.
 
 ---
 
-## Advanced / Internal (usually leave default)
+## PID / Future (currently stubs, wired for Phase 2)
 
-| Option                        | Default     | When you might change it |
-|-------------------------------|-------------|--------------------------|
-| `CONFIG_G6_BRAIN_RLS_LAMBDA`  | 0.98        | Lower (0.95) for faster adaptation, higher (0.999) for very stable environments |
-| `CONFIG_G6_BRAIN_RIDGE`       | 1e-4        | Increase only if you see matrix singularity warnings in debug logs |
-| `CONFIG_G6_BRAIN_SETTLE_SEC`  | 8           | How long to wait after applying new settings before collecting samples |
-| `CONFIG_G6_BRAIN_MIN_SHARES`  | 20          | Minimum valid shares before trusting a sample window |
-
-These are exposed for power users and future tuning. Most deployments should never touch them.
+### `G6_KP`, `G6_KI`, `G6_KD`
+- **Type:** float  
+- **Default:** `0.8`, `0.05`, `0.2`  
+- **Description:** PID gains for future fan / thermal control integration (currently logged only).  
+- **Recommendation:** Do not change unless you are actively developing Phase 2 fan control.
 
 ---
 
-## Recommended Starting Configuration (v1.0 Beta)
+## Recommended Starting Configuration (v1.0.0-beta1)
 
-For a typical Bitaxe Gamma with good cooling:
+For a typical Bitaxe Gamma 602+ with good cooling:
 
 ```
-CONFIG_G6_BRAIN_ENABLE=y
-CONFIG_G6_BRAIN_DEBUG=n          # switch to y only while tuning
-CONFIG_G6_BRAIN_TEMP_CEILING=70
-CONFIG_G6_BRAIN_MAX_FREQ_STEP=25
-CONFIG_G6_BRAIN_MAX_VOLT_STEP=12.5
-CONFIG_G6_BRAIN_NVS_FINGERPRINT=y
+G6_RLS_LAMBDA=0.98
+G6_TEMP_CEILING=70
+G6_DFS_STEP=25
+G6_VOLTAGE_RIPPLE_MAX=5.0
+G6_NER_THRESHOLD=0.001
+G6_PROACTIVE_DFS_THRESHOLD=2.0
+G6_NVS_WRITE_INTERVAL=30000
+G6_LOW_LATENCY_JOBS=y
 ```
 
-After 24–48 hours of stable operation you can experiment with slightly higher `MAX_FREQ_STEP` if your power delivery and cooling allow it.
+After 24–48 h of stable operation you can experiment with slightly higher `G6_DFS_STEP` if your power delivery and cooling allow it.
 
 ---
 
 ## How These Options Interact with the Brain
 
-- `TEMP_CEILING` + `MAX_*_STEP` together implement the **predictive safety layer**.
-- `NVS_FINGERPRINT` makes the RLS model persistent across reboots.
-- `DEBUG` adds visibility into the quadratic model quality and sample state machine (`BRAIN_STATE_*`).
+- `TEMP_CEILING` + `PROACTIVE_DFS_THRESHOLD` + `VOLTAGE_RIPPLE_MAX` implement the **multi-layer predictive safety** system.
+- `NVS_WRITE_INTERVAL` controls persistence of both theta and the full covariance matrix (true warm-start).
 - All limits are **hard-enforced** inside `g6_brain_update()` — the brain will refuse unsafe requests even if your calling code tries to override them.
+- `DEBUG` (if you add it via menuconfig) adds visibility into model quality and sample state machine.
 
 ---
 
 ## Next Steps
 
-- **Full API** → [API.md](API.md)
+- **Full API & integration** → [API.md](API.md) and `docs/main_integration_v1.0_beta.c`
 - **Installation guide** → [INSTALL.md](INSTALL.md)
-- **Production example** → `docs/main_integration_v1.0_beta.c`
-- **Safety & edge-case handling** → Root `AGENTS.md` + `g6_safety.h`
-
----
+- **Safety philosophy & edge cases** → Root `AGENTS.md` (if present) or the inline comments in `g6_brain.c`
 
 **Pro tip:** After changing any Kconfig value, always do a full clean build:
 
@@ -137,5 +129,5 @@ idf.py build
 
 ---
 
-**Version:** v1.0 Beta — May 2026  
+**Version:** v1.0.0-beta1 — May 2026  
 **Maintainer:** 6ummy-Dev + Grok (xAI)
