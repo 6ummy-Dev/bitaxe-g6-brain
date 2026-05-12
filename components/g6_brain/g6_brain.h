@@ -1,7 +1,12 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0 Beta (Phase 1 Complete — Polished)
- * Pure RLS. Clean. Light. Modular-ready.
+ * Bitaxe G6 Brain — v2.0 (ALL-IN-ONE Ready)
+ *
+ * Public interface for the fully self-contained G6 Brain.
+ * No dependency on g6_safety.h or g6_safety.c — all safety logic lives inside g6_brain.c.
+ *
+ * This header is 100% compatible with the original repo struct and API.
+ * Use this exact header with the new all-in-one g6_brain.c.
  */
 
 #pragma once
@@ -13,10 +18,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* ====================== NOTE ====================== */
-/* G6BrainState is currently updated from a single thread (ESP-Miner main loop). */
-/* No mutex required yet. Add one only if multi-tasked in the future. */
 
 /* ====================== RLS CONSTANTS ====================== */
 #define RLS_N               6
