@@ -91,11 +91,11 @@ typedef struct {
     /* Sample quality state machine */
     BrainSampleState sample_state;
     uint32_t settle_start_tick;
-    uint32_t measure_start_tick;   /* NASA v2.2: for MIN_WINDOW_MS timing */
+    uint32_t measure_start_tick;   /* for MIN_WINDOW_MS timing */
     uint32_t valid_sample_count;
 
     /* Telemetry */
-    float last_efficiency;         /* NASA v2.2: Hashrate / Power (J/TH) */
+    float last_efficiency;         /* J/TH telemetry */
 } G6BrainState;
 
 /* ====================== PUBLIC INTERFACE ====================== */
