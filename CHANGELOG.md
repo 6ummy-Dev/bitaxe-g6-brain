@@ -1,5 +1,47 @@
 # Changelog
 
+All notable changes to the Bitaxe G6 Brain will be documented in this file.
+
+## [1.0.0-beta1] - 2026-05-11
+
+### Added
+- **Fully self-contained safety** — All thermal, voltage, frequency, and ASIC error handling logic is now integrated directly inside `g6_brain.c`. The separate `g6_safety.c` / `g6_safety.h` modules are no longer required (legacy stubs provided for transition).
+- **NASA Level C hardening** applied throughout:
+  - Proper cold-start covariance matrix initialization (`P = 1e5 × I`)
+  - Strict `isfinite()` input sanitization in `g6_brain_update` (returns `ESP_ERR_INVALID_ARG` on bad data)
+  - `goto safety_layer` pattern ensures boundary clamps and proactive scaling always execute
+  - Single 8-second settle timing (`SETTLE_MS`) with proper `MEASURE_WINDOW` duration check (`MIN_WINDOW_MS`)
+  - Meaningful share count validation (`MIN_VALID_SHARES = 30`)
+  - NVS initialization guard in `g6_brain_init`
+  - Lambda guard to prevent covariance collapse
+- New telemetry field: `last_efficiency` (J/TH) exposed in `G6BrainState`
+
+### Changed
+- Timing macros renamed for correctness: `SETTLE_SECONDS` → `SETTLE_MS`, `MIN_WINDOW_SECONDS` → `MIN_WINDOW_MS`
+- Efficiency calculation corrected to proper energy efficiency (`power_w / hr_ths` → J/TH)
+- `is_sample_valid` no longer performs redundant time checks (state machine is now the single source of truth)
+- Internal share threshold made explicit and documented
+
+### Removed
+- Dependency on `g6_safety.c` / `g6_safety.h` (all safety logic consolidated)
+- Hardcoded `50U` share count in update path
+
+### Fixed
+- Critical RLS cold-start bug (P matrix was zeroed, preventing adaptation)
+- Missing initialization of `temp_ceiling`, `ner_threshold`, and PID coefficients
+- Double-settle timing issue (was effectively 16 seconds)
+- `MEASURE_WINDOW` state now properly waits the configured duration
+- Thermal scaling and final clamps now always execute even on rejected samples
+
+### Notes
+- Public API (`g6_brain_init`, `g6_brain_update`, `g6_brain_get_optimal`, etc.) remains unchanged for backward compatibility.
+- `nvs_flash_init()` must be called before `g6_brain_init()` (the brain now returns a clear error if NVS is not ready).
+- `MAX_TEMP_SLOPE` is defined but not yet actively enforced (planned for v1.1).
+
+---
+
+**Status**: Production Ready — Approved for deployment on Bitaxe ESP-Miner (Gamma 602+).
+
 ## [v1.0.0-beta.1] - 2026-05-11
 
 **Documentation Overhaul & Safety Reference**
