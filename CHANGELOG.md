@@ -40,7 +40,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ---
 
-**Status**: Production Ready — Approved for deployment on Bitaxe ESP-Miner (Gamma 602+).
+**Status**: Extensively reviewed and hardened. Ready for community field testing. Not yet deployed in production.
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
