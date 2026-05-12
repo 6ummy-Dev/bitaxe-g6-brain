@@ -69,7 +69,7 @@ Major improvement to project documentation to match the production quality of th
 
 These changes make the G6 Brain significantly more accessible and trustworthy for new integrators while preserving the minimalist, high-signal style of the original project.
 
-## **Next Phase (Phase 2):** Advanced telemetry, controlled exploration, and extended soak testing (as previously noted). Documentation will continue to evolve in lockstep with code. ##
+**Next Phase (Phase 2):** Advanced telemetry, controlled exploration, and extended soak testing (as previously noted). Documentation will continue to evolve in lockstep with code.
 
 ## [v1.0.0-beta.1] - 2026-05-11
 
