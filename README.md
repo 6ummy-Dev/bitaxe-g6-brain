@@ -17,13 +17,13 @@ This is the flagship module of the **Bitaxe Brains Project** — a clean, modula
 - Efficiency optimization (J/TH) with fail-closed auto-apply logic
 - Slew-rate limiting and BM1370-specific safe operating limits
 - NVS silicon fingerprinting with warm-start capability per chip
-- NASA Level C defensive programming (isfinite guards, covariance stabilization, proper cold-start initialization)
+- Extensively reviewed with NASA Level C-style defensive programming (isfinite guards, covariance stabilization, proper cold-start initialization)
 
 ---
 
 ## v1.0.0-beta1 Release (May 2026)
 
-All major stability, safety, and adaptation improvements identified in independent technical audits have been implemented. The core RLS engine is now production-hardened for continuous 24/7 operation.
+All major stability, safety, and adaptation improvements identified in independent technical audits have been implemented. The core RLS engine has been extensively reviewed and NASA Level C hardened. **This is a beta release — it has not yet been deployed in production.** Community field testing is encouraged.
 
 **Major improvements in this release:**
 - Complete consolidation of safety logic into `g6_brain.c` (g6_safety.c/h no longer required)
