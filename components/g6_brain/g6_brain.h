@@ -37,9 +37,9 @@ extern "C" {
 #define BM1370_V_MIN        1050.0f
 #define BM1370_V_MAX        1350.0f
 
-/* ====================== SAMPLE QUALITY CONSTANTS ====================== */
-#define SETTLE_SECONDS      8000
-#define MIN_WINDOW_SECONDS  5000
+/* ====================== SAMPLE QUALITY CONSTANTS (NASA fix: correct units) ====================== */
+#define SETTLE_MS           8000   /* 8000 ms = 8 seconds when configTICK_RATE_HZ=1000 */
+#define MIN_WINDOW_MS       5000
 #define MIN_SHARE_COUNT     20
 #define MAX_TEMP_SLOPE      0.5f
 
