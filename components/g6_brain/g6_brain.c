@@ -2,7 +2,7 @@
  * g6_brain.c
  * Bitaxe G6 Brain — v1.0.0-beta1 (Final Release)
  *
- * Pure RLS quadratic optimizer with fully integrated aerospace-grade safety.
+ * Stabilized conventional RLS quadratic optimizer with fully integrated safety.
  * All logic self-contained — no external g6_safety.c dependency.
  *
  * Production ready for Bitaxe ESP-Miner (Gamma 602+).
@@ -305,7 +305,7 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     }
 
 safety_layer:
-    /* LAYER 4: Safety (always executed) */
+    /* LAYER 4: Safety (always executed — thermal/voltage/NER clamps run even on rejected samples) */
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
     if (err_pct > brain->ner_threshold) g6_asic_error_handle_non_blocking(brain);
@@ -340,7 +340,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
 
-    if (quadratic_has_valid_maximum(a, b, c)) {
+    if (quadratic_has_valid_maximum(a, float b, float c)) {
         float det = 4.0f * a * b - c * c;
         if (fabsf(det) > 1e-6f) {
             float f_norm = (2.0f * b * (-d) - c * (-e)) / det;
@@ -372,14 +372,23 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     bool ok = true;
+    float min_diag = 1e30f;
+    float max_diag = 0.0f;
+
     for (int i = 0; i < RLS_N; i++) {
         if (brain->P[i][i] < RLS_P_CLAMP_MIN || brain->P[i][i] > RLS_P_CLAMP_MAX) ok = false;
+        if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
+        if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
+
         for (int j = i + 1; j < RLS_N; j++) {
             if (fabsf(brain->P[i][j] - brain->P[j][i]) > 1e-4f) ok = false;
         }
     }
 
-    ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH)", 
-             ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency);
+    float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
+    if (cond > 1e6f) ok = false;  /* ill-conditioned covariance */
+
+    ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH, cond=%.1f)", 
+             ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency, cond);
     return ok ? ESP_OK : ESP_FAIL;
 }
