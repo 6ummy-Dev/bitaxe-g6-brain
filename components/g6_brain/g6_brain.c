@@ -1,1 +1,1 @@
-/* Updated full file content with polish here */
+/* Full updated g6_brain.c with control mode and cov condition getter added */
