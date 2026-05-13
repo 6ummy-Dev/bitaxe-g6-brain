@@ -1,11 +1,8 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta1 (Final Release)
+ * Bitaxe G6 Brain — v1.0.0-beta1 + Polish (Control Mode + Cov Condition)
  *
- * Public interface for the fully self-contained G6 Brain.
- * All safety logic is integrated inside g6_brain.c (no external dependency).
- *
- * 100% compatible with original G6BrainState struct and public API.
+ * Public interface with control mode and covariance monitoring.
  */
 
 #pragma once
@@ -17,6 +14,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ====================== CONTROL MODES ====================== */
+typedef enum {
+    G6_MODE_OBSERVE_ONLY = 0,
+    G6_MODE_RECOMMEND,
+    G6_MODE_AUTO
+} G6ControlMode;
 
 /* ====================== RLS CONSTANTS ====================== */
 #define RLS_N               6
@@ -37,7 +41,7 @@ extern "C" {
 #define BM1370_V_MAX        1350.0f
 
 /* ====================== SAMPLE QUALITY CONSTANTS ====================== */
-#define SETTLE_MS           8000   /* 8 seconds (configTICK_RATE_HZ=1000) */
+#define SETTLE_MS           8000
 #define MIN_WINDOW_MS       5000
 #define MIN_SHARE_COUNT     20
 #define MAX_TEMP_SLOPE      0.5f
@@ -79,6 +83,9 @@ typedef struct {
     float temp_ceiling;
     float dfs_step_mhz;
 
+    /* Control mode */
+    G6ControlMode control_mode;
+
     /* Nonce / extras */
     uint32_t nonce_offset;
     bool enable_low_latency_jobs;
@@ -91,11 +98,11 @@ typedef struct {
     /* Sample quality state machine */
     BrainSampleState sample_state;
     uint32_t settle_start_tick;
-    uint32_t measure_start_tick;   /* for MIN_WINDOW_MS timing */
+    uint32_t measure_start_tick;
     uint32_t valid_sample_count;
 
     /* Telemetry */
-    float last_efficiency;         /* J/TH telemetry */
+    float last_efficiency;
 } G6BrainState;
 
 /* ====================== PUBLIC INTERFACE ====================== */
@@ -110,9 +117,11 @@ void g6_brain_get_optimal(const G6BrainState *brain,
 
 float g6_brain_get_model_quality(const G6BrainState *brain);
 
+float g6_brain_get_cov_condition(const G6BrainState *brain);
+
 esp_err_t g6_brain_self_test(G6BrainState *brain);
 
-/* NVS silicon fingerprint */
+/* NVS */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
