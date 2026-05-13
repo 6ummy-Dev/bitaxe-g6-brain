@@ -340,7 +340,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
 
-    if (quadratic_has_valid_maximum(a, float b, float c)) {
+    if (quadratic_has_valid_maximum(a, b, c)) {
         float det = 4.0f * a * b - c * c;
         if (fabsf(det) > 1e-6f) {
             float f_norm = (2.0f * b * (-d) - c * (-e)) / det;
@@ -366,6 +366,20 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
 
 float g6_brain_get_model_quality(const G6BrainState *brain) {
     return brain ? brain->model_quality : 0.0f;
+}
+
+float g6_brain_get_cov_condition(const G6BrainState *brain) {
+    if (!brain) return 0.0f;
+    
+    float min_diag = 1e30f;
+    float max_diag = 0.0f;
+    
+    for (int i = 0; i < RLS_N; i++) {
+        if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
+        if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
+    }
+    
+    return (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
 }
 
 esp_err_t g6_brain_self_test(G6BrainState *brain) {
