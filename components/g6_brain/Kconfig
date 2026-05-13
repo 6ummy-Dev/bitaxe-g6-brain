@@ -1,5 +1,14 @@
 menu "G6 Brain Configuration (v1.0 Beta QA Hardened)"
 
+    config G6_CONTROL_MODE
+        int "G6 Control Mode"
+        default 0
+        range 0 2
+        help
+          0 = OBSERVE_ONLY (recommended for safety)
+          1 = RECOMMEND_ONLY
+          2 = AUTO_TUNE (full automatic)
+
     config G6_RLS_LAMBDA
         float "RLS forgetting factor"
         default 0.98
