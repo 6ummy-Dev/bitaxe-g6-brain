@@ -1,4 +1,4 @@
-# G6 Brain Documentation — v1.0 Beta
+# G6 Brain Documentation — v1.0.0-beta2
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
@@ -46,8 +46,8 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 
 ## Status
 
-- **Version:** v1.0 Beta (May 2026)
-- **Maturity:** Production-ready for Gamma 602+ hardware
+- **Version:** v1.0.0-beta2 (May 2026)
+- **Maturity:** Beta — ready for community field testing on Gamma 602+ hardware
 - **License:** MIT
 - **Maintainer:** 6ummy-Dev + Grok (xAI)
 
