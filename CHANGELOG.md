@@ -2,6 +2,34 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta2] - 2026-05-17
+
+**Status**: Polished beta with expanded test coverage and improved auditability. Ready for wider community testing.
+
+### Added
+- Significantly expanded Unity test suite:
+  - Input validation and rejection tests
+  - Safety layer execution on invalid/overheated samples
+  - Proactive thermal derating behavior
+  - Covariance matrix symmetry verification after updates
+  - Cold-start flag clearing behavior
+- Added explanatory comment on the `goto safety_layer` pattern for better auditability
+- Added power sanity check in `g6_brain_update()`
+- Improved Kconfig with clearer help texts, section organization, and control mode explanations
+
+### Changed
+- Tightened self-test condition number threshold (from 1e6 to 5e5) for stricter ill-conditioned matrix detection
+- Updated all version strings, headers, and documentation to v1.0.0-beta2
+- Improved README.md release notes and contributing guidelines
+- Minor cleanup and formatting in CMakeLists.txt and Kconfig for readability
+
+### Notes
+- Public API remains **100% backward compatible** with beta1.
+- Focus of this release: Test expansion + messaging & documentation alignment following independent technical reviews.
+- Still in beta — extended field testing and soak data collection recommended before Phase 4 production release.
+
+---
+
 ## [1.0.0-beta1] - 2026-05-12
 
 **Status**: Extensively reviewed and hardened. Ready for community field testing. Not yet in large-scale production.
@@ -47,4 +75,4 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - v1.0 Beta (early May 2026): Major hardening, sample state machine, efficiency objective, audit-driven fixes
 - All pre-v1.0 development archived in `v1.8` branch history
 
-**Next Phase (Phase 2)**: Active thermal slope detection, controlled exploration, PID integration, extended 30+ day soak testing, and Unity test suite.
+**Next Phase (Phase 2)**: Active thermal slope detection, controlled exploration, PID integration, extended 30+ day soak testing, and further test expansion.
