@@ -8,57 +8,49 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 
 ---
 
-## Quick Start (30 seconds)
+## Quick Start
 
 1. Read **[INSTALL.md](INSTALL.md)** — add the component and enable it
-2. Use the **drop-in task** in `docs/main_integration_v1.0_beta.c`
-3. Call `start_g6_brain(&your_global_state)` from `app_main()`
-4. Watch the logs. The brain will begin learning within minutes.
+2. Use the **recommended integration example**: `docs/INTEGRATION_EXAMPLE.c`
+3. Adapt it into your firmware and start in `OBSERVE_ONLY` or `RECOMMEND` mode
+4. Monitor the logs. The brain will begin learning within minutes.
 
 ---
 
 ## Documentation Map
 
-| Document                  | Purpose                                      | Read this when... |
-|---------------------------|----------------------------------------------|-------------------|
-| **[INSTALL.md](INSTALL.md)**     | Complete installation & integration guide    | You are adding the brain to your firmware |
-| **[API.md](API.md)**             | Full public API reference with examples      | You need function signatures or usage details |
-| **[KCONFIG.md](KCONFIG.md)**     | All configuration options explained          | You want to tune safety limits or debug output |
-| `main_integration_v1.0_beta.c`   | Production-ready drop-in example             | You want the recommended integration pattern |
-| `INTEGRATION_EXAMPLE.c`          | Minimal placeholder example                  | You prefer a simpler starting point |
+| Document                        | Purpose                                           | When to read |
+|--------------------------------|---------------------------------------------------|--------------|
+| **[INSTALL.md](INSTALL.md)**        | Installation & integration guide                  | Adding the brain to your firmware |
+| `INTEGRATION_EXAMPLE.c`             | **Recommended integration example** (main)        | Starting point for real integration |
+| **[API.md](API.md)**                | Full public API reference                         | Need function details |
+| **[KCONFIG.md](KCONFIG.md)**        | All configuration options explained               | Tuning safety limits or debugging |
+| **[SAFETY.md](SAFETY.md)**          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
 
-**Additional project docs (root of repo):**
+**Additional project docs (root):**
 - `AGENTS.md` — Safety invariants & engineering principles
-- `GLOSSARY.md` — Terminology used throughout the project
+- `GLOSSARY.md` — Terminology
 - `CHANGELOG.md` — Version history
 
 ---
 
 ## What Makes G6 Brain Different
 
-- **Pure RLS quadratic modeling** — no black-box ML, fully explainable
-- **Predictive safety** — thermal ceiling, voltage undershoot detection, slew limiting, proactive ΔT/dt scaling
-- **Per-chip NVS fingerprinting** — learns your specific silicon and warm-starts on every boot
-- **Modular architecture** — clean `G6BrainInterface` so future brains (ML, multi-ASIC, heuristic) can be swapped without touching ESP-Miner core
-- **Aerospace QA hardening** — signal integrity, unhappy-path engineering, Triple-8 certification path
+- Pure RLS quadratic modeling (fully explainable)
+- Strong predictive safety layers
+- Per-chip NVS fingerprinting (warm start)
+- Modular and auditable design
+- Aerospace-style QA hardening
 
 ---
 
 ## Status
 
 - **Version:** v1.0.0-beta2 (May 2026)
-- **Maturity:** Beta — ready for community field testing on Gamma 602+ hardware
+- **Maturity:** Beta — ready for community field testing
 - **License:** MIT
-- **Maintainer:** 6ummy-Dev + Grok (xAI)
-
----
-
-## Getting Help
-
-- Open an issue on [github.com/6ummy-Dev/bitaxe-g6-brain](https://github.com/6ummy-Dev/bitaxe-g6-brain)
-- Check the root `README.md` for project vision and credits
 
 ---
 
 **The brain your Bitaxe always wanted.**  
-Maximize hashrate. Minimize risk. Evolve autonomously. ⚡
+Start safe. Learn. Then optimize. ⚡
