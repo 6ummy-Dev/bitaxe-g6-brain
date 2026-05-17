@@ -1,4 +1,4 @@
-# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta1
+# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta2
 
 **This is not a happy-path optimizer.**  
 The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
@@ -128,5 +128,5 @@ Every line of the safety layer was written with the explicit goal of surviving r
 
 ---
 
-**Version:** v1.0.0-beta1 — May 2026  
+**Version:** v1.0.0-beta2 — May 2026  
 **Philosophy:** Fail safe. Learn fast. Never compromise the hardware.
