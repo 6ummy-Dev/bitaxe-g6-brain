@@ -3,7 +3,6 @@
  * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened)
  *
  * Stabilized conventional RLS quadratic optimizer with fully integrated safety.
- * All logic self-contained.
  */
 
 #include "g6_brain.h"
@@ -18,8 +17,6 @@ static const char *TAG = "G6_BRAIN";
 
 static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
-
-#define MIN_VALID_SHARES   30U
 
 /* ====================== RLS HELPERS ====================== */
 
@@ -89,7 +86,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     }
 }
 
-/* Fixed: Now actually reacts to high error rate instead of model_quality */
+/* Fixed: Now reacts to actual error rate */
 static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct) {
     if (!brain) return;
     if (err_pct > brain->ner_threshold) {
@@ -139,7 +136,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
 
 /* ====================== SAMPLE STATE MACHINE ====================== */
 
-static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares, uint32_t now) {
+static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares) {
     if (!isfinite(hr_ths) || hr_ths <= 0.0f) return false;
     if (shares < MIN_SHARE_COUNT) return false;
     if (!is_thermal_safe(brain, temp_c)) return false;
@@ -196,7 +193,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     memset(brain, 0, sizeof(G6BrainState));
 
-    /* Safe defaults to prevent 0 MHz / 0 mV after cold start (BUG-3 fix) */
+    /* Safe defaults to avoid 0 MHz / 0 mV after cold start */
     brain->best_f = BM1370_F_CENTER;
     brain->best_v = BM1370_V_CENTER;
 
@@ -227,8 +224,16 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     return ESP_OK;
 }
 
-esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths,
-                          float power_w, float temp_c, float err_pct) {
+/* Updated signature with share_count parameter (fixes BUG-2) */
+esp_err_t g6_brain_update(G6BrainState *brain,
+                          float f_mhz,
+                          float v_mv,
+                          float hr_ths,
+                          float power_w,
+                          float temp_c,
+                          float err_pct,
+                          uint32_t share_count)
+{
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     uint32_t now = xTaskGetTickCount();
@@ -241,7 +246,7 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* Thermal gate — do NOT call safety here, let safety_layer handle it (BUG-1 fix) */
+    /* Thermal gate — safety handled only in safety_layer */
     if (!is_thermal_safe(brain, temp_c)) {
         goto safety_layer;
     }
@@ -253,8 +258,8 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
 
     brain->last_update_timestamp = now;
 
-    /* Sample quality */
-    bool valid = is_sample_valid(brain, hr_ths, temp_c, MIN_VALID_SHARES, now);
+    /* Sample quality now uses real share_count */
+    bool valid = is_sample_valid(brain, hr_ths, temp_c, share_count);
 
     if (valid || brain->sample_state == BRAIN_STATE_SETTLE_WAIT || brain->sample_state == BRAIN_STATE_MEASURE_WINDOW) {
         advance_sample_state(brain, now);
@@ -306,7 +311,7 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     }
 
 safety_layer:
-    /* SAFETY LAYER — always executes (BUG-1 fixed: no double call) */
+    /* SAFETY LAYER — always executes once */
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
     if (err_pct > brain->ner_threshold) {
