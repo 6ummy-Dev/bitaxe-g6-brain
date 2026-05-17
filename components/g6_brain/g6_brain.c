@@ -1,11 +1,14 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta1 (Final Release)
+ * Bitaxe G6 Brain — v1.0.0-beta2
  *
  * Stabilized conventional RLS quadratic optimizer with fully integrated safety.
  * All logic self-contained — no external g6_safety.c dependency.
  *
- * Production ready for Bitaxe ESP-Miner (Gamma 602+).
+ * Beta2 focus: messaging alignment, additional defensive guards,
+ * tightened self-test thresholds, and expanded test coverage preparation.
+ *
+ * Production readiness target: Phase 4 (after extended soak + expanded tests).
  */
 
 #include "g6_brain.h"
@@ -222,7 +225,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     g6_brain_load_nvs_fingerprint(brain);
 
-    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta1 initialized (All-In-One)");
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (All-In-One)");
     return ESP_OK;
 }
 
@@ -236,6 +239,11 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
         hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Extra power sanity check */
+    if (power_w < 0.0f || power_w > 100.0f) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -305,7 +313,12 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     }
 
 safety_layer:
-    /* LAYER 4: Safety (always executed — thermal/voltage/NER clamps run even on rejected samples) */
+    /* 
+     * SAFETY LAYER (always executed)
+     * This goto pattern guarantees that thermal derating, voltage clamping,
+     * and NER handling run even when samples are rejected. Critical for
+     * hardware safety when directly controlling ASIC voltage/frequency.
+     */
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
     if (err_pct > brain->ner_threshold) g6_asic_error_handle_non_blocking(brain);
@@ -400,7 +413,7 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
     }
 
     float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
-    if (cond > 1e6f) ok = false;  /* ill-conditioned covariance */
+    if (cond > 5e5f) ok = false;  /* ill-conditioned covariance — tightened for beta2 */
 
     ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH, cond=%.1f)", 
              ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency, cond);
