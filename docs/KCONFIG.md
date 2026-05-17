@@ -1,7 +1,7 @@
-# G6 Brain Kconfig Options — v1.0.0-beta1
+# G6 Brain Kconfig Options — v1.0.0-beta2
 
 All options live under:  
-**Component config → G6 Brain Configuration (v1.0 Beta QA Hardened)**
+**Component config → G6 Brain Configuration**
 
 These control behavior, safety limits, debug output, and persistence.
 
@@ -86,7 +86,7 @@ These control behavior, safety limits, debug output, and persistence.
 
 ---
 
-## Recommended Starting Configuration (v1.0.0-beta1)
+## Recommended Starting Configuration (v1.0.0-beta2)
 
 For a typical Bitaxe Gamma 602+ with good cooling:
 
@@ -118,7 +118,7 @@ After 24–48 h of stable operation you can experiment with slightly higher `G6_
 
 - **Full API & integration** → [API.md](API.md) and `docs/main_integration_v1.0_beta.c`
 - **Installation guide** → [INSTALL.md](INSTALL.md)
-- **Safety philosophy & edge cases** → Root `AGENTS.md` (if present) or the inline comments in `g6_brain.c`
+- **Safety philosophy & edge cases** → Root `AGENTS.md`
 
 **Pro tip:** After changing any Kconfig value, always do a full clean build:
 
@@ -129,5 +129,5 @@ idf.py build
 
 ---
 
-**Version:** v1.0.0-beta1 — May 2026  
+**Version:** v1.0.0-beta2 — May 2026  
 **Maintainer:** 6ummy-Dev + Grok (xAI)
