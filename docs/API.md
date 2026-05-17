@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0 Beta
+# G6 Brain Public API — v1.0.0-beta2
 
 **Modular, self-optimizing control brain for Bitaxe ESP-Miner (Gamma 602+ / BM1370).**  
 Pure Recursive Least Squares (RLS) quadratic response surface modeling with built-in predictive safety.
@@ -143,12 +143,12 @@ The brain will **never** recommend values outside these ranges.
 - **Installation & quick start** → [INSTALL.md](INSTALL.md)
 - **Kconfig options** → [KCONFIG.md](KCONFIG.md)
 - **Production integration example** → [main_integration_v1.0_beta.c](main_integration_v1.0_beta.c)
-- **Safety & unhappy-path engineering** → See root `AGENTS.md` and `g6_safety.h`
+- **Safety & engineering principles** → [AGENTS.md](../AGENTS.md)
 
 ---
 
 **License**: MIT  
-**Version**: v1.0 Beta (May 2026)  
+**Version**: v1.0.0-beta2 (May 2026)  
 **Maintainer**: 6ummy-Dev + Grok (xAI)
 
 *This API is stable for v1.0. Future brains (ML, multi-ASIC, etc.) will implement the same interface.*
