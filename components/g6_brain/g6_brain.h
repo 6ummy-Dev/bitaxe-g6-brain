@@ -1,12 +1,8 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened)
  *
- * Stabilized conventional RLS quadratic optimizer with integrated safety.
- * Focus for beta2: messaging alignment, test coverage expansion,
- * and continued defensive hardening.
- *
- * Public interface with control mode and covariance monitoring.
+ * Public interface.
  */
 
 #pragma once
@@ -110,14 +106,32 @@ typedef struct {
 } G6BrainState;
 
 /* ====================== PUBLIC INTERFACE ====================== */
+
+/**
+ * Initialize the G6 Brain.
+ * Must be called after nvs_flash_init().
+ */
 esp_err_t g6_brain_init(G6BrainState *brain);
 
+/**
+ * Feed telemetry and run one optimization + safety cycle.
+ *
+ * @param share_count  Actual number of valid shares in the current window.
+ *                     Pass 0 if unknown (share quality check will be skipped).
+ */
 esp_err_t g6_brain_update(G6BrainState *brain,
-                          float f_mhz, float v_mv, float hr_ths,
-                          float power_w, float temp_c, float err_pct);
+                          float f_mhz,
+                          float v_mv,
+                          float hr_ths,
+                          float power_w,
+                          float temp_c,
+                          float err_pct,
+                          uint32_t share_count);   /* Added for proper share validation (BUG-2 fix) */
 
 void g6_brain_get_optimal(const G6BrainState *brain,
-                          float *opt_f, float *opt_v, float *pred_hr);
+                          float *opt_f,
+                          float *opt_v,
+                          float *pred_hr);
 
 float g6_brain_get_model_quality(const G6BrainState *brain);
 
