@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0 Beta**
+**G6 Brain v1.0.0-beta2**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
