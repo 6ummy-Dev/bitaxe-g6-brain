@@ -25,7 +25,7 @@ This file provides proper academic credit and stable references for the core tec
 ## Quadratic Response Surface Methodology (RSM)
 
 - **Box, G. E. P., & Wilson, K. B.** (1951). "On the Experimental Attainment of Optimum Conditions". *Journal of the Royal Statistical Society. Series B (Methodological)*, 13(1), 1–45.  
-  https://doi.org/10.1111/j.2517-6161.1951.tb00067.x  
+  https://doi.org/10.1111/j.2517-6161.1951tb00067.x  
   The original paper that introduced response surface methodology.
 
 - **Myers, R. H., Montgomery, D. C., & Anderson-Cook, C. M.** (2016). *Response Surface Methodology: Process and Product Optimization Using Designed Experiments* (4th ed.). Wiley.  
