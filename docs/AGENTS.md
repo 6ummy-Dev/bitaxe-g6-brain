@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0 Beta**
+**G6 Brain v1.0.0-beta2**
 
 This document defines the non-negotiable engineering rules and safety invariants for the G6 Brain project. All code, documentation, and future contributions must respect these principles.
 
