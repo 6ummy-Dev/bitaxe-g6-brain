@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0 Beta
+# G6 Brain Installation & Integration Guide — v1.0.0-beta2
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370) running AxeOS or custom ESP-IDF firmware.
 
