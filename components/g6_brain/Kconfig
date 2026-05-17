@@ -1,49 +1,76 @@
-menu "G6 Brain Configuration (v1.0 Beta QA Hardened)"
+menu "G6 Brain Configuration (v1.0.0-beta2)"
+
+    comment "Bitaxe G6 Brain — Stabilized RLS Optimizer (Beta2)"
 
     config G6_CONTROL_MODE
         int "G6 Control Mode"
         default 0
         range 0 2
         help
-          0 = OBSERVE_ONLY (recommended for safety)
-          1 = RECOMMEND_ONLY
-          2 = AUTO_TUNE (full automatic)
+            Selects the operating mode of the G6 Brain:
+              0 = OBSERVE_ONLY  (safest — only monitors, never applies changes)
+              1 = RECOMMEND     (calculates optimal point but does not auto-apply)
+              2 = AUTO          (full automatic tuning — use with caution)
+
+            Recommended: Start with 0 or 1 during initial testing.
 
     config G6_RLS_LAMBDA
-        float "RLS forgetting factor"
+        float "RLS base forgetting factor"
         default 0.98
         range 0.9 0.999
+        help
+            Base forgetting factor for the RLS algorithm.
+            Lower values adapt faster but can be less stable.
+            The brain also uses a gradient-based variable forgetting factor on top of this.
 
     config G6_TEMP_CEILING
-        int "Smart DFS thermal ceiling (C)"
+        int "Thermal ceiling (°C)"
         default 70
+        help
+            Maximum allowed ASIC temperature before proactive derating kicks in.
 
     config G6_DFS_STEP
         int "DFS frequency step (MHz)"
         default 25
+        help
+            Step size used when adjusting frequency.
 
     config G6_NER_THRESHOLD
-        float "P-VUS NER threshold"
+        float "NER / Error threshold"
         default 0.001
+        help
+            Threshold for Nonce Error Rate. Above this value triggers conservative back-off.
 
     config G6_I2C_HARD_FAULT_THRESHOLD
-        int "I2C hard fault threshold (consecutive timeouts)"
+        int "I2C hard fault threshold (consecutive)"
         default 5
         range 3 20
+        help
+            Number of consecutive I2C timeouts before considering it a hard fault.
+            (Currently used for monitoring/logging)
 
-    # QA HARDENING KNOBS
+    # === QA Hardening & Safety Knobs ===
     config G6_PROACTIVE_DFS_THRESHOLD
-        float "Proactive ΔT/dt threshold (°C/s)"
+        float "Proactive thermal slope threshold (°C/s)"
         default 2.0
+        help
+            Temperature slope threshold for proactive derating.
+            (Phase 2 feature — partially active)
 
     config G6_VOLTAGE_RIPPLE_MAX
         float "Max allowed voltage ripple (%)"
         default 5.0
+        help
+            Voltage ripple tolerance before triggering protection logic.
 
     config G6_NVS_WRITE_INTERVAL
         int "NVS write interval (ticks) — wear leveling"
         default 30000
+        help
+            How often the brain is allowed to write the model fingerprint to NVS.
+            Higher values reduce flash wear.
 
+    # === PID (Phase 2 — placeholders) ===
     config G6_KP
         float "PID Kp"
         default 2.0
@@ -56,9 +83,12 @@ menu "G6 Brain Configuration (v1.0 Beta QA Hardened)"
         float "PID Kd"
         default 0.5
 
-    # STOCHASTIC NONCE FEATURES
+    # === Extra Features ===
     config G6_LOW_LATENCY_JOBS
-        bool "Enable low-latency job mode (double-buffering hook)"
+        bool "Enable low-latency job mode"
         default y
+        help
+            Enables hooks for low-latency job handling (double-buffering).
+            Safe to leave enabled.
 
 endmenu
