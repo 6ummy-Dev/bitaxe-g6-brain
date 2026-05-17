@@ -1,14 +1,9 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened)
  *
  * Stabilized conventional RLS quadratic optimizer with fully integrated safety.
- * All logic self-contained — no external g6_safety.c dependency.
- *
- * Beta2 focus: messaging alignment, additional defensive guards,
- * tightened self-test thresholds, and expanded test coverage preparation.
- *
- * Production readiness target: Phase 4 (after extended soak + expanded tests).
+ * All logic self-contained.
  */
 
 #include "g6_brain.h"
@@ -21,14 +16,13 @@
 
 static const char *TAG = "G6_BRAIN";
 
-/* NVS */
 static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 
-/* Internal minimum shares for valid sample (realistic for stable hashrate) */
 #define MIN_VALID_SHARES   30U
 
 /* ====================== RLS HELPERS ====================== */
+
 static float compute_gradient_vff(float err, float sigma_sq) {
     if (sigma_sq < 1e-8f) sigma_sq = 1e-8f;
     float L = (err * err) / sigma_sq;
@@ -72,6 +66,7 @@ static bool quadratic_has_valid_maximum(float a, float b, float c) {
 }
 
 /* ====================== SELF-CONTAINED SAFETY ====================== */
+
 static bool is_thermal_safe(const G6BrainState *brain, float temp_c) {
     if (!isfinite(temp_c) || !isfinite(brain->temp_ceiling)) return false;
     return (temp_c < brain->temp_ceiling);
@@ -94,11 +89,12 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     }
 }
 
-static void g6_asic_error_handle_non_blocking(G6BrainState *brain) {
+/* Fixed: Now actually reacts to high error rate instead of model_quality */
+static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct) {
     if (!brain) return;
-    if (brain->model_quality < 0.30f) {
-        ESP_LOGW(TAG, "HIGH ERROR RATE — conservative back-off");
-        brain->model_quality = 0.15f;
+    if (err_pct > brain->ner_threshold) {
+        ESP_LOGW(TAG, "HIGH ERROR RATE (%.2f%%) — conservative back-off", err_pct);
+        brain->model_quality = fminf(brain->model_quality, 0.25f);
         brain->cold_start = true;
         brain->best_f *= 0.92f;
         brain->best_v *= 0.985f;
@@ -106,6 +102,7 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain) {
 }
 
 /* ====================== NVS ====================== */
+
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
@@ -141,6 +138,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
 }
 
 /* ====================== SAMPLE STATE MACHINE ====================== */
+
 static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares, uint32_t now) {
     if (!isfinite(hr_ths) || hr_ths <= 0.0f) return false;
     if (shares < MIN_SHARE_COUNT) return false;
@@ -162,9 +160,7 @@ static void advance_sample_state(G6BrainState *brain, uint32_t now) {
                 brain->sample_state = BRAIN_STATE_MEASURE_WINDOW;
             break;
         case BRAIN_STATE_MEASURE_WINDOW:
-            if (brain->measure_start_tick == 0) {
-                brain->measure_start_tick = now;
-            }
+            if (brain->measure_start_tick == 0) brain->measure_start_tick = now;
             if (now - brain->measure_start_tick >= MIN_WINDOW_MS) {
                 brain->sample_state = BRAIN_STATE_VALIDATE_SAMPLE;
                 brain->measure_start_tick = 0;
@@ -190,7 +186,6 @@ static void advance_sample_state(G6BrainState *brain, uint32_t now) {
 esp_err_t g6_brain_init(G6BrainState *brain) {
     if (!brain) return ESP_ERR_INVALID_ARG;
 
-    /* NVS safety check */
     nvs_handle_t nvs_test;
     esp_err_t nvs_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_test);
     if (nvs_err == ESP_ERR_NVS_NOT_INITIALIZED) {
@@ -201,6 +196,10 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     memset(brain, 0, sizeof(G6BrainState));
 
+    /* Safe defaults to prevent 0 MHz / 0 mV after cold start (BUG-3 fix) */
+    brain->best_f = BM1370_F_CENTER;
+    brain->best_v = BM1370_V_CENTER;
+
     brain->ridge_epsilon = 1e-5f;
     brain->cold_start = true;
     brain->update_count = 0;
@@ -210,7 +209,6 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     brain->last_setting_change_tick = 0;
     brain->measure_start_tick = 0;
 
-    /* Cold-start covariance (critical for RLS) */
     for (int i = 0; i < RLS_N; i++) {
         for (int j = 0; j < RLS_N; j++) {
             brain->P[i][j] = (i == j) ? 1.0e5f : 0.0f;
@@ -225,7 +223,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     g6_brain_load_nvs_fingerprint(brain);
 
-    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (All-In-One)");
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized");
     return ESP_OK;
 }
 
@@ -235,32 +233,27 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
 
     uint32_t now = xTaskGetTickCount();
 
-    /* LAYER 0: Input validation */
+    /* Input validation */
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
-        hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
+        hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN ||
+        power_w < 0.0f || power_w > 100.0f) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* Extra power sanity check */
-    if (power_w < 0.0f || power_w > 100.0f) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    /* LAYER 1: Thermal gate (always reach safety_layer) */
+    /* Thermal gate — do NOT call safety here, let safety_layer handle it (BUG-1 fix) */
     if (!is_thermal_safe(brain, temp_c)) {
-        g6_safety_proactive_thermal_scale(brain, temp_c);
         goto safety_layer;
     }
 
     if (err_pct > brain->ner_threshold) {
-        g6_asic_error_handle_non_blocking(brain);
+        g6_asic_error_handle_non_blocking(brain, err_pct);
         goto safety_layer;
     }
 
     brain->last_update_timestamp = now;
 
-    /* LAYER 2: Sample quality (meaningful share threshold) */
+    /* Sample quality */
     bool valid = is_sample_valid(brain, hr_ths, temp_c, MIN_VALID_SHARES, now);
 
     if (valid || brain->sample_state == BRAIN_STATE_SETTLE_WAIT || brain->sample_state == BRAIN_STATE_MEASURE_WINDOW) {
@@ -271,7 +264,7 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
         goto safety_layer;
     }
 
-    /* LAYER 3: RLS with lambda guard */
+    /* RLS Update */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -313,17 +306,14 @@ esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr
     }
 
 safety_layer:
-    /* 
-     * SAFETY LAYER (always executed)
-     * This goto pattern guarantees that thermal derating, voltage clamping,
-     * and NER handling run even when samples are rejected. Critical for
-     * hardware safety when directly controlling ASIC voltage/frequency.
-     */
+    /* SAFETY LAYER — always executes (BUG-1 fixed: no double call) */
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
-    if (err_pct > brain->ner_threshold) g6_asic_error_handle_non_blocking(brain);
+    if (err_pct > brain->ner_threshold) {
+        g6_asic_error_handle_non_blocking(brain, err_pct);
+    }
 
-    /* LAYER 5: Optimal setpoint + clamps + efficiency (J/TH) */
+    /* Optimal setpoint + clamps */
     g6_brain_get_optimal(brain, &brain->best_f, &brain->best_v, NULL);
 
     if (brain->best_f < BM1370_F_MIN) brain->best_f = BM1370_F_MIN;
@@ -331,10 +321,8 @@ safety_layer:
     if (brain->best_v < BM1370_V_MIN) brain->best_v = BM1370_V_MIN;
     if (brain->best_v > BM1370_V_MAX) brain->best_v = BM1370_V_MAX;
 
-    /* Energy efficiency in J/TH (lower is better) */
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
-    /* Settle reset on significant change */
     if (fabsf(brain->best_f - f_mhz) > 8.0f || fabsf(brain->best_v - v_mv) > 8.0f) {
         brain->last_setting_change_tick = now;
         brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
@@ -383,15 +371,14 @@ float g6_brain_get_model_quality(const G6BrainState *brain) {
 
 float g6_brain_get_cov_condition(const G6BrainState *brain) {
     if (!brain) return 0.0f;
-    
+
     float min_diag = 1e30f;
     float max_diag = 0.0f;
-    
+
     for (int i = 0; i < RLS_N; i++) {
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
     }
-    
     return (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
 }
 
@@ -413,9 +400,9 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
     }
 
     float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
-    if (cond > 5e5f) ok = false;  /* ill-conditioned covariance — tightened for beta2 */
+    if (cond > 5e5f) ok = false;
 
-    ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH, cond=%.1f)", 
+    ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH, cond=%.1f)",
              ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency, cond);
     return ok ? ESP_OK : ESP_FAIL;
 }
