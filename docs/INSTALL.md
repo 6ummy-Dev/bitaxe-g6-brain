@@ -13,9 +13,6 @@
 - At least **64 KB free PSRAM** and **8 KB free IRAM** after integration (brain task uses ~4 KB stack)
 - Git access (recommended) or manual copy of the `g6_brain` component
 
-**Recommended starting point:** Use the **production integration example** at  
-`docs/main_integration_v1.0_beta.c` (drop-in FreeRTOS task + real telemetry extraction).
-
 ---
 
 ## Step 1: Add the Component
@@ -38,15 +35,13 @@ git submodule update --init --recursive
 
 ## Step 2: Register the Component
 
-Edit your project’s top-level `CMakeLists.txt` (or the `CMakeLists.txt` of your main application component) and add:
+Edit your project’s top-level `CMakeLists.txt` and add:
 
 ```cmake
 set(EXTRA_COMPONENT_DIRS 
     ${CMAKE_CURRENT_LIST_DIR}/components/g6_brain
 )
 ```
-
-If you already have `EXTRA_COMPONENT_DIRS`, just append the path.
 
 ---
 
@@ -56,88 +51,42 @@ If you already have `EXTRA_COMPONENT_DIRS`, just append the path.
 idf.py menuconfig
 ```
 
-Navigate to:
+Go to:
 
 ```
-Component config →
-    G6 Brain Configuration
+Component config → G6 Brain Configuration
 ```
 
-**Required options to enable:**
-
-- `CONFIG_G6_BRAIN_ENABLE` → **Yes** (default)
-- `CONFIG_G6_BRAIN_NVS_FINGERPRINT` → **Yes** (strongly recommended for per-chip learning)
-
-Optional but useful:
-- `CONFIG_G6_BRAIN_DEBUG` → Yes (during first integration)
-- Adjust `CONFIG_G6_BRAIN_TEMP_CEILING` (default 70 °C)
-- Adjust max step sizes if you want more aggressive tuning
-
-Save and exit.
+Enable at minimum:
+- `CONFIG_G6_BRAIN_ENABLE`
+- `CONFIG_G6_BRAIN_NVS_FINGERPRINT` (recommended)
 
 ---
 
-## Step 4: Integrate the Brain (Recommended Path)
+## Step 4: Integrate the Brain (Recommended)
 
-Use the **drop-in task** from `docs/main_integration_v1.0_beta.c`:
+Use the **recommended integration example**:
 
-1. Copy `docs/main_integration_v1.0_beta.c` into your project (e.g. `main/brain_task.c`)
-2. Include it:
-   ```c
-   #include "main_integration_v1.0_beta.h"   // or just paste the functions
-   ```
-3. Call from `app_main()` **after** WiFi, ASIC init, and GlobalState is valid:
+→ **`docs/INTEGRATION_EXAMPLE.c`**
 
-   ```c
-   extern void start_g6_brain(GlobalState *state);
-   ...
-   start_g6_brain(&gState);   // gState = your GlobalState instance
-   ```
+This file contains a clean, practical integration you can adapt into your firmware.
 
-The task will:
-- Initialize the brain
-- Extract real telemetry every 30 seconds
-- Compute optimal `f` / `v`
-- Log via `ESP_LOGI("G6_BRAIN_INTEGRATION", ...)`
+**Quick integration path:**
 
-**You decide** when/how to apply `opt_f` and `opt_v` (see comments in the example).
+1. Copy `docs/INTEGRATION_EXAMPLE.c` into your project (e.g. as `main/g6_brain_task.c`)
+2. Call `g6_brain_example_task()` from `app_main()` after WiFi and ASIC initialization.
+3. Replace the placeholder telemetry reads with your actual values from `GlobalState`.
+
+**Important notes:**
+- Start in `OBSERVE_ONLY` or `RECOMMEND` mode.
+- Only move to `AUTO` mode after monitoring behavior.
+- The example includes guidance on when (and when **not**) to apply the recommended `opt_f` / `opt_v`.
 
 ---
 
 ## Alternative: Minimal Manual Integration
 
-If you prefer to call the API directly in your existing control loop:
-
-```c
-#include "g6_brain.h"
-
-static G6BrainState g6_brain;
-
-void your_miner_loop(void) {
-    static bool initialized = false;
-    if (!initialized) {
-        g6_brain_init(&g6_brain);
-        initialized = true;
-    }
-
-    // Read current values from your SYSTEM_MODULE / GlobalState
-    float f = ...;
-    float v = ...;
-    float hr = ...;
-    float pwr = ...;
-    float temp = ...;
-    float err = ...;
-
-    g6_brain_update(&g6_brain, f, v, hr, pwr, temp, err);
-
-    float opt_f, opt_v;
-    g6_brain_get_optimal(&g6_brain, &opt_f, &opt_v, NULL);
-
-    // Apply only if you want to (with slew limiting, confirmation, etc.)
-    // asic_set_frequency((uint32_t)opt_f);
-    // asic_set_voltage((uint32_t)opt_v);
-}
-```
+If you prefer calling the API directly in your existing loop, see the comments inside `INTEGRATION_EXAMPLE.c`.
 
 ---
 
@@ -148,52 +97,33 @@ idf.py build
 idf.py flash monitor
 ```
 
-**Expected first logs:**
-```
-I (xxxx) G6_BRAIN_INTEGRATION: G6 Brain initialized successfully
-I (xxxx) G6_BRAIN: Cold start — collecting initial samples...
-```
-
-After ~5–10 minutes you should see improving `model_quality` and the brain beginning to suggest new setpoints.
+After a few minutes you should see improving `model_quality` and the brain suggesting new operating points.
 
 ---
 
 ## Troubleshooting
 
-| Symptom                        | Likely Cause                          | Fix |
-|--------------------------------|---------------------------------------|-----|
-| `g6_brain_init` returns error  | NULL pointer or heap issue            | Check stack size (min 4096) |
-| No telemetry updates           | Wrong GlobalState fields or timing    | Verify `state->SYSTEM_MODULE.*` names match your firmware |
-| Brain stays in cold-start      | Too few valid samples or high error rate | Lower `CONFIG_G6_BRAIN_TEMP_CEILING` temporarily |
-| Voltage/frequency jumps too fast | Missing slew limiting in your apply code | Implement 5–10 MHz / 5 mV steps with delay |
-| NVS fingerprint not saving     | NVS partition full or not initialized | Call `nvs_flash_init()` before brain init |
-| High CPU usage                 | Calling `update()` too frequently     | Use 20–30 s interval (recommended) |
-
-**Debug tip:** Enable `CONFIG_G6_BRAIN_DEBUG` and watch for `ESP_LOGD` output from the RLS core.
+See the troubleshooting table in the previous version or check logs with `CONFIG_G6_BRAIN_DEBUG=y`.
 
 ---
 
-## Post-Integration Checklist (Aerospace QA Style)
+## Post-Integration Checklist
 
-- [ ] Brain task runs without crashes for 30+ minutes
-- [ ] `g6_brain_self_test(&brain)` returns `ESP_OK`
-- [ ] Model quality > 0.7 after 20+ samples
-- [ ] No voltage undershoot events in logs
-- [ ] NVS fingerprint saved successfully (if enabled)
-- [ ] You have reviewed and accepted the recommended `opt_f` / `opt_v` before applying
+- [ ] Brain runs stably for 30+ minutes
+- [ ] `g6_brain_self_test()` returns `ESP_OK`
+- [ ] `model_quality` improves over time
+- [ ] You understand when the brain applies or refuses changes
 
 ---
 
 ## Next Steps
 
+- **Recommended Integration Example** → `docs/INTEGRATION_EXAMPLE.c`
 - **Full API reference** → [API.md](API.md)
-- **All Kconfig options explained** → [KCONFIG.md](KCONFIG.md)
-- **Production-ready drop-in task** → `docs/main_integration_v1.0_beta.c`
-- **Safety invariants & unhappy paths** → Root `AGENTS.md`
+- **Kconfig options** → [KCONFIG.md](KCONFIG.md)
+- **Safety principles** → [AGENTS.md](../AGENTS.md)
 
 ---
 
-**Questions?** Open an issue on the repo or ping 6ummy-Dev.
-
-**You are now running the most advanced open-source Bitaxe brain available.**  
-Welcome to the future of autonomous mining. ⚡
+**You are now running the G6 Brain.**  
+Start conservative. Monitor first. Optimize later. ⚡
