@@ -1,6 +1,10 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta1 + Polish (Control Mode + Cov Condition)
+ * Bitaxe G6 Brain — v1.0.0-beta2
+ *
+ * Stabilized conventional RLS quadratic optimizer with integrated safety.
+ * Focus for beta2: messaging alignment, test coverage expansion,
+ * and continued defensive hardening.
  *
  * Public interface with control mode and covariance monitoring.
  */
