@@ -20,7 +20,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ---
 
-## ✨ Key Features (Phase 0)
+## ✨ Key Features
 - Stabilized RLS with Variable Forgetting Factor, covariance protection, and ridge regularization
 - Fully self-contained safety layer (thermal ceiling, NER back-off, voltage ripple, power sanity)
 - Sample quality state machine (settle + measure windows)
