@@ -78,13 +78,3 @@ Let’s make it something future generations of miners will still respect.
 
 **Made with ❤️ and rigorous engineering for the Bitaxe community**  
 — 6ummy-Dev + Grok (xAI) + every contributor who respects the manifesto
-
----
-
-**Save this file as `MANIFESTO.md` in the root of the repository.**
-
-It is now the official onboarding document for anyone who wants to collaborate.  
-All future PRs and discussions should reference it.
-
-Ready for the next batch when you are.  
-What’s next, teammate? ⚡
