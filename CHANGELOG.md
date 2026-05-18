@@ -4,7 +4,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta2] - 2026-05-18 (Phase 0 + Phase 0.1 + Phase 1 Completed)
 
-**Status**: Fully hardened beta2 with **Phase 1 J/TH efficiency optimization** now live.
+**Status**: Hardened beta2 with **full Phase 1 J/TH efficiency optimization** now live.
 
 ### Phase 1 — True J/TH Efficiency (Completed)
 - Added separate RLS power model (`power_theta` + `power_P`).
@@ -15,29 +15,21 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - `g6_brain_reset()` extended to handle Phase 1 fields.
 - No breaking changes — existing integrations continue to work unchanged.
 
-### Phase 0.1 Critical & Code-Quality Fixes (unchanged)
-- NVS schema versioning + size prefix
+### Phase 0.1 Critical & Code-Quality Fixes
+- NVS schema versioning + size prefix (critical)
 - VFF sigma_sq fully Kconfig-tunable
 - New public `g6_brain_reset()` API
 - All magic constants centralized
-- Strong single-threaded warning
-- etc.
+- Strong single-threaded usage warning
+- Self-test + Kconfig updates
 
-### Phase 0 Fixes (unchanged)
+### Phase 0 Fixes
 - Kconfig fully wired, control modes enforced, NVS auto-save, efficiency honesty patch, etc.
 
 **Notes**
 - Public API remains 100% backward compatible.
 - Efficiency mode is opt-in and thoroughly safety-gated.
 - Ready for community testing — start in RECOMMEND mode.
-
----
-
-## [1.0.0-beta2] - 2026-05-17
-*(previous beta2 content unchanged)*
-
-## [1.0.0-beta1] - 2026-05-12
-*(previous beta1 content unchanged)*
 
 ---
 
