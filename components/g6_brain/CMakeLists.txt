@@ -4,4 +4,5 @@ idf_component_register(
     PRIV_REQUIRES 
         esp_timer
         nvs_flash
+        freertos
 )
