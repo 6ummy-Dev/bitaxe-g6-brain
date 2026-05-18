@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2 (Best Hardened from v1)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Fixes)
  */
 
 #include "g6_brain.h"
@@ -74,6 +74,7 @@ static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
     if (temp_c > (brain->temp_ceiling - 5.0f)) {
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
+        ESP_LOGW(TAG, "PROACTIVE THERMAL: %.1f°C → best_f=%.1f best_v=%.1f", temp_c, brain->best_f, brain->best_v);
     }
 }
 
@@ -81,6 +82,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     if (!brain || !isfinite(v_mv)) return;
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
         brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
+        ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);
     }
 }
 
@@ -91,6 +93,7 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
         brain->cold_start = true;
         brain->best_f *= 0.92f;
         brain->best_v *= 0.985f;
+        ESP_LOGW(TAG, "HIGH ERROR RATE (%.2f%%) — conservative back-off", err_pct);
     }
 }
 
@@ -168,6 +171,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     nvs_handle_t nvs_test;
     esp_err_t nvs_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_test);
     if (nvs_err == ESP_ERR_NVS_NOT_INITIALIZED) {
+        ESP_LOGE(TAG, "NVS NOT INITIALIZED");
         return ESP_ERR_NVS_NOT_INITIALIZED;
     }
     if (nvs_err == ESP_OK) nvs_close(nvs_test);
@@ -195,6 +199,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 
     g6_brain_load_nvs_fingerprint(brain);
 
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized successfully");
     return ESP_OK;
 }
 
@@ -210,6 +215,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
         hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // NEW-2: Power sanity check
+    if (power_w < 0.0f || power_w > 100.0f) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -275,8 +285,9 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 safety_layer:
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
-    if (err_pct > brain->ner_threshold)
-        g6_asic_error_handle_non_blocking(brain, err_pct);
+
+    // NOTE: NER handling is now ONLY inside safety_layer via the call above when we goto from the check.
+    // Removed duplicate call before goto to fix double-execution (NEW-1).
 
     g6_brain_get_optimal(brain, &brain->best_f, &brain->best_v, NULL);
 
@@ -358,6 +369,9 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
 
     float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
     if (cond > 5e5f) ok = false;
+
+    ESP_LOGI(TAG, "Self-test: %s (quality=%.3f, eff=%.2f J/TH, cond=%.1f)", 
+             ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency, cond);
 
     return ok ? ESP_OK : ESP_FAIL;
 }
