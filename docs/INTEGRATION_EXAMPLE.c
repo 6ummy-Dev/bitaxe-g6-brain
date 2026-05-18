@@ -1,17 +1,13 @@
 /*
- * G6 Brain Integration Example — v1.0.0-beta2
+ * G6 Brain Integration Example — v1.0.0-beta2 (Phase 0 — fully wired)
  *
  * This is the recommended integration example for the G6 Brain.
  *
- * Purpose:
- * - Show a clean, practical way to integrate the brain into ESP-Miner.
- * - Balance between simplicity and real-world usability.
- *
- * Recommendation:
- * - Start with G6_MODE_OBSERVE_ONLY or G6_MODE_RECOMMEND.
- * - Only move to G6_MODE_AUTO after you have monitored behavior for several hours/days.
- *
- * Place this logic in your main control task or create a dedicated brain task.
+ * Phase 0 updates:
+ * - Control modes are now enforced (default = RECOMMEND)
+ * - NVS auto-save of theta + full P matrix every ~5 min
+ * - Kconfig options are live
+ * - Start in RECOMMEND or OBSERVE_ONLY for safety
  */
 
 #include "g6_brain.h"
@@ -37,10 +33,10 @@ void g6_brain_example_task(void *arg)
         return;
     }
 
-    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized successfully");
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save)");
 
-    // Optional: Set control mode here if needed
-    // brain.control_mode = G6_MODE_RECOMMEND;   // Recommended starting mode
+    // Phase 0: Choose your starting mode (RECOMMEND is safest for first runs)
+    brain.control_mode = G6_MODE_RECOMMEND;   // ← Change to G6_MODE_AUTO only after monitoring
 
     while (1) {
         // ============================================================
@@ -55,11 +51,10 @@ void g6_brain_example_task(void *arg)
         float error_pct = 0.7f;       // Hardware error rate (%)
 
         // NOTE: share_count should come from your actual share counter in the current window.
-        // For now we pass 0 as placeholder. The brain will skip share-based validation
-        // when share_count is 0, but still performs all other safety checks.
+        // Pass 0 if unknown — the brain still performs all other safety checks.
         uint32_t share_count = 0;
 
-        // Feed data into the brain (share_count added in beta2)
+        // Feed data into the brain
         ret = g6_brain_update(&brain, freq_mhz, volt_mv, hashrate,
                               power_w, temp_c, error_pct, share_count);
         if (ret != ESP_OK) {
@@ -73,23 +68,22 @@ void g6_brain_example_task(void *arg)
         float quality = g6_brain_get_model_quality(&brain);
 
         ESP_LOGI(TAG,
-                 "Quality=%.2f | Current: %.1f MHz @ %.0f mV | Recommended: %.1f MHz @ %.0f mV",
-                 quality, freq_mhz, volt_mv, opt_f, opt_v);
+                 "Quality=%.2f | Mode=%d | Current: %.1f MHz @ %.0f mV | Recommended: %.1f MHz @ %.0f mV",
+                 quality, brain.control_mode, freq_mhz, volt_mv, opt_f, opt_v);
 
         // ============================================================
         // === WHEN TO APPLY opt_f / opt_v ===
         //
         // DO NOT blindly apply the recommended values in production.
         //
-        // Good practice:
-        // - Start in OBSERVE_ONLY or RECOMMEND mode
-        // - Add your own slew limiting when applying changes
-        // - Only apply when model_quality is good (> 0.7)
-        // - Consider adding confirmation / manual approval first
+        // Good practice (Phase 0):
+        // - OBSERVE_ONLY: never apply
+        // - RECOMMEND:   compute only (safe for monitoring)
+        // - AUTO:        full optimizer (enable only after 24-48h soak)
         //
-        // Example (commented out):
-        // if (quality > 0.75f && brain.control_mode == G6_MODE_RECOMMEND) {
-        //     // Apply with slew limiting here
+        // Example (uncomment when ready):
+        // if (brain.control_mode == G6_MODE_AUTO && quality > 0.75f) {
+        //     // Apply with your own slew limiting here
         //     // asic_set_frequency_with_slew((uint32_t)opt_f);
         //     // asic_set_voltage_with_slew((uint32_t)opt_v);
         // }
