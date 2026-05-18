@@ -157,6 +157,23 @@ typedef struct {
 
 } G6BrainState;
 
+/* ====================== TELEMETRY STRUCT (Phase 2 — lightweight export) ====================== */
+/*
+ * Zero-overhead snapshot of internal state.
+ * Call this anytime (single-threaded contract still holds).
+ * Perfect for MONITORING.md, logs, or external dashboard.
+ */
+typedef struct {
+    float theta_hashrate[RLS_N];      // current hashrate quadratic coeffs
+    float theta_power[RLS_N];         // current power quadratic coeffs (Phase 1)
+    float trace_P_hashrate;           // covariance trace (stability metric)
+    float trace_P_power;              // power model trace
+    float last_innovation;            // last RLS innovation (hashrate)
+    uint8_t safety_status;            // 0=OK, 1=thermal, 2=voltage, 3=power, 4=NER (expandable)
+    bool efficiency_mode_active;      // is J/TH mode on?
+    float last_recommended_voltage;   // last output from g6_brain_get_optimal()
+} G6BrainTelemetry;
+
 /* ====================== PUBLIC INTERFACE ====================== */
 
 esp_err_t g6_brain_init(G6BrainState *brain);
@@ -176,6 +193,9 @@ esp_err_t g6_brain_reset(G6BrainState *brain);
 /* NVS (now versioned) */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
+
+/* Phase 2 telemetry (new) */
+void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out);
 
 #ifdef __cplusplus
 }
