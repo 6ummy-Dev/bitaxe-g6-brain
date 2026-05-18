@@ -1,9 +1,13 @@
-# G6 Brain Public API — v1.0.0-beta2
+# G6 Brain Public API — v1.0.0-beta2 (Phase 0 — fully wired)
 
 **Modular, self-optimizing control brain for Bitaxe ESP-Miner (Gamma 602+ / BM1370).**  
 Pure Recursive Least Squares (RLS) quadratic response surface modeling with built-in predictive safety.
 
-> **Thread Safety Note** (from header): `G6BrainState` is currently updated from a **single thread** (ESP-Miner main loop / dedicated brain task). No mutex is required yet. Add one only if you multi-task the brain in the future.
+> **Phase 0 Updates (now live):**  
+> - All Kconfig options are wired and read at runtime  
+> - `G6ControlMode` is **enforced** in `update()` and `get_optimal()`  
+> - NVS auto-save of theta + full P-matrix every ~5 minutes (true warm-start)  
+> - Efficiency honesty: This is a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety). True J/TH optimization planned for Phase 1.
 
 ---
 
@@ -11,17 +15,21 @@ Pure Recursive Least Squares (RLS) quadratic response surface modeling with buil
 
 ### `esp_err_t g6_brain_init(G6BrainState *brain)`
 
-Initializes the brain state to safe defaults.
+Initializes the brain state to safe defaults. Must be called after `nvs_flash_init()`.
 
 **Parameters**
-- `brain` — Pointer to uninitialized `G6BrainState` (must be zeroed or stack-allocated)
+- `brain` — Pointer to uninitialized `G6BrainState`
 
 **Returns**
 - `ESP_OK` on success
 - `ESP_ERR_INVALID_ARG` if `brain` is NULL
+- `ESP_ERR_NVS_NOT_INITIALIZED` if NVS is not ready
 
-**Usage**
-Call once at startup (before any `update` calls). Performs cold-start initialization of RLS matrices and loads NVS fingerprint if enabled.
+**Behavior (Phase 0)**
+- Loads Kconfig values (`G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, etc.)
+- Sets default control mode to `G6_MODE_RECOMMEND`
+- Loads NVS fingerprint if available
+- Starts NVS auto-save timer
 
 **Example**
 ```c
@@ -32,28 +40,25 @@ if (ret != ESP_OK) { /* handle error */ }
 
 ---
 
-### `esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct, uint32_t share_count)`
+### `esp_err_t g6_brain_update(...)`
 
-Feeds one telemetry sample into the RLS model and runs the safety + optimization loop.
+Feeds one telemetry sample and runs the full optimization + safety cycle.
 
 **Parameters** (all in real units)
-- `f_mhz` — Current ASIC frequency (MHz)
-- `v_mv` — Actual measured core voltage (mV)
-- `hr_ths` — Current hashrate (TH/s)
-- `power_w` — Power consumption (W)
-- `temp_c` — ASIC temperature (°C)
-- `err_pct` — Hardware error rate (%)
-- `share_count` — Number of valid shares in the current measurement window (pass `0` if unknown)
+- `f_mhz`, `v_mv`, `hr_ths`, `power_w`, `temp_c`, `err_pct` — telemetry
+- `share_count` — Valid shares in current window (0 = skip share validation)
 
 **Returns**
-- `ESP_OK` — Sample accepted and model updated
-- `ESP_ERR_INVALID_ARG` — NULL brain or out-of-range values
+- `ESP_OK` — processed
+- `ESP_ERR_INVALID_ARG` — bad input
 
-**Behavior**
-- Runs quadratic RLS update (6 coefficients)
-- Applies thermal ceiling, voltage protection, and safety checks
-- Updates `best_f` / `best_v` when a better safe operating point is found
-- Tracks model quality and cold-start state
+**Phase 0 Behavior**
+- Respects `brain->control_mode`:
+  - `OBSERVE_ONLY`: safety only, no optimal changes
+  - `RECOMMEND`: computes optimal but does **not** mutate `best_f`/`best_v`
+  - `AUTO`: full optimizer (original behavior)
+- Periodic NVS auto-save after 10+ updates
+- All safety layers (thermal, NER, voltage, power sanity) always run
 
 **Recommended call rate**: Every 20–30 seconds.
 
@@ -63,65 +68,54 @@ Feeds one telemetry sample into the RLS model and runs the safety + optimization
 
 Returns the currently recommended safe operating point.
 
-**Parameters**
-- `brain` — Initialized brain state
-- `opt_f` — Output: recommended frequency (MHz) — **never NULL**
-- `opt_v` — Output: recommended voltage (mV) — **never NULL**
-- `pred_hr` — Optional output: predicted hashrate at this point (TH/s). Pass `NULL` if not needed.
-
-**Notes**
-- Values are already clamped to BM1370 safe ranges (400–950 MHz, 1050–1350 mV)
-- Includes predictive safety margin
-- Call after `update()` to get the next settings to apply
+**Phase 0 Note**
+- `opt_f` / `opt_v` are always clamped to BM1370 safe ranges
+- In `OBSERVE_ONLY`/`RECOMMEND` modes the returned values may differ from `best_f`/`best_v` (which remain unchanged)
 
 ---
 
 ### `float g6_brain_get_model_quality(const G6BrainState *brain)`
 
-Returns current model quality metric (0.0–1.0).
+Returns current model quality (0.0–1.0).  
+- > 0.85 → Excellent  
+- 0.6–0.85 → Good  
+- < 0.6 → Poor (conservative mode)
 
-- **> 0.85** → Excellent fit, trust the optimizer
-- **0.6–0.85** → Good, continue collecting samples
-- **< 0.6** → Poor fit (cold start or noisy data) — fall back to conservative settings
+---
+
+### `float g6_brain_get_cov_condition(const G6BrainState *brain)`
+
+Returns covariance condition number for diagnostics.
 
 ---
 
 ### `esp_err_t g6_brain_self_test(G6BrainState *brain)`
 
-Runs synthetic data sanity checks on the RLS solver and optimum finder.
-
-**Returns**
-- `ESP_OK` — All internal tests passed
-- Error if mathematical integrity check fails
-
-Useful during development or after major changes.
+Runs internal sanity checks on RLS matrices and optimum finder.
 
 ---
 
-### NVS Silicon Fingerprint (per-chip warm-start)
+### NVS Silicon Fingerprint (warm-start)
 
 ```c
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 ```
 
-- Stores learned RLS coefficients + best setpoint per physical chip
-- Survives power cycles and reduces cold-start time
+- `load` is called automatically in `init()`
+- `save` is now called automatically every ~5 minutes (Phase 0)
 
 ---
 
 ## Key Struct: `G6BrainState`
 
-Contains:
-- Full 6×6 RLS covariance matrix `P` and coefficient vector `theta`
-- Best safe setpoint (`best_f`, `best_v`)
-- Safety config (`temp_ceiling`, `ner_threshold`)
-- Sample quality state machine (`BrainSampleState`)
-- NVS and timing counters
+**Important Phase 0 fields**
+- `control_mode` — now enforced (default: `G6_MODE_RECOMMEND`)
+- `best_f`, `best_v` — only mutated in `AUTO` mode
+- `nvs_last_write_tick` — used for auto-save
+- All Kconfig-driven values are populated in `init()`
 
 **Do not** modify fields directly — use the public API.
-
-Full definition in `components/g6_brain/g6_brain.h`.
 
 ---
 
@@ -132,19 +126,13 @@ Full definition in `components/g6_brain/g6_brain.h`.
 | Frequency     | 400 MHz | 650 MHz | 950 MHz |
 | Voltage       | 1050 mV | 1220 mV | 1350 mV |
 
-The brain will **never** recommend values outside these ranges.
-
 ---
 
 ## Next Steps
 
-- **Installation & quick start** → [INSTALL.md](INSTALL.md)
-- **Recommended integration example** → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)
-- **Kconfig options** → [KCONFIG.md](KCONFIG.md)
-- **Safety & engineering principles** → [AGENTS.md](../AGENTS.md)
+- Recommended integration example → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)
+- Kconfig options → [KCONFIG.md](KCONFIG.md)
+- Safety & engineering principles → [AGENTS.md](../AGENTS.md)
 
----
-
-**License**: MIT  
-**Version**: v1.0.0-beta2 (May 2026)  
-**Maintainer**: 6ummy-Dev + Grok (xAI)
+**Version:** v1.0.0-beta2 (Phase 0 fixes applied — May 2026)  
+**Maintainer:** 6ummy-Dev + Grok (xAI)
