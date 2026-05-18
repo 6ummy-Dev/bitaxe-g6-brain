@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include <string.h>
 #include <math.h>
+#include <inttypes.h>
 
 static const char *TAG = "G6_BRAIN";
 
@@ -134,9 +135,10 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
             memcpy(brain->P, buffer + sizeof(uint32_t) * 2 + sizeof(brain->theta), sizeof(brain->P));
             brain->nvs_valid = true;
             brain->cold_start = false;
-            ESP_LOGI(TAG, "NVS fingerprint loaded (schema v%u)", stored_version);
+            ESP_LOGI(TAG, "NVS fingerprint loaded (schema v%" PRIu32 ")", stored_version);
         } else {
-            ESP_LOGW(TAG, "NVS schema mismatch (stored v%u, expected v%u) — forcing cold start + erase", stored_version, NVS_SCHEMA_VERSION);
+            ESP_LOGW(TAG, "NVS schema mismatch (stored v%" PRIu32 ", expected v%" PRIu32 ") — forcing cold start + erase", 
+                     stored_version, NVS_SCHEMA_VERSION);
             brain->cold_start = true;
             brain->nvs_valid = false;
             nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
