@@ -69,4 +69,4 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 ---
 
 **Made with ❤️ and rigorous engineering for the Bitaxe community**  
-*May 2026 • v1.0.0-beta2 (Phase 0 fixes applied)*
+*May 2026 • v1.0.0-beta2
