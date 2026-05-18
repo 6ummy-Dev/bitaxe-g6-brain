@@ -12,6 +12,9 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Fixed cold-start initialization — `best_f` and `best_v` now have safe default values instead of remaining at 0.
 - Fixed NER error handler — it now correctly reacts to high error rate instead of checking model quality.
 - Fixed Unity test runner syntax so tests can actually compile and run.
+- Fixed NER handler double-execution regression (same pattern as thermal safety).
+- Re-added power sanity check validation (was accidentally removed).
+- Removed broken manual Unity test runner in `test_g6_brain.c` (ESP-IDF auto-discovers TEST_CASE macros).
 
 ### Improvements
 - Added safe defaults for operating point after cold start.
@@ -35,6 +38,36 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Still in beta — further soak testing and Phase 2 features planned.
 
 **Next Phase**: Active thermal slope detection, PID fan control, and expanded field validation.
+
+---
+
+## [1.0.0-beta2] - 2026-05-17
+
+**Status**: Polished beta with expanded test coverage, improved documentation, and consolidated examples. Ready for wider community testing.
+
+### Added
+- Significantly expanded Unity test suite:
+  - Input validation and rejection tests
+  - Safety layer execution on invalid/overheated samples
+  - Proactive thermal derating behavior
+  - Covariance matrix symmetry verification
+  - Cold-start flag clearing behavior
+- Added explanatory comment on the `goto safety_layer` safety pattern for better auditability
+- Added power sanity check in `g6_brain_update()`
+- Improved Kconfig with clearer help texts and section organization
+
+### Changed
+- Made `INTEGRATION_EXAMPLE.c` the **main recommended integration example**
+- Consolidated documentation: All `docs/` files updated and cleaned up
+- Removed redundant `main_integration_v1.0_beta.c` (now using one clear example)
+- Tightened self-test condition number threshold (from 1e6 → 5e5)
+- Updated all version strings, headers, READMEs, and documentation to v1.0.0-beta2
+- Improved `INSTALL.md` and `docs/README.md` to clearly point to the recommended example
+
+### Notes
+- Public API remains **100% backward compatible** with beta1.
+- Focus of this release: Test expansion + documentation quality + example consolidation.
+- Still in beta — extended field testing recommended.
 
 ---
 
