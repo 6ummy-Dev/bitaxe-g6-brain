@@ -1,4 +1,4 @@
-# G6 Brain Configuration — v1.0.0-beta2 (Phase 0 — fully wired + Phase 0.1 VFF tuning)
+# G6 Brain Configuration — v1.0.0-beta2 (Phase 0 + Phase 0.1 + Phase 1 Completed)
 
 menu "G6 Brain Configuration"
 
@@ -10,7 +10,6 @@ menu "G6 Brain Configuration"
             range 900 999
             help
                 Minimum effective forgetting factor for Variable Forgetting Factor.
-                Value ÷ 1000 → e.g. 950 = 0.950. Higher = more stable model.
 
         config G6_RLS_RIDGE_EPSILON
             int "RLS ridge regularization (x1e6)"
@@ -26,16 +25,12 @@ menu "G6 Brain Configuration"
             help
                 Upper limit for trace(P). Exceeding forces conservative/cold-start mode.
 
-        # Phase 0.1: VFF sigma_sq now fully Kconfig-tunable (completes Critical fix #1)
         config G6_RLS_VFF_SIGMA_SQ
             int "VFF sigma_sq tuning factor (x10000)"
             default 80
             range 10 200
             help
                 Sigma squared used in Variable Forgetting Factor gradient.
-                Value ÷ 10000 → default 80 = 0.008f.
-                Lower = faster adaptation (more aggressive on large errors).
-                Higher = smoother/more stable model. Tune only if you know what you're doing.
 
     endmenu
 
@@ -46,14 +41,14 @@ menu "G6 Brain Configuration"
             default 70
             range 50 85
             help
-                Hard ASIC temperature limit. Proactive derating triggers near this value.
+                Hard ASIC temperature limit.
 
         config G6_NER_THRESHOLD
             int "NER (nonce error rate) threshold (x100)"
             default 250
             range 50 2000
             help
-                Nonce Error Rate threshold in 0.01% units (250 = 2.5%). Triggers back-off.
+                Nonce Error Rate threshold in 0.01% units.
 
     endmenu
 
@@ -64,7 +59,14 @@ menu "G6 Brain Configuration"
             default 25
             range 5 50
             help
-                Step size used for optimization suggestions and slew limiting (Phase 1).
+                Step size used for optimization suggestions and slew limiting.
+
+        config G6_ENABLE_EFFICIENCY_MODE
+            bool "Enable true J/TH efficiency optimization (Phase 1)"
+            default n
+            help
+                When enabled, the brain uses a separate power RLS model to optimize for minimum J/TH (Watts per TH/s).
+                When disabled (default), it remains a safe hashrate maximizer (exact previous behavior).
 
     endmenu
 
