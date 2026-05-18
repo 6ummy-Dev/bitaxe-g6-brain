@@ -5,11 +5,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:     # Allows manual triggering from GitHub UI
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -21,13 +21,11 @@ jobs:
       - name: Prepare minimal test project
         run: |
           mkdir -p test_app/main test_app/components/g6_brain
-
           cat > test_app/CMakeLists.txt << 'EOF'
           cmake_minimum_required(VERSION 3.16)
           include($ENV{IDF_PATH}/tools/cmake/project.cmake)
           project(test_g6_brain)
           EOF
-
           echo 'idf_component_register()' > test_app/main/CMakeLists.txt
           cp -r components/g6_brain test_app/components/
 
