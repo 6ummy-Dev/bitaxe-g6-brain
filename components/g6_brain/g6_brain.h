@@ -173,7 +173,16 @@ typedef struct {
     bool efficiency_mode_active;      // is J/TH mode on?
     float last_recommended_voltage;   // last output from g6_brain_get_optimal()
 } G6BrainTelemetry;
-
+/* ====================== SAFETY STATUS ENUM (Phase 2) ====================== */
+typedef enum {
+    G6_SAFETY_OK = 0,              // all clear
+    G6_SAFETY_THERMAL,             // thermal ceiling hit or proactive derate
+    G6_SAFETY_VOLTAGE,             // voltage ripple / undershoot / out-of-range
+    G6_SAFETY_POWER_SANITY,        // power model sanity fail
+    G6_SAFETY_NER_BACKOFF,         // high NER → conservative back-off
+    G6_SAFETY_SAMPLE_QUALITY,      // bad sample FSM (noisy / unsettled)
+    G6_SAFETY_P_MATRIX_SINGULAR    // RLS covariance exploded (fallback active)
+} G6SafetyStatus;
 /* ====================== PUBLIC INTERFACE ====================== */
 
 esp_err_t g6_brain_init(G6BrainState *brain);
