@@ -2,6 +2,44 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta2] - 2026-05-18 (Final)
+
+**Status**: Production-ready beta2 with full Phase 1 J/TH efficiency mode + clean telemetry export.
+
+### Final Cleanup (this build)
+- Moved `g6_brain_get_telemetry()` into the main PUBLIC API section for better discoverability and consistency.
+- Removed broken recursive NVS wrapper functions.
+- Removed unnecessary section headers and redundant comments.
+- Full documentation refresh (`API.md`, `README.md`, `MONITORING.md`, `INTEGRATION_EXAMPLE.c`).
+- NVS warm-start bug fixed (load guard now correctly compares against expected payload size).
+- Codebase is now clean, well-organized, and ready for field testing.
+
+### Phase 1 — J/TH Efficiency (Completed)
+- Separate RLS power model (`power_theta` + `power_P`).
+- New Kconfig option `G6_ENABLE_EFFICIENCY_MODE`.
+- Grid-based J/TH optimization when enabled (safe, opt-in).
+- NVS schema v2 with full power model persistence.
+- No breaking changes to existing integrations.
+
+### Phase 0.1 + Phase 0 (Previously Completed)
+- Full Kconfig wiring
+- Control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`)
+- NVS auto-save + true warm-start
+- Strong single-threaded contract documented
+- Extensive safety layer + self-test
+- Unity test coverage
+
+**Notes**
+- Public API is 100% backward compatible.
+- Start in `G6_MODE_RECOMMEND`.
+- Telemetry via `g6_brain_get_telemetry()` is now cleanly part of the public interface.
+
+---
+
+**Next Phase (Phase 2)**: Analytical J/TH solver (replace grid search), active thermal slope, PID fan, extended soak testing.
+
+---
+
 ## [1.0.0-beta2] - 2026-05-18 (Phase 0 + Phase 0.1 + Phase 1 Completed)
 
 **Status**: Hardened beta2 with **full Phase 1 J/TH efficiency optimization** now live.
