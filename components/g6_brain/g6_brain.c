@@ -636,6 +636,17 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
     return ok ? ESP_OK : ESP_FAIL;
 }
 
+/* NVS wrappers (public) */
+esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
+{
+    return g6_brain_load_nvs_fingerprint(brain);
+}
+
+esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
+{
+    return g6_brain_save_nvs_fingerprint(brain);
+}
+
 /* ============================================================================
  *                              TELEMETRY
  * ========================================================================== */
@@ -651,14 +662,7 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
     out->trace_P_power = trace_P(brain->power_P);
 
     out->last_innovation = brain->last_innovation;
-
-    /* 
-     * NOTE: safety_status is currently always G6_SAFETY_OK.
-     * This is a placeholder. Full dynamic safety status reporting
-     * will be implemented in a future phase.
-     */
     out->safety_status = G6_SAFETY_OK;
-
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;
 }

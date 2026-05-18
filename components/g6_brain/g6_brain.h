@@ -43,7 +43,7 @@ typedef enum {
  *                              CONSTANTS
  * ========================================================================== */
 
-#define G6_NVS_SCHEMA_VERSION 2u   // v2 includes power model
+#define G6_NVS_SCHEMA_VERSION 1u
 
 #define RLS_N  6
 
