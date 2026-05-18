@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta2**
+**G6 Brain v1.0.0-beta2 (Phase 0 QA Hardened)**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -28,7 +28,7 @@ A metric (0.0–1.0) indicating how well the current RLS model fits observed dat
 The initial phase after power-on or reset when the brain has insufficient data and operates conservatively while collecting samples.
 
 **Warm Start / NVS Fingerprint**  
-The learned RLS coefficients and best setpoint stored per physical chip in NVS. Enables fast recovery after reboot.
+The learned RLS coefficients (`theta`) + full covariance matrix (`P`) stored per physical chip in NVS. Enables true warm-start after reboot (auto-saved every ~5 min after 10+ updates).
 
 ---
 
@@ -45,36 +45,45 @@ Production validation protocol:
 - 8 dirty power cycles  
 
 **ΔT/dt (Delta Temperature over Delta Time)**  
-Rate of temperature change. Used for proactive thermal protection.
+Rate of temperature change. Used for proactive thermal protection (Phase 2).
 
 **P-VUS (Predictive Voltage Undershoot)**  
-Safety guard that blocks voltage increases if recent undershoots were detected.
+Safety guard that blocks voltage increases if recent undershoots were detected (Phase 2).
 
 **NER (Nonce Error Rate)**  
-Hardware error rate reported by the BM1370. Used as a key input to the safety logic.
+Hardware error rate reported by the BM1370. Used as a key input to the safety logic (`G6_NER_THRESHOLD`).
+
+**G6ControlMode**  
+Runtime control modes (Phase 0):  
+- `G6_MODE_OBSERVE_ONLY` — safety only  
+- `G6_MODE_RECOMMEND` — compute optimal but never mutate setpoints (safe default)  
+- `G6_MODE_AUTO` — full optimizer
 
 ---
 
-## Configuration & Limits
+## Configuration & Limits (Kconfig — fully wired)
 
-**CONFIG_G6_BRAIN_TEMP_CEILING**  
-Hard thermal limit (°C). Default: 70.
+**G6_TEMP_CEILING**  
+Hard thermal ceiling (°C). Default: 70. Configurable via `menuconfig`.
 
-**CONFIG_G6_BRAIN_MAX_FREQ_STEP**  
-Maximum allowed frequency change per update (MHz). Default: 25.
+**G6_NER_THRESHOLD**  
+Nonce Error Rate threshold (×100). Default: 250 (= 2.5 %).
 
-**CONFIG_G6_BRAIN_MAX_VOLT_STEP**  
-Maximum allowed voltage change per update (mV). Default: 12.5.
+**G6_DFS_STEP_MHZ**  
+Frequency step size (MHz). Currently reserved for Phase 1 slew-rate limiting inside `get_optimal()`.
+
+**G6_RLS_LAMBDA_MIN / G6_RLS_RIDGE_EPSILON / G6_RLS_TRACE_MAX**  
+RLS tuning parameters, all live at runtime via `sdkconfig.h`.
 
 **Slew Rate**  
-The controlled rate of change for frequency and voltage to prevent thermal shock and voltage droop.
+The controlled rate of change for frequency and voltage to prevent thermal shock and voltage droop (recommended at integration layer; Phase 1 will add internal enforcement).
 
 ---
 
 ## Telemetry & Monitoring
 
 **best_f / best_v**  
-The currently recommended safe operating point (frequency in MHz, voltage in mV).
+The currently recommended safe operating point (frequency in MHz, voltage in mV). Only mutated in `AUTO` mode.
 
 **theta[6]**  
 The 6 RLS coefficients of the quadratic model.
@@ -84,6 +93,9 @@ The covariance matrix used by RLS (used for numerical stability monitoring).
 
 **update_count**  
 Number of successful RLS updates performed since initialization.
+
+**last_efficiency**  
+Stored as W/TH (power / hashrate). The brain is currently a **safe hashrate maximizer** (Phase 0 honesty patch).
 
 ---
 
@@ -100,5 +112,5 @@ The engineering approach of applying rigorous safety, signal integrity, and unha
 
 ---
 
-**Last updated:** May 2026  
+**Last updated:** May 2026 (Phase 0 QA fixes applied)  
 **Maintainer:** 6ummy-Dev + Grok (xAI)
