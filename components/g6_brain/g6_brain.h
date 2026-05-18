@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 Kconfig wiring)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 + QA fixes)
  *
  * Public interface.
  */
@@ -18,15 +18,15 @@ extern "C" {
 
 /* ====================== CONTROL MODES ====================== */
 typedef enum {
-    G6_MODE_OBSERVE_ONLY = 0,   // Phase 0: now enforced (no best_f/v mutation)
-    G6_MODE_RECOMMEND,          // Compute optimal but do not mutate best_f/v
+    G6_MODE_OBSERVE_ONLY = 0,   // Safety only — no best_f/v mutation
+    G6_MODE_RECOMMEND,          // Compute optimal but do not mutate best_f/v (safe default)
     G6_MODE_AUTO                // Full optimizer + safety (original behavior)
 } G6ControlMode;
 
-/* ====================== RLS CONSTANTS (now Kconfig-wired) ====================== */
+/* ====================== RLS CONSTANTS (fully Kconfig-wired) ====================== */
 #define RLS_N               6
 
-// Kconfig fallbacks (matches the G6_ options you just installed)
+// All RLS options now symmetric with Kconfig (QA fix)
 #if defined(CONFIG_G6_RLS_LAMBDA_MIN)
 #define RLS_LAMBDA_MIN      ((float)CONFIG_G6_RLS_LAMBDA_MIN / 1000.0f)
 #else
@@ -85,7 +85,7 @@ typedef struct {
     /* RLS core */
     float theta[RLS_N];
     float P[RLS_N][RLS_N];
-    float ridge_epsilon;        // now comes from Kconfig via RLS_RIDGE_EPSILON
+    float ridge_epsilon;        // from Kconfig via RLS_RIDGE_EPSILON
     float model_quality;
     bool  cold_start;
     uint32_t update_count;
@@ -95,13 +95,13 @@ typedef struct {
     float best_f;
     float best_v;
 
-    /* Safety & config (Kconfig wired) */
+    /* Safety & config (all Kconfig-wired) */
     float ner_threshold;
     float Kp, Ki, Kd;
     float temp_ceiling;
-    float dfs_step_mhz;         // now from CONFIG_G6_DFS_STEP_MHZ
+    float dfs_step_mhz;         // ← QA FIX: now explicitly reserved for Phase 1 slew-rate limiting inside get_optimal()
 
-    /* Control mode — Phase 0 enforcement coming in g6_brain.c */
+    /* Control mode — fully enforced in g6_brain.c */
     G6ControlMode control_mode;
 
     /* Nonce / extras */
