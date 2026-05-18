@@ -3,7 +3,7 @@
  *
  * Run with: idf.py test
  *
- * This file fixes the Unity runner syntax issue (BUG-5).
+ * Note: No manual app_main() — ESP-IDF Unity auto-registers all TEST_CASE() macros.
  */
 
 #include "unity.h"
@@ -23,7 +23,7 @@ void setUp(void) {
 void tearDown(void) {
 }
 
-/* ====================== TEST FUNCTIONS ====================== */
+/* ====================== TEST CASES ====================== */
 
 TEST_CASE("g6_brain_init initializes correctly", "[g6_brain]") {
     esp_err_t ret = g6_brain_init(&test_brain);
@@ -122,22 +122,4 @@ TEST_CASE("Cold start flag clears after sufficient updates", "[g6_brain]") {
     }
 
     TEST_ASSERT_FALSE(test_brain.cold_start);
-}
-
-/* ====================== TEST RUNNER ====================== */
-
-void app_main(void) {
-    UNITY_BEGIN();
-
-    RUN_TEST(g6_brain_init initializes correctly);
-    RUN_TEST(g6_brain_update with valid synthetic data);
-    RUN_TEST(g6_brain_self_test detects good vs degraded state);
-    RUN_TEST(NVS fingerprint save/load round-trip);
-    RUN_TEST(g6_brain_update rejects invalid inputs);
-    RUN_TEST(Safety layer still executes on invalid sample);
-    RUN_TEST(Proactive thermal derating triggers correctly);
-    RUN_TEST(Covariance matrix stays symmetric after updates);
-    RUN_TEST(Cold start flag clears after sufficient updates);
-
-    UNITY_END();
 }
