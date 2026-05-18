@@ -2,9 +2,20 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta2] - 2026-05-18 (Phase 0 QA Fixes)
+## [1.0.0-beta2] - 2026-05-18 (Phase 0 QA Fixes + Phase 0.1 Critical Hardening)
 
-**Status**: Hardened beta2 with **full Phase 0 fixes** applied (Kconfig wiring, control modes enforcement, NVS auto-save, efficiency honesty).
+**Status**: Hardened beta2 with **full Phase 0 + Phase 0.1 fixes** applied (Kconfig wiring, control modes enforcement, NVS auto-save + versioning, VFF tuning, reset API, constants centralization).
+
+### Phase 0.1 Critical & Code-Quality Fixes Applied
+- **NVS schema versioning + size prefix** (critical): `G6_NVS_SCHEMA_VERSION` + stored size check. Automatic mismatch → cold-start + erase. Prevents silent corruption on any future struct change.
+- **VFF sigma_sq now fully Kconfig-tunable** (`G6_RLS_VFF_SIGMA_SQ`, default 80 → 0.008f). No more magic number buried in code.
+- **New public API**: `g6_brain_reset()` — full NVS erase + safe cold-start (perfect for ASIC swap or debugging).
+- **All magic constants centralized** in `g6_brain.h` (innovation threshold, symmetry tolerance, etc.).
+- **Strong single-threaded usage warning** added to header + comments (AGGRESSIVE — must serialize calls).
+- **Self-test** now uses centralized `RLS_SYMMETRY_TOLERANCE`.
+- **Kconfig** updated with clear help text for new VFF option.
+- **CHANGELOG + test suite** updated to reflect Phase 0.1 changes.
+- Public API remains 100% backward compatible (new `g6_brain_reset()` is additive only).
 
 ### Phase 0 Fixes Applied
 - **Kconfig fully wired**: All `G6_*` options now read at runtime via `sdkconfig.h` with safe fallbacks (`G6_RLS_LAMBDA_MIN`, `G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, `G6_DFS_STEP_MHZ`, etc.).
@@ -33,8 +44,8 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - `build.yml` is the single source of truth.
 
 **Notes**
-- Public API remains backward compatible (with the addition of enforced control modes).
-- All critical issues from independent code review have been addressed.
+- Public API remains backward compatible (with the addition of enforced control modes and `g6_brain_reset()`).
+- All critical issues from independent senior QA have been addressed.
 - Still in beta — further soak testing recommended.
 
 ---
