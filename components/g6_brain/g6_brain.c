@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened v2)
  */
 
 #include "g6_brain.h"
@@ -84,6 +84,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     }
 }
 
+/* NER handler — called only from safety layer to avoid double execution */
 static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct) {
     if (!brain) return;
     if (err_pct > brain->ner_threshold) {
@@ -210,18 +211,25 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     uint32_t now = xTaskGetTickCount();
 
+    /* Input validation */
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
         hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* Re-added power sanity check (NEW-2 fix) */
+    if (power_w < 0.0f || power_w > 100.0f) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Thermal gate — do NOT call safety functions here */
     if (!is_thermal_safe(brain, temp_c)) {
         goto safety_layer;
     }
 
+    /* NER check — do NOT call handler here to avoid double execution (NEW-1 fix) */
     if (err_pct > brain->ner_threshold) {
-        g6_asic_error_handle_non_blocking(brain, err_pct);
         goto safety_layer;
     }
 
@@ -233,9 +241,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         advance_sample_state(brain, now);
     }
 
-    if (!valid) goto safety_layer;
+    if (!valid) {
+        goto safety_layer;
+    }
 
-    /* RLS */
+    /* RLS Update */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -245,9 +255,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float err = hr_ths - y_pred;
 
     if (has_significant_innovation(brain, x) && trace_P(brain) <= RLS_TRACE_MAX) {
-        /* VFF uses a small fixed sigma (0.008f).
-           A more advanced version would maintain a running estimate of prediction error variance.
-           This is noted as a minor limitation (GAP-4). */
         float lambda_eff = brain->cold_start ? 0.985f : compute_gradient_vff(fabsf(err), 0.008f);
         if (lambda_eff < RLS_LAMBDA_MIN) lambda_eff = RLS_LAMBDA_MIN;
 
@@ -266,8 +273,9 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         for (int i = 0; i < RLS_N; i++) brain->theta[i] += k[i] * err;
 
         for (int i = 0; i < RLS_N; i++) {
-            for (int j = 0; j < RLS_N; j++)
+            for (int j = 0; j < RLS_N; j++) {
                 brain->P[i][j] = (brain->P[i][j] - k[i] * Px[j]) / lambda_eff;
+            }
             brain->P[i][i] += brain->ridge_epsilon;
         }
 
@@ -279,11 +287,16 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
 
 safety_layer:
+    /* SAFETY LAYER — single execution point for all safety actions */
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
-    if (err_pct > brain->ner_threshold)
-        g6_asic_error_handle_non_blocking(brain, err_pct);
 
+    /* NER handling moved here exclusively (NEW-1 fix) */
+    if (err_pct > brain->ner_threshold) {
+        g6_asic_error_handle_non_blocking(brain, err_pct);
+    }
+
+    /* Optimal setpoint + clamps */
     g6_brain_get_optimal(brain, &brain->best_f, &brain->best_v, NULL);
 
     if (brain->best_f < BM1370_F_MIN) brain->best_f = BM1370_F_MIN;
