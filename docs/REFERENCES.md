@@ -1,5 +1,7 @@
 # References & Scientific Foundations
 
+**G6 Brain v1.0.0-beta2 (Phase 0 QA Hardened)**
+
 G6 Brain builds on well-established research in **adaptive control**, **system identification**, and **response surface methodology**. All code is original implementation.
 
 This file provides proper academic credit and stable references for the core techniques used.
@@ -46,14 +48,17 @@ This file provides proper academic credit and stable references for the core tec
 
 ---
 
-## Notes
+## Notes (Phase 0 QA Updates)
 
-- The G6 Brain implementation uses a **quadratic RLS model** with **variable forgetting factor**, **ridge regularization**, and **predictive safety layers** inspired by the above works.
-- All numerical stability techniques (PSD safeguard, trace monitoring, denominator guards) draw from Bierman and Haykin.
-- Safety interlocks (thermal ceiling, voltage undershoot prediction, slew limiting) follow fail-safe principles common in aerospace and automotive embedded control literature.
+- The G6 Brain implements a **quadratic RLS model** with **variable forgetting factor**, **ridge regularization**, covariance symmetrization, trace monitoring, innovation gating, and full self-contained safety layers.
+- All numerical stability techniques draw from Bierman and Haykin.
+- Safety interlocks (thermal ceiling, NER back-off, voltage clamping, control-mode enforcement, NVS warm-start) follow fail-safe principles common in aerospace and automotive embedded control literature.
+- **Efficiency Reality (honesty patch)**: This is currently a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety clamps). True J/TH efficiency optimization (separate power model) is planned for Phase 1.
+- Kconfig options (`G6_RLS_*`, `G6_TEMP_CEILING`, etc.), control modes, and NVS auto-save are now fully wired and runtime-configurable.
+
 - No proprietary algorithms or closed-source code from any paper have been used.
 
 ---
 
-**Last updated:** May 2026  
+**Last updated:** May 2026 (Phase 0 QA fixes applied)  
 **Maintainer:** 6ummy-Dev + Grok (xAI)
