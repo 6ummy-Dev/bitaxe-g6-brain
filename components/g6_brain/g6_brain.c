@@ -14,8 +14,9 @@
 #include <math.h>
 
 static const char *TAG = "G6_BRAIN";
-static const char *NVS_NAMESPACE = "g6_brain";
-static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
+
+/* ====================== LOCAL DEFINES ====================== */
+#define RLS_P0_DIAG 1.0f
 
 /* ====================== RLS HELPERS ====================== */
 
@@ -72,7 +73,6 @@ esp_err_t g6_brain_init(G6BrainState *brain)
 
     memset(brain, 0, sizeof(G6BrainState));
 
-    // Identity matrix initialization
     for (int i = 0; i < RLS_N; i++) {
         for (int j = 0; j < RLS_N; j++) {
             brain->P[i][j] = (i == j) ? RLS_P0_DIAG : 0.0f;
@@ -82,35 +82,39 @@ esp_err_t g6_brain_init(G6BrainState *brain)
 
     brain->model_quality = 0.0f;
     brain->last_efficiency = 0.0f;
-    brain->last_update_us = esp_timer_get_time();
+    brain->cold_start = true;
+    brain->last_update_timestamp = xTaskGetTickCount();
 
     ESP_LOGI(TAG, "G6 Brain initialized (RLS stabilized)");
     return ESP_OK;
 }
 
-void g6_brain_update(G6BrainState *brain, float freq_mhz, float voltage, float hashrate)
+esp_err_t g6_brain_update(G6BrainState *brain,
+                          float f_mhz,
+                          float v_mv,
+                          float hr_ths,
+                          float power_w,
+                          float temp_c,
+                          float err_pct,
+                          uint32_t share_count)
 {
-    if (!brain) return;
+    if (!brain) return ESP_ERR_INVALID_ARG;
 
     uint32_t now = xTaskGetTickCount();
-    float dt = (now - brain->last_update_ticks) * portTICK_PERIOD_MS / 1000.0f;
-    if (dt < 0.5f) return; // throttle updates
+    brain->last_update_timestamp = now;
 
-    brain->last_update_ticks = now;
-
-    // Feature vector
+    // Feature vector for RLS (quadratic model)
     float x[RLS_N] = {
         1.0f,
-        freq_mhz,
-        voltage,
-        freq_mhz * voltage,
-        freq_mhz * freq_mhz,
-        voltage * voltage
+        f_mhz,
+        v_mv,
+        f_mhz * v_mv,
+        f_mhz * f_mhz,
+        v_mv * v_mv
     };
 
-    float y = hashrate;
+    float y = hr_ths;
 
-    // RLS update (simplified stabilized version)
     float err = y;
     for (int i = 0; i < RLS_N; i++) {
         err -= brain->theta[i] * x[i];
@@ -118,16 +122,33 @@ void g6_brain_update(G6BrainState *brain, float freq_mhz, float voltage, float h
 
     float lambda = compute_gradient_vff(err, 1.0f);
 
-    // Update logic would go here (kept minimal for now)
-    brain->last_efficiency = hashrate / (freq_mhz * 0.001f); // placeholder
+    // Basic efficiency tracking
+    if (power_w > 0.1f) {
+        brain->last_efficiency = hr_ths / power_w;
+    }
+
+    // TODO: Full RLS matrix update + safety logic will go here in next iteration
+    (void)lambda;
+    (void)share_count;
+    (void)temp_c;
+    (void)err_pct;
+
+    return ESP_OK;
 }
 
-float g6_brain_predict_hashrate(const G6BrainState *brain, float freq_mhz, float voltage)
+void g6_brain_get_optimal(const G6BrainState *brain,
+                          float *opt_f,
+                          float *opt_v,
+                          float *pred_hr)
 {
-    if (!brain) return 0.0f;
+    if (!brain || !opt_f || !opt_v || !pred_hr) return;
 
-    float fn = (freq_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
-    float vn = (voltage - BM1370_V_CENTER) / BM1370_V_SCALE;
+    *opt_f = brain->best_f;
+    *opt_v = brain->best_v;
+
+    // Quadratic prediction using current theta
+    float fn = (*opt_f - BM1370_F_CENTER) / BM1370_F_SCALE;
+    float vn = (*opt_v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
     float a = brain->theta[4];
     float b = brain->theta[5];
@@ -136,7 +157,7 @@ float g6_brain_predict_hashrate(const G6BrainState *brain, float freq_mhz, float
     float e = brain->theta[2];
     float g = brain->theta[0];
 
-    return a*fn*fn + b*vn*vn + c*fn*vn + d*fn + e*vn + g;
+    *pred_hr = a*fn*fn + b*vn*vn + c*fn*vn + d*fn + e*vn + g;
 }
 
 float g6_brain_get_model_quality(const G6BrainState *brain)
@@ -164,12 +185,15 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
     float min_diag = 1e30f, max_diag = 0.0f;
 
     for (int i = 0; i < RLS_N; i++) {
-        if (brain->P[i][i] < RLS_P_CLAMP_MIN || brain->P[i][i] > RLS_P_CLAMP_MAX) ok = false;
+        if (brain->P[i][i] < RLS_P_CLAMP_MIN || brain->P[i][i] > RLS_P_CLAMP_MAX)
+            ok = false;
+
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
 
         for (int j = i + 1; j < RLS_N; j++) {
-            if (fabsf(brain->P[i][j] - brain->P[j][i]) > 1e-4f) ok = false;
+            if (fabsf(brain->P[i][j] - brain->P[j][i]) > 1e-4f)
+                ok = false;
         }
     }
 
@@ -183,4 +207,19 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
              cond);
 
     return ok ? ESP_OK : ESP_FAIL;
+}
+
+/* ====================== NVS STUBS ====================== */
+
+esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
+{
+    if (!brain) return ESP_ERR_INVALID_ARG;
+    brain->nvs_valid = false;
+    return ESP_OK;
+}
+
+esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
+{
+    if (!brain) return ESP_ERR_INVALID_ARG;
+    return ESP_OK;
 }
