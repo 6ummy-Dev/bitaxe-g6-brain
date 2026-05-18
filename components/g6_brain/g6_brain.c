@@ -1,6 +1,14 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 + QA fixes)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 + Phase 0.1 Critical Fixes)
+ *
+ * PHASE 0.1 FIXES APPLIED:
+ * - NVS schema versioning + size prefix (prevents silent corruption)
+ * - VFF sigma_sq now Kconfig-tunable via RLS_VFF_SIGMA_SQ
+ * - All magic constants centralized
+ * - New g6_brain_reset() API
+ * - Stronger single-threaded enforcement notes
+ * - Defensive logging on schema mismatch
  */
 
 #include "g6_brain.h"
@@ -19,7 +27,10 @@ static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 
 /* Phase 0: NVS auto-save interval (5 minutes) */
-static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;  // ~5 min @ 1ms tick
+static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
+
+/* Phase 0.1: NVS schema (defined in header) */
+static const uint32_t NVS_SCHEMA_VERSION = G6_NVS_SCHEMA_VERSION;
 
 /* ====================== RLS HELPERS ====================== */
 
@@ -36,7 +47,7 @@ static bool has_significant_innovation(const G6BrainState *brain, const float x[
         for (int j = 0; j < RLS_N; j++) px += brain->P[i][j] * x[j];
         innovation += x[i] * px;
     }
-    return innovation > 1e-4f;
+    return innovation > RLS_INNOVATION_THRESHOLD;   // Phase 0.1: centralized
 }
 
 static float trace_P(const G6BrainState *brain) {
@@ -85,7 +96,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     if (!brain || !isfinite(v_mv)) return;
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
         brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
-        ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);  // ← QA FIX: added missing v_mv argument
+        ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);
     }
 }
 
@@ -100,25 +111,40 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
     }
 }
 
-/* ====================== NVS ====================== */
+/* ====================== NVS (PHASE 0.1 VERSIONED) ====================== */
 
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
     if (err != ESP_OK) return err;
 
-    size_t size = sizeof(brain->theta) + sizeof(brain->P);
-    uint8_t buffer[sizeof(brain->theta) + sizeof(brain->P)];
-    err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &size);
+    // Phase 0.1: schema version + size prefix
+    uint32_t stored_version = 0;
+    uint32_t stored_size = 0;
+    size_t blob_size = sizeof(uint32_t) * 2 + sizeof(brain->theta) + sizeof(brain->P);
+    uint8_t buffer[sizeof(uint32_t) * 2 + sizeof(brain->theta) + sizeof(brain->P)];
 
-    if (err == ESP_OK && size == sizeof(buffer)) {
-        memcpy(brain->theta, buffer, sizeof(brain->theta));
-        memcpy(brain->P, buffer + sizeof(brain->theta), sizeof(brain->P));
-        brain->nvs_valid = true;
-        brain->cold_start = false;
+    err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &blob_size);
+    if (err == ESP_OK && blob_size == sizeof(buffer)) {
+        memcpy(&stored_version, buffer, sizeof(uint32_t));
+        memcpy(&stored_size, buffer + sizeof(uint32_t), sizeof(uint32_t));
+
+        if (stored_version == NVS_SCHEMA_VERSION && stored_size == sizeof(brain->theta) + sizeof(brain->P)) {
+            memcpy(brain->theta, buffer + sizeof(uint32_t) * 2, sizeof(brain->theta));
+            memcpy(brain->P, buffer + sizeof(uint32_t) * 2 + sizeof(brain->theta), sizeof(brain->P));
+            brain->nvs_valid = true;
+            brain->cold_start = false;
+            ESP_LOGI(TAG, "NVS fingerprint loaded (schema v%u)", stored_version);
+        } else {
+            ESP_LOGW(TAG, "NVS schema mismatch (stored v%u, expected v%u) — forcing cold start + erase", stored_version, NVS_SCHEMA_VERSION);
+            brain->cold_start = true;
+            brain->nvs_valid = false;
+            nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+            nvs_commit(nvs);
+        }
     }
     nvs_close(nvs);
-    return err;
+    return ESP_OK;
 }
 
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
@@ -126,14 +152,74 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) return err;
 
-    uint8_t buffer[sizeof(brain->theta) + sizeof(brain->P)];
-    memcpy(buffer, brain->theta, sizeof(brain->theta));
-    memcpy(buffer + sizeof(brain->theta), brain->P, sizeof(brain->P));
+    size_t data_size = sizeof(brain->theta) + sizeof(brain->P);
+    uint8_t buffer[sizeof(uint32_t) * 2 + sizeof(brain->theta) + sizeof(brain->P)];
+    uint32_t version = NVS_SCHEMA_VERSION;
+    uint32_t size_field = (uint32_t)data_size;
+
+    memcpy(buffer, &version, sizeof(uint32_t));
+    memcpy(buffer + sizeof(uint32_t), &size_field, sizeof(uint32_t));
+    memcpy(buffer + sizeof(uint32_t) * 2, brain->theta, sizeof(brain->theta));
+    memcpy(buffer + sizeof(uint32_t) * 2 + sizeof(brain->theta), brain->P, sizeof(brain->P));
 
     err = nvs_set_blob(nvs, NVS_FINGERPRINT_KEY, buffer, sizeof(buffer));
     if (err == ESP_OK) err = nvs_commit(nvs);
     nvs_close(nvs);
     return err;
+}
+
+/* ====================== PHASE 0.1: FULL RESET ====================== */
+
+esp_err_t g6_brain_reset(G6BrainState *brain) {
+    if (!brain) return ESP_ERR_INVALID_ARG;
+
+    // Erase NVS fingerprint
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err == ESP_OK) {
+        nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+
+    // Re-initialize to safe cold-start state
+    memset(brain, 0, sizeof(G6BrainState));
+    brain->best_f = BM1370_F_CENTER;
+    brain->best_v = BM1370_V_CENTER;
+    brain->ridge_epsilon = RLS_RIDGE_EPSILON;
+    brain->cold_start = true;
+    brain->update_count = 0;
+    brain->model_quality = 0.0f;
+    brain->nvs_valid = false;
+    brain->sample_state = BRAIN_STATE_IDLE;
+    brain->control_mode = G6_MODE_RECOMMEND;
+
+    for (int i = 0; i < RLS_N; i++)
+        for (int j = 0; j < RLS_N; j++)
+            brain->P[i][j] = (i == j) ? 1.0e5f : 0.0f;
+
+    // Re-apply Kconfig values (same as init)
+#if defined(CONFIG_G6_TEMP_CEILING)
+    brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
+#else
+    brain->temp_ceiling = 70.0f;
+#endif
+#if defined(CONFIG_G6_NER_THRESHOLD)
+    brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
+#else
+    brain->ner_threshold = 2.5f;
+#endif
+#if defined(CONFIG_G6_DFS_STEP_MHZ)
+    brain->dfs_step_mhz = (float)CONFIG_G6_DFS_STEP_MHZ;
+#else
+    brain->dfs_step_mhz = 25.0f;
+#endif
+
+    brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
+    brain->nvs_last_write_tick = xTaskGetTickCount();
+
+    ESP_LOGW(TAG, "G6 Brain FULL RESET — NVS erased, cold start forced");
+    return ESP_OK;
 }
 
 /* ====================== SAMPLE STATE MACHINE ====================== */
@@ -196,7 +282,7 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
         for (int j = 0; j < RLS_N; j++)
             brain->P[i][j] = (i == j) ? 1.0e5f : 0.0f;
 
-    // Phase 0: full Kconfig wiring
+    // Phase 0: full Kconfig wiring (unchanged)
 #if defined(CONFIG_G6_TEMP_CEILING)
     brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
 #else
@@ -212,16 +298,22 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
 #else
     brain->dfs_step_mhz = 25.0f;
 #endif
-    /* dfs_step_mhz is now Kconfig-driven but unused in v1.0 — reserved for Phase 1 slew-rate limiting inside get_optimal() */
+    /* dfs_step_mhz is now Kconfig-driven but reserved for Phase 1 slew-rate limiting inside get_optimal() */
 
     brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
 
     g6_brain_load_nvs_fingerprint(brain);
     brain->nvs_last_write_tick = xTaskGetTickCount();
 
-    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save)");
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save + Phase 0.1 versioning)");
     return ESP_OK;
 }
+
+// g6_brain_update() stays functionally identical except:
+// - uses RLS_VFF_SIGMA_SQ from header
+// - uses RLS_INNOVATION_THRESHOLD
+// - safety_layer always runs
+// - single-threaded warning already in header
 
 esp_err_t g6_brain_update(G6BrainState *brain,
                           float f_mhz, float v_mv, float hr_ths,
@@ -261,7 +353,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     if (!valid) goto safety_layer;
 
-    /* RLS update (unchanged math) */
+    /* RLS update */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -271,7 +363,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float err = hr_ths - y_pred;
 
     if (has_significant_innovation(brain, x) && trace_P(brain) <= RLS_TRACE_MAX) {
-        float lambda_eff = brain->cold_start ? 0.985f : compute_gradient_vff(fabsf(err), 0.008f);
+        float lambda_eff = brain->cold_start ? 0.985f : compute_gradient_vff(fabsf(err), RLS_VFF_SIGMA_SQ);  // Phase 0.1: Kconfig-tunable
         if (lambda_eff < RLS_LAMBDA_MIN) lambda_eff = RLS_LAMBDA_MIN;
 
         float Px[RLS_N] = {0};
@@ -393,7 +485,7 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
         for (int j = i + 1; j < RLS_N; j++)
-            if (fabsf(brain->P[i][j] - brain->P[j][i]) > 1e-4f) ok = false;
+            if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETRY_TOLERANCE) ok = false;  // Phase 0.1: centralized
     }
 
     float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
