@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 Kconfig wiring)
  *
  * Public interface.
  */
@@ -10,6 +10,7 @@
 #include "esp_err.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include "sdkconfig.h"   // ← Phase 0: Full Kconfig support
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,16 +18,33 @@ extern "C" {
 
 /* ====================== CONTROL MODES ====================== */
 typedef enum {
-    G6_MODE_OBSERVE_ONLY = 0,
-    G6_MODE_RECOMMEND,
-    G6_MODE_AUTO
+    G6_MODE_OBSERVE_ONLY = 0,   // Phase 0: now enforced (no best_f/v mutation)
+    G6_MODE_RECOMMEND,          // Compute optimal but do not mutate best_f/v
+    G6_MODE_AUTO                // Full optimizer + safety (original behavior)
 } G6ControlMode;
 
-/* ====================== RLS CONSTANTS ====================== */
+/* ====================== RLS CONSTANTS (now Kconfig-wired) ====================== */
 #define RLS_N               6
+
+// Kconfig fallbacks (matches the G6_ options you just installed)
+#if defined(CONFIG_G6_RLS_LAMBDA_MIN)
+#define RLS_LAMBDA_MIN      ((float)CONFIG_G6_RLS_LAMBDA_MIN / 1000.0f)
+#else
 #define RLS_LAMBDA_MIN      0.95f
-#define RLS_LAMBDA_MAX      0.999f
+#endif
+
+#if defined(CONFIG_G6_RLS_RIDGE_EPSILON)
+#define RLS_RIDGE_EPSILON   ((float)CONFIG_G6_RLS_RIDGE_EPSILON * 1e-6f)
+#else
+#define RLS_RIDGE_EPSILON   1e-5f
+#endif
+
+#if defined(CONFIG_G6_RLS_TRACE_MAX)
+#define RLS_TRACE_MAX       (float)CONFIG_G6_RLS_TRACE_MAX
+#else
 #define RLS_TRACE_MAX       1e7f
+#endif
+
 #define RLS_P_CLAMP_MIN     1e-6f
 #define RLS_P_CLAMP_MAX     1e6f
 
@@ -67,7 +85,7 @@ typedef struct {
     /* RLS core */
     float theta[RLS_N];
     float P[RLS_N][RLS_N];
-    float ridge_epsilon;
+    float ridge_epsilon;        // now comes from Kconfig via RLS_RIDGE_EPSILON
     float model_quality;
     bool  cold_start;
     uint32_t update_count;
@@ -77,13 +95,13 @@ typedef struct {
     float best_f;
     float best_v;
 
-    /* Safety & config */
+    /* Safety & config (Kconfig wired) */
     float ner_threshold;
     float Kp, Ki, Kd;
     float temp_ceiling;
-    float dfs_step_mhz;
+    float dfs_step_mhz;         // now from CONFIG_G6_DFS_STEP_MHZ
 
-    /* Control mode */
+    /* Control mode — Phase 0 enforcement coming in g6_brain.c */
     G6ControlMode control_mode;
 
     /* Nonce / extras */
@@ -108,16 +126,13 @@ typedef struct {
 /* ====================== PUBLIC INTERFACE ====================== */
 
 /**
- * Initialize the G6 Brain.
+ * Initialize the brain.
  * Must be called after nvs_flash_init().
  */
 esp_err_t g6_brain_init(G6BrainState *brain);
 
 /**
  * Feed telemetry and run one optimization + safety cycle.
- *
- * @param share_count  Actual number of valid shares in the current window.
- *                     Pass 0 if unknown (share quality check will be skipped).
  */
 esp_err_t g6_brain_update(G6BrainState *brain,
                           float f_mhz,
@@ -126,7 +141,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                           float power_w,
                           float temp_c,
                           float err_pct,
-                          uint32_t share_count);   /* Added for proper share validation (BUG-2 fix) */
+                          uint32_t share_count);
 
 void g6_brain_get_optimal(const G6BrainState *brain,
                           float *opt_f,
