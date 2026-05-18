@@ -13,17 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup ESP-IDF
+      - name: Setup ESP-IDF v5.3
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.3
 
-      - name: Build G6 Brain component
+      - name: Build G6 Brain (ESP32-S3)
         run: |
           idf.py set-target esp32s3
           idf.py build
 
       - name: Run Unity self-tests
-        run: |
-          idf.py test
-        continue-on-error: true   # Keep during beta2 while expanding test coverage
+        run: idf.py test
+        # Note: Removed continue-on-error so test failures are visible
