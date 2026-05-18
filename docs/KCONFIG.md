@@ -110,15 +110,15 @@ After 24–48 h of stable operation you can experiment with slightly higher `G6_
 - `TEMP_CEILING` + `PROACTIVE_DFS_THRESHOLD` + `VOLTAGE_RIPPLE_MAX` implement the **multi-layer predictive safety** system.
 - `NVS_WRITE_INTERVAL` controls persistence of both theta and the full covariance matrix (true warm-start).
 - All limits are **hard-enforced** inside `g6_brain_update()` — the brain will refuse unsafe requests even if your calling code tries to override them.
-- `DEBUG` (if you add it via menuconfig) adds visibility into model quality and sample state machine.
 
 ---
 
 ## Next Steps
 
-- **Full API & integration** → [API.md](API.md) and `docs/main_integration_v1.0_beta.c`
-- **Installation guide** → [INSTALL.md](INSTALL.md)
-- **Safety philosophy & edge cases** → Root `AGENTS.md`
+- **Installation & quick start** → [INSTALL.md](INSTALL.md)
+- **Recommended integration example** → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)
+- **Full public API** → [API.md](API.md)
+- **Safety philosophy & edge cases** → [AGENTS.md](../AGENTS.md)
 
 **Pro tip:** After changing any Kconfig value, always do a full clean build:
 
