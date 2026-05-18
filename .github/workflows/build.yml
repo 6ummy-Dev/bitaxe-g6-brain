@@ -18,11 +18,25 @@ jobs:
         with:
           esp_idf_version: v5.3
 
-      - name: Build G6 Brain (ESP32-S3)
+      - name: Prepare minimal test project
+        run: |
+          mkdir -p test_app/main test_app/components/g6_brain
+
+          cat > test_app/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+          project(test_g6_brain)
+          EOF
+
+          echo 'idf_component_register()' > test_app/main/CMakeLists.txt
+          cp -r components/g6_brain test_app/components/
+
+      - name: Build component
+        working-directory: test_app
         run: |
           idf.py set-target esp32s3
           idf.py build
 
-      - name: Run Unity self-tests
+      - name: Run tests
+        working-directory: test_app
         run: idf.py test
-        # Note: Removed continue-on-error so test failures are visible
