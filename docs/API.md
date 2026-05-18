@@ -32,7 +32,7 @@ if (ret != ESP_OK) { /* handle error */ }
 
 ---
 
-### `esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct)`
+### `esp_err_t g6_brain_update(G6BrainState *brain, float f_mhz, float v_mv, float hr_ths, float power_w, float temp_c, float err_pct, uint32_t share_count)`
 
 Feeds one telemetry sample into the RLS model and runs the safety + optimization loop.
 
@@ -43,19 +43,19 @@ Feeds one telemetry sample into the RLS model and runs the safety + optimization
 - `power_w` — Power consumption (W)
 - `temp_c` — ASIC temperature (°C)
 - `err_pct` — Hardware error rate (%)
+- `share_count` — Number of valid shares in the current measurement window (pass `0` if unknown)
 
 **Returns**
 - `ESP_OK` — Sample accepted and model updated
 - `ESP_ERR_INVALID_ARG` — NULL brain or out-of-range values
-- Other errors from internal safety checks
 
 **Behavior**
 - Runs quadratic RLS update (6 coefficients)
-- Applies thermal ceiling, voltage undershoot protection, slew limits
+- Applies thermal ceiling, voltage protection, and safety checks
 - Updates `best_f` / `best_v` when a better safe operating point is found
 - Tracks model quality and cold-start state
 
-**Recommended call rate**: Every 20–30 seconds (see integration examples).
+**Recommended call rate**: Every 20–30 seconds.
 
 ---
 
@@ -105,7 +105,6 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 ```
 
-- Automatically enabled via `CONFIG_G6_BRAIN_NVS_FINGERPRINT`
 - Stores learned RLS coefficients + best setpoint per physical chip
 - Survives power cycles and reduces cold-start time
 
@@ -116,8 +115,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 Contains:
 - Full 6×6 RLS covariance matrix `P` and coefficient vector `theta`
 - Best safe setpoint (`best_f`, `best_v`)
-- Safety config (`temp_ceiling`, PID gains, `ner_threshold`)
-- Nonce/puzzle extras (`nonce_offset`, `enable_low_latency_jobs`)
+- Safety config (`temp_ceiling`, `ner_threshold`)
 - Sample quality state machine (`BrainSampleState`)
 - NVS and timing counters
 
@@ -141,8 +139,8 @@ The brain will **never** recommend values outside these ranges.
 ## Next Steps
 
 - **Installation & quick start** → [INSTALL.md](INSTALL.md)
+- **Recommended integration example** → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)
 - **Kconfig options** → [KCONFIG.md](KCONFIG.md)
-- **Production integration example** → [main_integration_v1.0_beta.c](main_integration_v1.0_beta.c)
 - **Safety & engineering principles** → [AGENTS.md](../AGENTS.md)
 
 ---
@@ -150,5 +148,3 @@ The brain will **never** recommend values outside these ranges.
 **License**: MIT  
 **Version**: v1.0.0-beta2 (May 2026)  
 **Maintainer**: 6ummy-Dev + Grok (xAI)
-
-*This API is stable for v1.0. Future brains (ML, multi-ASIC, etc.) will implement the same interface.*
