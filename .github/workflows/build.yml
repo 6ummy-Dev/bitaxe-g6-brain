@@ -44,11 +44,17 @@ jobs:
           cp -r components/g6_brain test_app/components/
 
       - name: Build G6 Brain
-        working-directory: test_app
         run: |
-          idf.py set-target esp32s3
-          idf.py build
+          docker run --rm \
+            -v "$PWD:/project" \
+            -w /project/test_app \
+            espressif/idf:v5.3 \
+            bash -c "idf.py set-target esp32s3 && idf.py build"
 
       - name: Run tests
-        working-directory: test_app
-        run: idf.py test
+        run: |
+          docker run --rm \
+            -v "$PWD:/project" \
+            -w /project/test_app \
+            espressif/idf:v5.3 \
+            idf.py test
