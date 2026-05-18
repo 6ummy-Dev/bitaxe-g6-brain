@@ -1,15 +1,8 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2 (Phase 0 QA Hardened + Phase 0.1 Critical Fixes)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (Phase 0 QA Hardened + Phase 0.1 Critical Fixes + Phase 1 Prep)
  *
  * Public interface.
- *
- * PHASE 0.1 FIXES APPLIED:
- * - NVS schema versioning + size prefix (critical — prevents silent corruption on future struct changes)
- * - VFF sigma_sq now tunable via Kconfig (next step)
- * - New g6_brain_reset() API
- * - Magic constants centralized
- * - Strong single-threaded usage warning
  */
 
 #pragma once
@@ -17,7 +10,7 @@
 #include "esp_err.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "sdkconfig.h"   // ← Phase 0: Full Kconfig support
+#include "sdkconfig.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,7 +36,7 @@ typedef enum {
 } G6ControlMode;
 
 /* ====================== NVS SCHEMA (PHASE 0.1 CRITICAL) ====================== */
-#define G6_NVS_SCHEMA_VERSION 1u   // Increment on ANY breaking change to theta/P struct
+#define G6_NVS_SCHEMA_VERSION 1u   // Will become 2 when Phase 1 power fields are persisted
 
 /* ====================== RLS CONSTANTS (fully Kconfig-wired + Phase 0.1) ====================== */
 #define RLS_N               6
@@ -67,15 +60,14 @@ typedef enum {
 #define RLS_TRACE_MAX       1e7f
 #endif
 
-// Phase 0.1: Tunable VFF sigma_sq (will be Kconfig-wired next)
 #if defined(CONFIG_G6_RLS_VFF_SIGMA_SQ)
 #define RLS_VFF_SIGMA_SQ    ((float)CONFIG_G6_RLS_VFF_SIGMA_SQ / 10000.0f)
 #else
 #define RLS_VFF_SIGMA_SQ    0.008f
 #endif
 
-#define RLS_INNOVATION_THRESHOLD 1e-4f     // Phase 0.1: centralized
-#define RLS_SYMMETRY_TOLERANCE   1e-4f     // Phase 0.1: centralized
+#define RLS_INNOVATION_THRESHOLD 1e-4f
+#define RLS_SYMMETRY_TOLERANCE   1e-4f
 #define RLS_P_CLAMP_MIN          1e-6f
 #define RLS_P_CLAMP_MAX          1e6f
 
@@ -113,10 +105,10 @@ typedef enum {
 
 /* ====================== MAIN BRAIN STATE ====================== */
 typedef struct {
-    /* RLS core */
+    /* RLS core — hashrate model */
     float theta[RLS_N];
     float P[RLS_N][RLS_N];
-    float ridge_epsilon;        // from Kconfig via RLS_RIDGE_EPSILON
+    float ridge_epsilon;
     float model_quality;
     bool  cold_start;
     uint32_t update_count;
@@ -130,7 +122,7 @@ typedef struct {
     float ner_threshold;
     float Kp, Ki, Kd;
     float temp_ceiling;
-    float dfs_step_mhz;         // reserved for Phase 1 slew-rate limiting inside get_optimal()
+    float dfs_step_mhz;
 
     /* Control mode — fully enforced */
     G6ControlMode control_mode;
@@ -152,45 +144,33 @@ typedef struct {
 
     /* Telemetry */
     float last_efficiency;
+
+    /* ====================== PHASE 1 — POWER MODEL (additive only) ====================== */
+    float power_theta[RLS_N];           // separate quadratic model for power (W)
+    float power_P[RLS_N][RLS_N];        // separate covariance matrix for power
+    float power_model_quality;          // 0.0-1.0 quality of power fit
+    bool  power_cold_start;
+    uint32_t power_update_count;
+
+    /* Phase 1 runtime flag (default = false for full backward compatibility) */
+    bool  use_efficiency_mode;          // when true → optimize J/TH instead of raw hashrate
+
 } G6BrainState;
 
 /* ====================== PUBLIC INTERFACE ====================== */
 
-/**
- * Initialize the brain.
- * Must be called after nvs_flash_init().
- */
 esp_err_t g6_brain_init(G6BrainState *brain);
-
-/**
- * Feed telemetry and run one optimization + safety cycle.
- * SINGLE-THREADED ONLY.
- */
 esp_err_t g6_brain_update(G6BrainState *brain,
-                          float f_mhz,
-                          float v_mv,
-                          float hr_ths,
-                          float power_w,
-                          float temp_c,
-                          float err_pct,
+                          float f_mhz, float v_mv, float hr_ths,
+                          float power_w, float temp_c, float err_pct,
                           uint32_t share_count);
 
-/**
- * Get the currently recommended safe operating point.
- */
 void g6_brain_get_optimal(const G6BrainState *brain,
-                          float *opt_f,
-                          float *opt_v,
-                          float *pred_hr);
+                          float *opt_f, float *opt_v, float *pred_hr);
 
 float g6_brain_get_model_quality(const G6BrainState *brain);
 float g6_brain_get_cov_condition(const G6BrainState *brain);
 esp_err_t g6_brain_self_test(G6BrainState *brain);
-
-/**
- * PHASE 0.1: Full reset + NVS erase (forces cold start).
- * Use this when you want to wipe learned model (e.g. ASIC swap, debugging).
- */
 esp_err_t g6_brain_reset(G6BrainState *brain);
 
 /* NVS (now versioned) */
