@@ -47,6 +47,11 @@ These are **now live** and read at runtime via `sdkconfig.h`.
 - **Default:** `25`  
 - **Description:** Frequency step size used internally for optimization and slew-rate limiting.
 
+### `G6_ENABLE_EFFICIENCY_MODE`
+- **Type:** bool  
+- **Default:** `n` (disabled)  
+- **Description:** Enable true J/TH efficiency optimization (Phase 1). When enabled, uses a separate power RLS model to minimize Watts per TH/s. When disabled, remains a safe hashrate maximizer.
+
 ---
 
 ## Phase 0 Changes Now Active
