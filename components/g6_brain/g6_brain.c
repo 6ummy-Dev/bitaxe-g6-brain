@@ -459,28 +459,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             if (brain->power_update_count > 25) brain->power_cold_start = false;
         }
     }
-/* ====================== TELEMETRY (Phase 2 - new) ====================== */
 
-void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out) {
-    if (!brain || !out) return;
-
-    /* hashrate model */
-    memcpy(out->theta_hashrate, brain->theta, sizeof(brain->theta));
-    out->trace_P_hashrate = trace_P(brain->P);
-
-    /* power model (Phase 1) */
-    memcpy(out->theta_power, brain->power_theta, sizeof(brain->power_theta));
-    out->trace_P_power = trace_P(brain->power_P);
-
-    /* innovation & safety (lightweight snapshot) */
-    out->last_innovation = 0.0f;                    // placeholder - real tracking added later
-    out->safety_status = 0;                         // 0 = OK (full enum in later file)
-    out->efficiency_mode_active = brain->use_efficiency_mode;
-    out->last_recommended_voltage = brain->best_v;  // last known safe voltage
-
-    ESP_LOGD(TAG, "Telemetry snapshot taken - trace_P_hr=%.2e trace_P_pw=%.2e eff_mode=%d",
-             out->trace_P_hashrate, out->trace_P_power, out->efficiency_mode_active);
-}
 safety_layer:
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
@@ -618,4 +597,26 @@ esp_err_t g6_brain_self_test(G6BrainState *brain) {
              ok ? "PASSED" : "DEGRADED", brain->model_quality, brain->last_efficiency, cond);
 
     return ok ? ESP_OK : ESP_FAIL;
+}
+/* ====================== TELEMETRY (Phase 2 - new) ====================== */
+
+void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out) {
+    if (!brain || !out) return;
+
+    /* hashrate model */
+    memcpy(out->theta_hashrate, brain->theta, sizeof(brain->theta));
+    out->trace_P_hashrate = trace_P(brain->P);
+
+    /* power model (Phase 1) */
+    memcpy(out->theta_power, brain->power_theta, sizeof(brain->power_theta));
+    out->trace_P_power = trace_P(brain->power_P);
+
+    /* innovation & safety (lightweight snapshot) */
+    out->last_innovation = 0.0f;                    // placeholder - real tracking added later
+    out->safety_status = 0;                         // 0 = OK (full enum in later file)
+    out->efficiency_mode_active = brain->use_efficiency_mode;
+    out->last_recommended_voltage = brain->best_v;  // last known safe voltage
+
+    ESP_LOGD(TAG, "Telemetry snapshot taken - trace_P_hr=%.2e trace_P_pw=%.2e eff_mode=%d",
+             out->trace_P_hashrate, out->trace_P_power, out->efficiency_mode_active);
 }
