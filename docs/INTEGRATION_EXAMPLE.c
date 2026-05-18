@@ -54,8 +54,14 @@ void g6_brain_example_task(void *arg)
         float temp_c    = 57.0f;      // ASIC temperature
         float error_pct = 0.7f;       // Hardware error rate (%)
 
-        // Feed data into the brain
-        ret = g6_brain_update(&brain, freq_mhz, volt_mv, hashrate, power_w, temp_c, error_pct);
+        // NOTE: share_count should come from your actual share counter in the current window.
+        // For now we pass 0 as placeholder. The brain will skip share-based validation
+        // when share_count is 0, but still performs all other safety checks.
+        uint32_t share_count = 0;
+
+        // Feed data into the brain (share_count added in beta2)
+        ret = g6_brain_update(&brain, freq_mhz, volt_mv, hashrate,
+                              power_w, temp_c, error_pct, share_count);
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "g6_brain_update failed: %s", esp_err_to_name(ret));
         }
