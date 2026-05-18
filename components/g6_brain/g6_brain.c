@@ -636,21 +636,6 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
     return ok ? ESP_OK : ESP_FAIL;
 }
 
-/* NVS wrappers (public) */
-esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
-{
-    return g6_brain_load_nvs_fingerprint(brain);
-}
-
-esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
-{
-    return g6_brain_save_nvs_fingerprint(brain);
-}
-
-/* ============================================================================
- *                              TELEMETRY
- * ========================================================================== */
-
 void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
 {
     if (!brain || !out) return;

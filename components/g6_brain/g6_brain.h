@@ -217,7 +217,6 @@ esp_err_t g6_brain_reset(G6BrainState *brain);
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
-/* Telemetry */
 void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out);
 
 #ifdef __cplusplus
