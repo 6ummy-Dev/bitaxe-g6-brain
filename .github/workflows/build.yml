@@ -41,5 +41,13 @@ jobs:
             espressif/idf:v5.3 \
             bash -c "idf.py set-target esp32s3 && idf.py build"
 
+      - name: Run Unity Tests (G6 Brain)
+        run: |
+          docker run --rm \
+            -v "$PWD:/project" \
+            -w /project/test_app \
+            espressif/idf:v5.3 \
+            bash -c "idf.py set-target esp32s3 && idf.py test"
+
       - name: Build complete
-        run: echo "✅ Build successful"
+        run: echo "✅ Build + Tests successful"
