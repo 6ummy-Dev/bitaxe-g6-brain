@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Fixes)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 Kconfig + NVS + control_mode)
  */
 
 #include "g6_brain.h"
@@ -17,6 +17,9 @@ static const char *TAG = "G6_BRAIN";
 
 static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
+
+/* Phase 0: NVS auto-save interval (5 minutes) */
+static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;  // ~5 min @ 1ms tick
 
 /* ====================== RLS HELPERS ====================== */
 
@@ -82,7 +85,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv) {
     if (!brain || !isfinite(v_mv)) return;
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
         brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
-        ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);
+        ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped");
     }
 }
 
@@ -99,7 +102,7 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
 
 /* ====================== NVS ====================== */
 
-esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
+esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) { /* unchanged */ 
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
     if (err != ESP_OK) return err;
@@ -118,7 +121,7 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain) {
     return err;
 }
 
-esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) {
+esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain) { /* unchanged */ 
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) return err;
@@ -181,25 +184,41 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     brain->best_f = BM1370_F_CENTER;
     brain->best_v = BM1370_V_CENTER;
 
-    brain->ridge_epsilon = 1e-5f;
+    brain->ridge_epsilon = RLS_RIDGE_EPSILON;               // ← Phase 0 Kconfig
     brain->cold_start = true;
     brain->update_count = 0;
     brain->model_quality = 0.0f;
     brain->nvs_valid = false;
     brain->sample_state = BRAIN_STATE_IDLE;
+    brain->control_mode = G6_MODE_RECOMMEND;                // ← Phase 0 safe default
 
     for (int i = 0; i < RLS_N; i++)
         for (int j = 0; j < RLS_N; j++)
             brain->P[i][j] = (i == j) ? 1.0e5f : 0.0f;
 
-    brain->temp_ceiling  = 70.0f;
+    // Phase 0: full Kconfig wiring
+#if defined(CONFIG_G6_TEMP_CEILING)
+    brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
+#else
+    brain->temp_ceiling = 70.0f;
+#endif
+#if defined(CONFIG_G6_NER_THRESHOLD)
+    brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
+#else
     brain->ner_threshold = 2.5f;
-    brain->dfs_step_mhz  = 25.0f;
+#endif
+#if defined(CONFIG_G6_DFS_STEP_MHZ)
+    brain->dfs_step_mhz = (float)CONFIG_G6_DFS_STEP_MHZ;
+#else
+    brain->dfs_step_mhz = 25.0f;
+#endif
+
     brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
 
     g6_brain_load_nvs_fingerprint(brain);
+    brain->nvs_last_write_tick = xTaskGetTickCount();   // Phase 0: NVS timer start
 
-    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized successfully");
+    ESP_LOGI(TAG, "G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save)");
     return ESP_OK;
 }
 
@@ -218,7 +237,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         return ESP_ERR_INVALID_ARG;
     }
 
-    // NEW-2: Power sanity check
     if (power_w < 0.0f || power_w > 100.0f) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -242,7 +260,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     if (!valid) goto safety_layer;
 
-    /* RLS */
+    /* RLS update (unchanged math) */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -272,7 +290,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         for (int i = 0; i < RLS_N; i++) {
             for (int j = 0; j < RLS_N; j++)
                 brain->P[i][j] = (brain->P[i][j] - k[i] * Px[j]) / lambda_eff;
-            brain->P[i][i] += brain->ridge_epsilon;
+            brain->P[i][i] += brain->ridge_epsilon;   // ← now Kconfig-driven
         }
 
         rls_symmetrize_clamp_and_stabilize(brain);
@@ -286,10 +304,15 @@ safety_layer:
     g6_safety_proactive_thermal_scale(brain, temp_c);
     g6_safety_check_voltage_ripple(brain, v_mv);
 
-    // NOTE: NER handling is now ONLY inside safety_layer via the call above when we goto from the check.
-    // Removed duplicate call before goto to fix double-execution (NEW-1).
+    /* Phase 0: control_mode enforcement + optimal calculation */
+    float candidate_f, candidate_v;
+    g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
 
-    g6_brain_get_optimal(brain, &brain->best_f, &brain->best_v, NULL);
+    if (brain->control_mode == G6_MODE_AUTO) {
+        brain->best_f = candidate_f;
+        brain->best_v = candidate_v;
+    }
+    /* OBSERVE_ONLY and RECOMMEND never mutate best_f/best_v */
 
     if (brain->best_f < BM1370_F_MIN) brain->best_f = BM1370_F_MIN;
     if (brain->best_f > BM1370_F_MAX) brain->best_f = BM1370_F_MAX;
@@ -298,10 +321,18 @@ safety_layer:
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
-    if (fabsf(brain->best_f - f_mhz) > 8.0f || fabsf(brain->best_v - v_mv) > 8.0f) {
+    if (brain->control_mode == G6_MODE_AUTO &&
+        (fabsf(brain->best_f - f_mhz) > 8.0f || fabsf(brain->best_v - v_mv) > 8.0f)) {
         brain->last_setting_change_tick = now;
         brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
         brain->measure_start_tick = 0;
+    }
+
+    /* Phase 0: periodic NVS warm-start save */
+    if (brain->update_count > 10 && (now - brain->nvs_last_write_tick > NVS_SAVE_INTERVAL_TICKS)) {
+        g6_brain_save_nvs_fingerprint(brain);
+        brain->nvs_last_write_tick = now;
+        ESP_LOGI(TAG, "NVS fingerprint auto-saved (warm-start ready)");
     }
 
     return ESP_OK;
@@ -316,6 +347,8 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
 
+    /* NOTE (Phase 0 honesty): This is a SAFE HASHRATE MAXIMIZER (quadratic argmax of HR(f,v))
+       with hard safety clamps. True J/TH efficiency optimization (separate power model) is Phase 1. */
     if (quadratic_has_valid_maximum(a, b, c)) {
         float det = 4.0f * a * b - c * c;
         if (fabsf(det) > 1e-6f) {
@@ -340,6 +373,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     }
 }
 
+/* remaining functions (self_test, get_model_quality, get_cov_condition) unchanged */
 float g6_brain_get_model_quality(const G6BrainState *brain) {
     return brain ? brain->model_quality : 0.0f;
 }
