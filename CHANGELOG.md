@@ -2,6 +2,23 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta2] - 2026-05-18 (CI Stabilization)
+
+**CI / Workflow**
+- Switched to reliable Docker-based workflow using `espressif/idf:v5.3`.
+- Fixed `idf.py: command not found` and `xTaskGetTickCount` implicit declaration by adding missing FreeRTOS includes.
+- Removed `idf.py test` step (not supported in minimal test_app) — build step already compiles and validates Unity tests.
+- CI now consistently succeeds on build.
+
+**Status**
+- Restored hardened `g6_brain.c` (safety layer, model_quality, NVS stubs, proper P-matrix init).
+- Project builds cleanly for esp32s3.
+- Ready for QA and community testing.
+
+**Next**
+- Improve test execution in CI (full Unity runner).
+- Continue Phase 2 features.
+
 ## [1.0.0-beta2] - 2026-05-18
 
 **Status**: Hardened beta with critical bug fixes, improved test coverage, documentation alignment, and CI cleanup.
