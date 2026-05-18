@@ -424,6 +424,10 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                 brain->P[i][j] = (brain->P[i][j] - k[i] * Px[j]) / lambda_eff;
             brain->P[i][i] += brain->ridge_epsilon;
         }
+            /* Phase 2 — store real last_innovation for telemetry (computed from current sample) */
+    float innovation = hr_ths - (brain->theta[0] * x[0] + brain->theta[1] * x[1] + brain->theta[2] * x[2] +
+                                 brain->theta[3] * x[3] + brain->theta[4] * x[4] + brain->theta[5] * x[5]);
+    brain->last_innovation = innovation;
 
         rls_symmetrize_clamp_and_stabilize(brain->P);
 
