@@ -1,133 +1,85 @@
-# G6 Brain Kconfig Options — v1.0.0-beta2
+# G6 Brain Kconfig Options — v1.0.0-beta2 (Phase 0 — fully wired)
 
 All options live under:  
 **Component config → G6 Brain Configuration**
 
-These control behavior, safety limits, debug output, and persistence.
+These are **now live** and read at runtime via `sdkconfig.h`.
 
 ---
 
-## Core Options
+## RLS Optimizer
 
-### `G6_RLS_LAMBDA`
-- **Type:** float (0.90–0.999)  
-- **Default:** `0.98`  
-- **Description:** Forgetting factor for the stabilized RLS. Lower = faster adaptation to silicon changes; higher = more stable model.  
-- **Recommendation:** Start at 0.98. Drop to 0.95 only during initial 24 h tuning on a new chip.
+### `G6_RLS_LAMBDA_MIN`
+- **Type:** int (900–999)  
+- **Default:** `950`  
+- **Description:** Minimum forgetting factor ×1000 (0.950). Higher = more stable model, lower = faster adaptation to silicon variation.
 
-### `G6_LOW_LATENCY_JOBS`
-- **Type:** bool  
-- **Default:** `y`  
-- **Description:** Enables low-latency job mode hook (double-buffering placeholder for future stochastic nonce improvements).  
-- **Recommendation:** Leave enabled unless you have a specific reason to disable.
+### `G6_RLS_RIDGE_EPSILON`
+- **Type:** int (1–1000)  
+- **Default:** `10`  
+- **Description:** Ridge regularization ×1e-6 added to P-matrix diagonal. Prevents covariance collapse.
+
+### `G6_RLS_TRACE_MAX`
+- **Type:** int  
+- **Default:** `10000000`  
+- **Description:** Maximum allowed trace(P). Exceeding forces conservative/cold-start behavior.
 
 ---
 
-## Safety & Thermal Limits
+## Safety & Thermal
 
 ### `G6_TEMP_CEILING`
-- **Type:** int (0–120)  
+- **Type:** int  
 - **Default:** `70` (°C)  
-- **Description:** Hard thermal limit. The brain will **never** increase frequency or voltage if ASIC temperature ≥ this value. It will also proactively down-tune on fast temperature rise (`ΔT/dt > G6_PROACTIVE_DFS_THRESHOLD`).  
-- **Recommendation:**  
-  - Stock heatsink + good airflow: `68–72`  
-  - Upgraded heatsink / Noctua / immersion: `75–80`  
-  - Always leave 3–5 °C headroom below your observed max stable temp.
-
-### `G6_PROACTIVE_DFS_THRESHOLD`
-- **Type:** float  
-- **Default:** `2.0` (°C/s)  
-- **Description:** Temperature rise rate that triggers proactive frequency/voltage derate.  
-- **Recommendation:** Default is conservative and safe for most Gamma 602+ boards.
-
-### `G6_DFS_STEP`
-- **Type:** int (1–100)  
-- **Default:** `25` (MHz)  
-- **Description:** Maximum single-step frequency change the brain is allowed to request per update cycle (slew-rate limit).  
-- **Recommendation:** Conservative: `15–20`. Aggressive first 24 h: `25–40`. Do not exceed 50 unless you have excellent power delivery and cooling.
-
-### `G6_VOLTAGE_RIPPLE_MAX`
-- **Type:** float  
-- **Default:** `5.0` (%)  
-- **Description:** Maximum allowed voltage ripple/undershoot before the brain logs a warning and clamps the setpoint.  
-- **Recommendation:** Default 5% is excellent. Noisy USB-C or long cables: lower to 3–4%.
+- **Description:** Hard thermal ceiling. Proactive derating starts 5 °C below this value.
 
 ### `G6_NER_THRESHOLD`
-- **Type:** float  
-- **Default:** `0.001`  
-- **Description:** P-VUS / NER (nonce error rate) threshold. Above this the brain triggers conservative back-off.  
-- **Recommendation:** Leave at default unless you see excessive NER on your specific board.
-
-### `G6_I2C_HARD_FAULT_THRESHOLD`
-- **Type:** int (3–20)  
-- **Default:** `5`  
-- **Description:** Consecutive I2C timeouts before the brain considers the ASIC link degraded (future guardian hook).  
-- **Recommendation:** Default is fine for most boards.
+- **Type:** int (×100)  
+- **Default:** `250` (= 2.5%)  
+- **Description:** Nonce Error Rate threshold. Triggers model reset + conservative back-off.
 
 ---
 
-## Persistence & Learning
+## Optimization Behavior
 
-### `G6_NVS_WRITE_INTERVAL`
+### `G6_DFS_STEP_MHZ`
 - **Type:** int  
-- **Default:** `30000` (ticks)  
-- **Description:** How often to persist the learned RLS coefficients + covariance to NVS (wear-leveling).  
-- **Recommendation:** Default is good. Lower = more flash wear; higher = longer cold-start after power loss.
+- **Default:** `25`  
+- **Description:** Frequency step size used internally for optimization and slew-rate limiting.
 
 ---
 
-## PID / Future (currently stubs, wired for Phase 2)
+## Phase 0 Changes Now Active
 
-### `G6_KP`, `G6_KI`, `G6_KD`
-- **Type:** float  
-- **Default:** `0.8`, `0.05`, `0.2`  
-- **Description:** PID gains for future fan / thermal control integration (currently logged only).  
-- **Recommendation:** Do not change unless you are actively developing Phase 2 fan control.
+- **Control Modes** (`G6_MODE_OBSERVE_ONLY` / `RECOMMEND` / `AUTO`) are now **enforced** in `g6_brain_update()` and `g6_brain_get_optimal()`. Default is `RECOMMEND`.
+- **NVS auto-save** — full theta + P matrix is now saved every ~5 minutes after 10 updates (warm-start works out of the box).
+- **Kconfig fallbacks** — all values are now read from menuconfig with safe compile-time defaults.
+- **Efficiency note** (honesty patch): The brain is currently a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety clamps). True J/TH efficiency optimization (separate power model) is planned for Phase 1.
 
 ---
 
-## Recommended Starting Configuration (v1.0.0-beta2)
-
-For a typical Bitaxe Gamma 602+ with good cooling:
+## Recommended Starting Config (Gamma 602+ with good cooling)
 
 ```
-G6_RLS_LAMBDA=0.98
+G6_RLS_LAMBDA_MIN=950
 G6_TEMP_CEILING=70
-G6_DFS_STEP=25
-G6_VOLTAGE_RIPPLE_MAX=5.0
-G6_NER_THRESHOLD=0.001
-G6_PROACTIVE_DFS_THRESHOLD=2.0
-G6_NVS_WRITE_INTERVAL=30000
-G6_LOW_LATENCY_JOBS=y
+G6_NER_THRESHOLD=250
+G6_DFS_STEP_MHZ=25
+G6_RLS_RIDGE_EPSILON=10
+G6_RLS_TRACE_MAX=10000000
 ```
 
-After 24–48 h of stable operation you can experiment with slightly higher `G6_DFS_STEP` if your power delivery and cooling allow it.
-
----
-
-## How These Options Interact with the Brain
-
-- `TEMP_CEILING` + `PROACTIVE_DFS_THRESHOLD` + `VOLTAGE_RIPPLE_MAX` implement the **multi-layer predictive safety** system.
-- `NVS_WRITE_INTERVAL` controls persistence of both theta and the full covariance matrix (true warm-start).
-- All limits are **hard-enforced** inside `g6_brain_update()` — the brain will refuse unsafe requests even if your calling code tries to override them.
-
----
-
-## Next Steps
-
-- **Installation & quick start** → [INSTALL.md](INSTALL.md)
-- **Recommended integration example** → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)
-- **Full public API** → [API.md](API.md)
-- **Safety philosophy & edge cases** → [AGENTS.md](../AGENTS.md)
-
-**Pro tip:** After changing any Kconfig value, always do a full clean build:
+After changing any Kconfig value, always do a full clean build:
 
 ```bash
-idf.py fullclean
-idf.py build
+idf.py fullclean && idf.py build
 ```
 
 ---
 
-**Version:** v1.0.0-beta2 — May 2026  
-**Maintainer:** 6ummy-Dev + Grok (xAI)
+**Next Steps**  
+- Full API reference → [API.md](API.md)  
+- Recommended integration example → [INTEGRATION_EXAMPLE.c](INTEGRATION_EXAMPLE.c)  
+- Safety philosophy → [AGENTS.md](../AGENTS.md)
+
+**Version:** v1.0.0-beta2 (Phase 0 fixes applied — May 2026)
