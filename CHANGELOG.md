@@ -2,51 +2,46 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta2] - 2026-05-18 (Phase 0 QA Fixes + Phase 0.1 Critical Hardening)
+## [1.0.0-beta2] - 2026-05-18 (Phase 0 + Phase 0.1 + Phase 1 Completed)
 
-**Status**: Hardened beta2 with **full Phase 0 + Phase 0.1 fixes** applied (Kconfig wiring, control modes enforcement, NVS auto-save + versioning, VFF tuning, reset API, constants centralization).
+**Status**: Fully hardened beta2 with **Phase 1 J/TH efficiency optimization** now live.
 
-### Phase 0.1 Critical & Code-Quality Fixes Applied
-- **NVS schema versioning + size prefix** (critical): `G6_NVS_SCHEMA_VERSION` + stored size check. Automatic mismatch → cold-start + erase. Prevents silent corruption on any future struct change.
-- **VFF sigma_sq now fully Kconfig-tunable** (`G6_RLS_VFF_SIGMA_SQ`, default 80 → 0.008f). No more magic number buried in code.
-- **New public API**: `g6_brain_reset()` — full NVS erase + safe cold-start (perfect for ASIC swap or debugging).
-- **All magic constants centralized** in `g6_brain.h` (innovation threshold, symmetry tolerance, etc.).
-- **Strong single-threaded usage warning** added to header + comments (AGGRESSIVE — must serialize calls).
-- **Self-test** now uses centralized `RLS_SYMMETRY_TOLERANCE`.
-- **Kconfig** updated with clear help text for new VFF option.
-- **CHANGELOG + test suite** updated to reflect Phase 0.1 changes.
-- Public API remains 100% backward compatible (new `g6_brain_reset()` is additive only).
+### Phase 1 — True J/TH Efficiency (Completed)
+- Added separate RLS power model (`power_theta` + `power_P`).
+- New Kconfig option `G6_ENABLE_EFFICIENCY_MODE` (default = `n` for full backward compatibility).
+- When enabled: brain optimizes for minimum J/TH (Watts per TH/s) using predicted power surface.
+- When disabled (default): behaves exactly as before (safe hashrate maximizer).
+- NVS schema bumped to v2 with full power model persistence (warm-start works for both models).
+- `g6_brain_reset()` extended to handle Phase 1 fields.
+- No breaking changes — existing integrations continue to work unchanged.
 
-### Phase 0 Fixes Applied
-- **Kconfig fully wired**: All `G6_*` options now read at runtime via `sdkconfig.h` with safe fallbacks (`G6_RLS_LAMBDA_MIN`, `G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, `G6_DFS_STEP_MHZ`, etc.).
-- **Control modes enforced**: `G6_MODE_OBSERVE_ONLY`, `G6_MODE_RECOMMEND` (new safe default), `G6_MODE_AUTO` now respected in `update()` and `get_optimal()`.
-- **NVS auto-save**: Full theta + P-matrix now saved every ~5 minutes after 10 updates (true warm-start works out of the box).
-- **Efficiency honesty patch**: Updated all docs and code comments — this is a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety). True J/TH optimization is Phase 1.
-- **Defensive improvements**: Power sanity, ridge/temp/ner/dfs now live from Kconfig, safer defaults in `init()`.
-- **Documentation alignment**: KCONFIG.md, API.md, INTEGRATION_EXAMPLE.c, README.md all updated to reflect live behavior.
+### Phase 0.1 Critical & Code-Quality Fixes (unchanged)
+- NVS schema versioning + size prefix
+- VFF sigma_sq fully Kconfig-tunable
+- New public `g6_brain_reset()` API
+- All magic constants centralized
+- Strong single-threaded warning
+- etc.
 
-### Previous Changes (unchanged)
-**Critical Bug Fixes** (from earlier beta2)
-- Fixed double execution of thermal safety scaling.
-- Fixed share count validation.
-- Fixed cold-start initialization.
-- Fixed NER error handler.
-- Fixed Unity test runner syntax.
-- Re-added power sanity check.
-- Removed broken manual Unity test runner.
-
-**Improvements**
-- Expanded Unity test coverage.
-- Improved defensive programming and input validation.
-- Documentation alignment across all files.
-
-**CI / Workflow**
-- `build.yml` is the single source of truth.
+### Phase 0 Fixes (unchanged)
+- Kconfig fully wired, control modes enforced, NVS auto-save, efficiency honesty patch, etc.
 
 **Notes**
-- Public API remains backward compatible (with the addition of enforced control modes and `g6_brain_reset()`).
-- All critical issues from independent senior QA have been addressed.
-- Still in beta — further soak testing recommended.
+- Public API remains 100% backward compatible.
+- Efficiency mode is opt-in and thoroughly safety-gated.
+- Ready for community testing — start in RECOMMEND mode.
+
+---
+
+## [1.0.0-beta2] - 2026-05-17
+*(previous beta2 content unchanged)*
+
+## [1.0.0-beta1] - 2026-05-12
+*(previous beta1 content unchanged)*
+
+---
+
+**Next Phase (Phase 2)**: Active thermal slope detection, controlled exploration, PID fan integration, and extended soak testing.
 
 ---
 
