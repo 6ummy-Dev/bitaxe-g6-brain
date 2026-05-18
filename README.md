@@ -52,5 +52,6 @@ Pull requests welcome. All changes must respect the safety invariants in `AGENTS
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI Status](https://github.com/6ummy-Dev/bitaxe-g6-brain/actions/workflows/build.yml/badge.svg)](https://github.com/6ummy-Dev/bitaxe-g6-brain/actions/workflows/build.yml)
 
-**G6 Brain v1.0.0-beta2** — The brain your Bitaxe always wanted.  
-*With ❤️ and rigorous engineering • May 2026*
+---
+
+**Made with ❤️ and rigorous engineering for the Bitaxe community**
