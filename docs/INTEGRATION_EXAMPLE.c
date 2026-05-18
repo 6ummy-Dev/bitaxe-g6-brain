@@ -80,3 +80,42 @@ void g6_brain_example_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(30000));  // 30 seconds
     }
 }
+/* ====================== PHASE 2 — TELEMETRY USAGE EXAMPLE (new) ====================== */
+/*
+ * Lightweight zero-copy snapshot of the brain's internal state.
+ * Call this anytime after g6_brain_update() — single-threaded contract only.
+ * Perfect for logs, OLED, MQTT, or external dashboard.
+ */
+static void example_telemetry_usage(G6BrainState *brain) {
+    G6BrainTelemetry tel = {0};
+
+    g6_brain_get_telemetry(brain, &tel);
+
+    ESP_LOGI("G6_TELEMETRY", "=== BRAIN SNAPSHOT ===");
+    ESP_LOGI("G6_TELEMETRY", "Hashrate model quality: %.3f", g6_brain_get_model_quality(brain));
+    ESP_LOGI("G6_TELEMETRY", "Cov trace (hashrate):   %.2e", tel.trace_P_hashrate);
+    ESP_LOGI("G6_TELEMETRY", "Cov trace (power):      %.2e", tel.trace_P_power);
+    ESP_LOGI("G6_TELEMETRY", "Last innovation:        %.4f TH/s", tel.last_innovation);
+    ESP_LOGI("G6_TELEMETRY", "Efficiency mode:        %s", tel.efficiency_mode_active ? "ENABLED (J/TH opt)" : "DISABLED (hashrate max)");
+    ESP_LOGI("G6_TELEMETRY", "Last recommended V:     %.1f mV", tel.last_recommended_voltage);
+
+    switch (tel.safety_status) {
+        case G6_SAFETY_OK:
+            ESP_LOGI("G6_TELEMETRY", "Safety: OK");
+            break;
+        case G6_SAFETY_THERMAL:
+            ESP_LOGW("G6_TELEMETRY", "Safety: THERMAL derate active");
+            break;
+        case G6_SAFETY_VOLTAGE:
+            ESP_LOGW("G6_TELEMETRY", "Safety: VOLTAGE issue");
+            break;
+        case G6_SAFETY_NER_BACKOFF:
+            ESP_LOGW("G6_TELEMETRY", "Safety: NER back-off");
+            break;
+        default:
+            ESP_LOGW("G6_TELEMETRY", "Safety: code %d", tel.safety_status);
+    }
+
+    /* Example: send to MQTT / serial / whatever */
+    // mqtt_publish_telemetry(&tel);
+}
