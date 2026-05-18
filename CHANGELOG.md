@@ -19,6 +19,8 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Improve test execution in CI (full Unity runner).
 - Continue Phase 2 features.
 
+---
+
 ## [1.0.0-beta2] - 2026-05-18
 
 **Status**: Hardened beta with critical bug fixes, improved test coverage, documentation alignment, and CI cleanup.
