@@ -2,42 +2,40 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta2] - 2026-05-18
+## [1.0.0-beta2] - 2026-05-18 (Phase 0 QA Fixes)
 
-**Status**: Hardened beta with critical bug fixes, improved test coverage, documentation alignment, and CI cleanup.
+**Status**: Hardened beta2 with **full Phase 0 fixes** applied (Kconfig wiring, control modes enforcement, NVS auto-save, efficiency honesty).
 
-### Critical Bug Fixes
-- Fixed double execution of thermal safety scaling (safety functions now execute only once).
-- Fixed share count validation — `g6_brain_update()` now properly accepts and uses real share count instead of a constant.
-- Fixed cold-start initialization — `best_f` and `best_v` now have safe default values instead of remaining at 0.
-- Fixed NER error handler — it now correctly reacts to high error rate instead of checking model quality.
-- Fixed Unity test runner syntax so tests can actually compile and run.
-- Fixed NER handler double-execution regression (same pattern as thermal safety).
-- Re-added power sanity check validation (was accidentally removed).
-- Removed broken manual Unity test runner in `test_g6_brain.c` (ESP-IDF auto-discovers TEST_CASE macros).
+### Phase 0 Fixes Applied
+- **Kconfig fully wired**: All `G6_*` options now read at runtime via `sdkconfig.h` with safe fallbacks (`G6_RLS_LAMBDA_MIN`, `G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, `G6_DFS_STEP_MHZ`, etc.).
+- **Control modes enforced**: `G6_MODE_OBSERVE_ONLY`, `G6_MODE_RECOMMEND` (new safe default), `G6_MODE_AUTO` now respected in `update()` and `get_optimal()`.
+- **NVS auto-save**: Full theta + P-matrix now saved every ~5 minutes after 10 updates (true warm-start works out of the box).
+- **Efficiency honesty patch**: Updated all docs and code comments — this is a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety). True J/TH optimization is Phase 1.
+- **Defensive improvements**: Power sanity, ridge/temp/ner/dfs now live from Kconfig, safer defaults in `init()`.
+- **Documentation alignment**: KCONFIG.md, API.md, INTEGRATION_EXAMPLE.c, README.md all updated to reflect live behavior.
 
-### Improvements
-- Added safe defaults for operating point after cold start.
+### Previous Changes (unchanged)
+**Critical Bug Fixes** (from earlier beta2)
+- Fixed double execution of thermal safety scaling.
+- Fixed share count validation.
+- Fixed cold-start initialization.
+- Fixed NER error handler.
+- Fixed Unity test runner syntax.
+- Re-added power sanity check.
+- Removed broken manual Unity test runner.
+
+**Improvements**
+- Expanded Unity test coverage.
 - Improved defensive programming and input validation.
-- Expanded Unity test coverage with meaningful safety and state checks.
-- Added explanatory comments for key safety patterns and known limitations (e.g. VFF sigma).
+- Documentation alignment across all files.
 
-### Documentation Alignment
-- Updated `SAFETY.md` to clearly separate implemented features from Phase 2 planned features.
-- Cleaned up `INSTALL.md` to remove references to non-existent Kconfig symbols.
-- Updated `AGENTS.md` to reflect actual current behavior vs aspirational invariants.
-- Improved consistency across documentation.
+**CI / Workflow**
+- `build.yml` is the single source of truth.
 
-### CI / Workflow
-- Consolidated workflows: removed duplicate `ci.yml`.
-- `build.yml` is now the single source of truth, targeting `esp32s3` with visible test results.
-
-### Notes
-- Public API remains backward compatible (with the addition of the `share_count` parameter in `g6_brain_update()`).
+**Notes**
+- Public API remains backward compatible (with the addition of enforced control modes).
 - All critical issues from independent code review have been addressed.
-- Still in beta — further soak testing and Phase 2 features planned.
-
-**Next Phase**: Active thermal slope detection, PID fan control, and expanded field validation.
+- Still in beta — further soak testing recommended.
 
 ---
 
