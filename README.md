@@ -10,88 +10,51 @@ This is the flagship module of the **Bitaxe Brains Project** — a clean, modula
 
 ## Key Features
 
-- Stabilized conventional RLS with Variable Forgetting Factor (gradient-based VFF), innovation gating, and covariance trace monitoring
-- Hessian-guarded analytical optimum solver with negative-definite validation
-- Fully self-contained safety (proactive thermal derating, voltage ripple/undershoot detection, NER handling) — zero external dependencies
-- Sample quality state machine (8 s settle + 5 s measure window) ensuring only high-quality, settled telemetry is used
-- Efficiency optimization (J/TH) with fail-closed auto-apply logic and slew-rate limiting
-- BM1370-specific safe operating limits (400–950 MHz, 1050–1350 mV)
-- NVS silicon fingerprinting (theta + full covariance P matrix) with warm-start per chip
-- Production-hardened defensive programming (isfinite guards on all inputs, covariance symmetrization + clamping, proper cold-start initialization, NVS readiness check)
+- Stabilized conventional RLS with Variable Forgetting Factor, innovation gating, and covariance monitoring
+- Fully self-contained safety (thermal protection, voltage clamping, error rate handling)
+- Sample quality state machine (settle + measure windows)
+- NVS silicon fingerprinting (theta + full covariance P matrix) for warm-start
+- BM1370 hard limits and efficiency optimization (J/TH)
+- Defensive programming with extensive input validation
+- Unity test suite
 
 ---
 
-## v1.0.0-beta2 Release (May 2026)
+## Status
 
-This release focuses on **messaging alignment**, **expanded test coverage**, and additional defensive hardening based on independent technical reviews.
+This is **v1.0.0-beta2**. The project has undergone significant hardening, including critical bug fixes, test expansion, and documentation alignment. It is ready for community field testing but has not yet reached stable v1.0.
 
-**Major improvements in beta2:**
-- Significantly expanded Unity test suite (input validation, safety layer behavior, thermal derating, covariance symmetry, cold-start clearing)
-- Added explanatory comments on critical safety paths for better auditability
-- Tightened self-test condition number threshold
-- Extra input validation guards (power sanity check)
-- Cleaner Kconfig with improved help texts and section organization
-- All version strings and documentation aligned to beta2
-- Continued focus on numerical stability and fail-closed safety behavior
-
-**This is still a beta release** — it has not yet been deployed in large-scale production. Community field testing is strongly encouraged.
-
-See [CHANGELOG.md](CHANGELOG.md) for the complete history of changes and audit responses.
+See [CHANGELOG.md](CHANGELOG.md) for detailed history.
 
 ---
 
-## Roadmap
+## Quick Start
 
-### Phase 1 — Core RLS Hardening **(Completed)**
-- Stabilized quadratic RLS modeling with numerical robustness
-- Sample quality state machine and telemetry validation
-- Efficiency optimization (J/TH) and fail-closed logic
-- NVS silicon fingerprint + covariance warm-start
-- BM1370 tuning and hard safety limits
-- Defensive programming hardening
+1. Add the component to your ESP-Miner project (git submodule or copy).
+2. Use the recommended integration example: `docs/INTEGRATION_EXAMPLE.c`
+3. Start in `OBSERVE_ONLY` or `RECOMMEND` mode.
+4. Monitor behavior before moving to `AUTO` mode.
 
-### Phase 2 — Advanced Telemetry & Control (Next)
-- Active thermal slope detection
-- Controlled exploration policy
-- Full PID fan integration with anti-windup
-- Extended hardware soak testing + long-term stability data
-
-### Phase 3 — Ecosystem & Modularity
-- Full "Ghost Brain" external MCU / multi-ASIC support
-- Pluggable optimizer interface
-
-### Phase 4 — Production Release (v1.0)
-- Comprehensive unit test suite and CI hardening
-- Community validation and 30+ day soak data
-- Official stable v1.0 release
+Full installation guide: [docs/INSTALL.md](docs/INSTALL.md)
 
 ---
 
-## Installation & Usage
+## Documentation
 
-1. Add the `g6_brain` component to your ESP-Miner project (copy or git submodule).
-2. Enable it via `menuconfig` → **Component config → G6 Brain Configuration**.
-3. Call `nvs_flash_init()` **before** `g6_brain_init()`. The brain will return a clear `ESP_ERR_NVS_NOT_INITIALIZED` error if NVS is not ready.
-4. Feed telemetry via `g6_brain_update()` in your main control loop (recommended every 20–30 s).
-
-Detailed build instructions, Kconfig reference, integration examples, and troubleshooting are in the `docs/` folder.
+- [Installation & Integration](docs/INSTALL.md)
+- [Public API](docs/API.md)
+- [Configuration (Kconfig)](docs/KCONFIG.md)
+- [Safety & Engineering](docs/SAFETY.md)
+- [AGENTS.md](AGENTS.md) — Engineering principles
 
 ---
 
 ## Contributing
 
-Pull requests are welcome. Please:
-- Preserve the public API and `G6BrainState` layout for backward compatibility
-- Ensure `g6_brain_self_test()` continues to pass (symmetry + P diagonal bounds)
-- Keep code clean, well-commented, and defensive
+Pull requests are welcome. Please respect the safety invariants defined in `AGENTS.md`.
 
 ---
 
 Built for the Bitaxe community with focus on mathematical correctness, reliability, and hardware safety.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
-[![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
-
-**G6 Brain v1.0.0-beta2** — The brain your Bitaxe always wanted.  
-*With ❤️ and rigorous engineering • May 2026*
+**G6 Brain v1.0.0-beta2** — The brain your Bitaxe always wanted.
