@@ -4,49 +4,49 @@
 
 The **G6 Brain** dynamically models the quadratic relationship between frequency, voltage, and hashrate in real time using a stabilized conventional RLS algorithm (P-matrix with symmetrization, ridge regularization, trace monitoring, Variable Forgetting Factor, and innovation gating). It continuously learns the unique efficiency surface of your ASIC and selects the most efficient safe operating point while maintaining strict numerical stability and enforcing hardware safety constraints.
 
-**Phase 0 fixes now live** (Kconfig fully wired, control modes enforced, NVS auto-save every ~5 min, true warm-start).
-
 ---
 
-## ✅ Status
-- **CI**: Passing (Docker ESP-IDF v5.3 build + Unity compilation)
-- **Kconfig**: Fully wired and configurable via `menuconfig`
+## ✅ Current Status
+
+- **CI**: Passing
+- **Kconfig**: Fully wired
 - **Control Modes**: Enforced (`OBSERVE_ONLY` / `RECOMMEND` / `AUTO`)
-- **NVS**: Auto-save of theta + full P-matrix (warm-start works)
-- **Version**: Hardened beta2 with Phase 0 QA fixes
-- Ready for community field testing
+- **NVS**: Full theta + P-matrix warm-start with auto-save
+- **Telemetry**: Clean `g6_brain_get_telemetry()` API available
+- **Code Quality**: Heavy QA + structural cleanup applied
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ---
 
 ## ✨ Key Features
+
 - Stabilized RLS with Variable Forgetting Factor, covariance protection, and ridge regularization
 - Fully self-contained safety layer (thermal ceiling, NER back-off, voltage ripple, power sanity)
-- Sample quality state machine (settle + measure windows)
-- **NVS persistence of theta + full P-matrix** (true warm-start, auto-saved)
-- BM1370 hard limits + safe hashrate maximization
-- **Kconfig fully wired** (`G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, etc.)
-- **Control modes enforced** in `update()` / `get_optimal()`
-- Defensive programming, extensive input validation, and self-test
-- Unity test suite
+- Sample quality state machine
+- **NVS persistence** of theta + full P-matrix (true warm-start)
+- **Control modes** fully enforced
+- **Telemetry export** via `g6_brain_get_telemetry()`
+- Defensive programming and self-test
 
-**Efficiency note** (honesty patch): This is currently a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety clamps). True J/TH efficiency optimization (separate power model) is planned for Phase 1.
+**Note on Efficiency**: When `G6_ENABLE_EFFICIENCY_MODE` is enabled, the brain uses a separate power RLS model. The current optimizer still uses a coarse grid search. A proper analytical J/TH solver is planned.
 
 ---
 
 ## 🚀 Quick Start
+
 1. Add the component to your ESP-IDF project
 2. Use the recommended integration example: [`docs/INTEGRATION_EXAMPLE.c`](docs/INTEGRATION_EXAMPLE.c)
-3. **Start in `G6_MODE_RECOMMEND`** (safest for first runs)
+3. **Start in `G6_MODE_RECOMMEND`** (safest)
 4. Run `idf.py menuconfig` → Component config → G6 Brain Configuration
-5. Monitor behavior and logs before enabling `AUTO` mode
+5. Monitor logs before switching to `AUTO` mode
 
 Full installation guide → [`docs/INSTALL.md`](docs/INSTALL.md)
 
 ---
 
 ## 📖 Documentation
+
 - [Installation & Integration](docs/INSTALL.md)
 - [Public API](docs/API.md)
 - [Kconfig Options](docs/KCONFIG.md)
@@ -57,6 +57,7 @@ Full installation guide → [`docs/INSTALL.md`](docs/INSTALL.md)
 ---
 
 ## 🤝 Contributing
+
 Pull requests are welcome. All changes must respect the safety invariants documented in `AGENTS.md`.
 
 ---
@@ -69,4 +70,4 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 ---
 
 **Made with ❤️ and rigorous engineering for the Bitaxe community**  
-*May 2026 • v1.0.0-beta2
+*May 2026 • v1.0.0-beta2*
