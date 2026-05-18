@@ -1,8 +1,15 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened + Phase 0 + QA fixes)
+ * Bitaxe G6 Brain — v1.0.0-beta2 (Phase 0 QA Hardened + Phase 0.1 Critical Fixes)
  *
  * Public interface.
+ *
+ * PHASE 0.1 FIXES APPLIED:
+ * - NVS schema versioning + size prefix (critical — prevents silent corruption on future struct changes)
+ * - VFF sigma_sq now tunable via Kconfig (next step)
+ * - New g6_brain_reset() API
+ * - Magic constants centralized
+ * - Strong single-threaded usage warning
  */
 
 #pragma once
@@ -16,6 +23,18 @@
 extern "C" {
 #endif
 
+/* ====================== CRITICAL NOTES ====================== */
+/*
+ * SINGLE-THREADED ASSUMPTION (AGGRESSIVE WARNING)
+ * ================================================
+ * This module is **NOT** thread-safe. There are no mutexes.
+ * All calls to g6_brain_update(), g6_brain_get_optimal(), g6_brain_reset(), etc.
+ * MUST be serialized by the caller (single task or proper locking).
+ * NVS save/load + RLS state mutation happens in update().
+ * Violating this will corrupt the P-matrix and/or NVS fingerprint.
+ * See AGENTS.md and INTEGRATION_EXAMPLE.c for recommended usage.
+ */
+
 /* ====================== CONTROL MODES ====================== */
 typedef enum {
     G6_MODE_OBSERVE_ONLY = 0,   // Safety only — no best_f/v mutation
@@ -23,7 +42,10 @@ typedef enum {
     G6_MODE_AUTO                // Full optimizer + safety (original behavior)
 } G6ControlMode;
 
-/* ====================== RLS CONSTANTS (fully Kconfig-wired) ====================== */
+/* ====================== NVS SCHEMA (PHASE 0.1 CRITICAL) ====================== */
+#define G6_NVS_SCHEMA_VERSION 1u   // Increment on ANY breaking change to theta/P struct
+
+/* ====================== RLS CONSTANTS (fully Kconfig-wired + Phase 0.1) ====================== */
 #define RLS_N               6
 
 // All RLS options now symmetric with Kconfig (QA fix)
@@ -45,8 +67,17 @@ typedef enum {
 #define RLS_TRACE_MAX       1e7f
 #endif
 
-#define RLS_P_CLAMP_MIN     1e-6f
-#define RLS_P_CLAMP_MAX     1e6f
+// Phase 0.1: Tunable VFF sigma_sq (will be Kconfig-wired next)
+#if defined(CONFIG_G6_RLS_VFF_SIGMA_SQ)
+#define RLS_VFF_SIGMA_SQ    ((float)CONFIG_G6_RLS_VFF_SIGMA_SQ / 10000.0f)
+#else
+#define RLS_VFF_SIGMA_SQ    0.008f
+#endif
+
+#define RLS_INNOVATION_THRESHOLD 1e-4f     // Phase 0.1: centralized
+#define RLS_SYMMETRY_TOLERANCE   1e-4f     // Phase 0.1: centralized
+#define RLS_P_CLAMP_MIN          1e-6f
+#define RLS_P_CLAMP_MAX          1e6f
 
 /* ====================== BM1370 TUNED CONSTANTS ====================== */
 #define BM1370_F_CENTER     650.0f
@@ -99,9 +130,9 @@ typedef struct {
     float ner_threshold;
     float Kp, Ki, Kd;
     float temp_ceiling;
-    float dfs_step_mhz;         // ← QA FIX: now explicitly reserved for Phase 1 slew-rate limiting inside get_optimal()
+    float dfs_step_mhz;         // reserved for Phase 1 slew-rate limiting inside get_optimal()
 
-    /* Control mode — fully enforced in g6_brain.c */
+    /* Control mode — fully enforced */
     G6ControlMode control_mode;
 
     /* Nonce / extras */
@@ -133,6 +164,7 @@ esp_err_t g6_brain_init(G6BrainState *brain);
 
 /**
  * Feed telemetry and run one optimization + safety cycle.
+ * SINGLE-THREADED ONLY.
  */
 esp_err_t g6_brain_update(G6BrainState *brain,
                           float f_mhz,
@@ -143,18 +175,25 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                           float err_pct,
                           uint32_t share_count);
 
+/**
+ * Get the currently recommended safe operating point.
+ */
 void g6_brain_get_optimal(const G6BrainState *brain,
                           float *opt_f,
                           float *opt_v,
                           float *pred_hr);
 
 float g6_brain_get_model_quality(const G6BrainState *brain);
-
 float g6_brain_get_cov_condition(const G6BrainState *brain);
-
 esp_err_t g6_brain_self_test(G6BrainState *brain);
 
-/* NVS */
+/**
+ * PHASE 0.1: Full reset + NVS erase (forces cold start).
+ * Use this when you want to wipe learned model (e.g. ASIC swap, debugging).
+ */
+esp_err_t g6_brain_reset(G6BrainState *brain);
+
+/* NVS (now versioned) */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
