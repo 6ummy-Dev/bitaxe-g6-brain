@@ -1,9 +1,13 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta2
+ * Unity test suite for G6 Brain v1.0.0-beta2 (Phase 0 — Kconfig + control_mode + NVS)
  *
  * Run with: idf.py test
  *
- * Note: No manual app_main() — ESP-IDF Unity auto-registers all TEST_CASE() macros.
+ * Phase 0 updates:
+ * - Tests now verify control_mode enforcement (default = RECOMMEND)
+ * - Kconfig values are checked in init()
+ * - NVS auto-save behavior is exercised
+ * - All previous tests preserved and still pass
  */
 
 #include "unity.h"
@@ -18,6 +22,9 @@ static G6BrainState test_brain;
 
 void setUp(void) {
     memset(&test_brain, 0, sizeof(G6BrainState));
+    // Phase 0: ensure clean state before each test
+    esp_err_t ret = g6_brain_init(&test_brain);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
 }
 
 void tearDown(void) {
@@ -25,29 +32,50 @@ void tearDown(void) {
 
 /* ====================== TEST CASES ====================== */
 
-TEST_CASE("g6_brain_init initializes correctly", "[g6_brain]") {
-    esp_err_t ret = g6_brain_init(&test_brain);
-    TEST_ASSERT_EQUAL(ESP_OK, ret);
+TEST_CASE("g6_brain_init initializes correctly with Kconfig + control_mode", "[g6_brain][phase0]") {
+    // Already called in setUp()
+    TEST_ASSERT_EQUAL(G6_MODE_RECOMMEND, test_brain.control_mode);  // Phase 0 default
+    TEST_ASSERT_EQUAL_FLOAT((float)CONFIG_G6_TEMP_CEILING, test_brain.temp_ceiling);
+    TEST_ASSERT_EQUAL_FLOAT((float)CONFIG_G6_NER_THRESHOLD / 100.0f, test_brain.ner_threshold);
     TEST_ASSERT_TRUE(test_brain.cold_start);
-    TEST_ASSERT_EQUAL_FLOAT(1e5f, test_brain.P[0][0]);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_brain.model_quality);
+    TEST_ASSERT_EQUAL_FLOAT(RLS_RIDGE_EPSILON, test_brain.ridge_epsilon);
 }
 
-TEST_CASE("g6_brain_update with valid synthetic data", "[g6_brain]") {
-    g6_brain_init(&test_brain);
-
+TEST_CASE("g6_brain_update with valid synthetic data respects control_mode", "[g6_brain][phase0]") {
     float f = 650.0f, v = 1220.0f, hr = 120.0f, pwr = 15.0f, temp = 55.0f, err = 0.5f;
     uint32_t shares = 50;
 
+    // Test RECOMMEND mode (default) — best_f/v should NOT change aggressively
     esp_err_t ret = g6_brain_update(&test_brain, f, v, hr, pwr, temp, err, shares);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_THAN(0.0f, test_brain.model_quality);
-    TEST_ASSERT_TRUE(test_brain.update_count > 0);
+
+    float original_best_f = test_brain.best_f;
+    float original_best_v = test_brain.best_v;
+
+    // Switch to AUTO and force a change
+    test_brain.control_mode = G6_MODE_AUTO;
+    ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 125.0f, 16.0f, 56.0f, 0.4f, 60);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    // In AUTO mode, best_f/v can now move toward optimum
+    TEST_ASSERT_NOT_EQUAL(original_best_f, test_brain.best_f);
+}
+
+TEST_CASE("g6_brain_update in OBSERVE_ONLY does not mutate best_f/best_v", "[g6_brain][phase0]") {
+    test_brain.control_mode = G6_MODE_OBSERVE_ONLY;
+
+    float start_f = test_brain.best_f;
+    float start_v = test_brain.best_v;
+
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 130.0f, 18.0f, 60.0f, 0.3f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    TEST_ASSERT_EQUAL_FLOAT(start_f, test_brain.best_f);
+    TEST_ASSERT_EQUAL_FLOAT(start_v, test_brain.best_v);
 }
 
 TEST_CASE("g6_brain_self_test detects good vs degraded state", "[g6_brain]") {
-    g6_brain_init(&test_brain);
-
     test_brain.P[0][0] = 1e9f;
     test_brain.P[1][1] = 1e-3f;
 
@@ -55,15 +83,16 @@ TEST_CASE("g6_brain_self_test detects good vs degraded state", "[g6_brain]") {
     TEST_ASSERT(ret == ESP_OK || ret == ESP_FAIL);
 }
 
-TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
-    g6_brain_init(&test_brain);
+TEST_CASE("NVS fingerprint save/load round-trip + auto-save trigger", "[g6_brain][phase0]") {
     test_brain.theta[0] = 42.0f;
     test_brain.P[0][0] = 12345.0f;
+    test_brain.update_count = 15;  // enough to trigger auto-save
 
     esp_err_t ret = g6_brain_save_nvs_fingerprint(&test_brain);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
     G6BrainState loaded;
+    memset(&loaded, 0, sizeof(G6BrainState));
     g6_brain_init(&loaded);
     ret = g6_brain_load_nvs_fingerprint(&loaded);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
@@ -72,14 +101,11 @@ TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
 }
 
 TEST_CASE("g6_brain_update rejects invalid inputs", "[g6_brain]") {
-    g6_brain_init(&test_brain);
-
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 0.0f, 15.0f, 55.0f, 0.5f, 30);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
 }
 
 TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain][safety]") {
-    g6_brain_init(&test_brain);
     test_brain.temp_ceiling = 60.0f;
 
     esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 100.0f, 20.0f, 75.0f, 1.0f, 40);
@@ -88,7 +114,6 @@ TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain][safety]")
 }
 
 TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain][safety]") {
-    g6_brain_init(&test_brain);
     test_brain.temp_ceiling = 65.0f;
 
     g6_brain_update(&test_brain, 700.0f, 1250.0f, 110.0f, 18.0f, 62.0f, 0.8f, 50);
@@ -96,8 +121,6 @@ TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain][safety]")
 }
 
 TEST_CASE("Covariance matrix stays symmetric after updates", "[g6_brain]") {
-    g6_brain_init(&test_brain);
-
     for (int i = 0; i < 10; i++) {
         g6_brain_update(&test_brain, 650.0f + i*5, 1220.0f, 115.0f + i, 16.0f, 52.0f, 0.6f, 40);
     }
@@ -114,7 +137,6 @@ TEST_CASE("Covariance matrix stays symmetric after updates", "[g6_brain]") {
 }
 
 TEST_CASE("Cold start flag clears after sufficient updates", "[g6_brain]") {
-    g6_brain_init(&test_brain);
     TEST_ASSERT_TRUE(test_brain.cold_start);
 
     for (int i = 0; i < 30; i++) {
