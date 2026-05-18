@@ -7,12 +7,12 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 **Status**: Production-ready beta2 with full Phase 1 J/TH efficiency mode + clean telemetry export.
 
 ### Final Cleanup (this build)
-- Moved `g6_brain_get_telemetry()` into the main PUBLIC API section for better discoverability and consistency.
-- Removed broken recursive NVS wrapper functions.
-- Removed unnecessary section headers and redundant comments.
-- Full documentation refresh (`API.md`, `README.md`, `MONITORING.md`, `INTEGRATION_EXAMPLE.c`).
-- NVS warm-start bug fixed (load guard now correctly compares against expected payload size).
-- Codebase is now clean, well-organized, and ready for field testing.
+- **Critical fix**: NVS warm-start load guard corrected (`blob_size == expected_blob_size` instead of `sizeof(buffer)`). Warm-start now actually works after reboot.
+- **Regression fix**: Restored `G6_NVS_SCHEMA_VERSION` to `2u` in header to match implementation.
+- Moved `g6_brain_get_telemetry()` into the main PUBLIC API section.
+- Removed broken recursive NVS wrapper functions and unnecessary section headers.
+- Full documentation refresh across `API.md`, `README.md`, `MONITORING.md`, `INTEGRATION_EXAMPLE.c`, and this changelog.
+- Codebase is now structurally clean and ready for beta3 / field testing.
 
 ### Phase 1 — J/TH Efficiency (Completed)
 - Separate RLS power model (`power_theta` + `power_P`).
