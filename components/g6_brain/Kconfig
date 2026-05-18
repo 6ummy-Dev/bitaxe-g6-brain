@@ -1,59 +1,59 @@
+# G6 Brain Configuration — v1.0.0-beta2 (Phase 0 — fully wired for code)
+
 menu "G6 Brain Configuration"
 
     menu "RLS Optimizer"
 
-        config RLS_LAMBDA_MIN
+        config G6_RLS_LAMBDA_MIN
             int "Minimum RLS forgetting factor (x1000)"
-            default 980
+            default 950
             range 900 999
             help
-                Minimum effective forgetting factor.
-                Value is multiplied by 0.001 (e.g. 985 = 0.985).
+                Minimum effective forgetting factor for Variable Forgetting Factor.
+                Value ÷ 1000 → e.g. 950 = 0.950. Higher = more stable model.
 
-        config RLS_RIDGE_EPSILON
-            int "RLS ridge regularization (x100000)"
-            default 1
-            range 0 100
+        config G6_RLS_RIDGE_EPSILON
+            int "RLS ridge regularization (x1e6)"
+            default 10
+            range 1 1000
             help
-                Ridge regularization term added to P matrix diagonal.
-                Value is multiplied by 1e-5.
+                Ridge term added to P-matrix diagonal (value × 1e-6). Prevents collapse.
 
-        config RLS_TRACE_MAX
+        config G6_RLS_TRACE_MAX
             int "Maximum trace of P matrix"
-            default 1000000
-            range 10000 10000000
+            default 10000000
+            range 100000 100000000
             help
-                Upper limit for trace(P) to consider the model valid.
+                Upper limit for trace(P). Exceeding forces conservative/cold-start mode.
 
     endmenu
 
     menu "Safety & Thermal"
 
-        config TEMP_CEILING
-            int "Thermal ceiling (°C)"
+        config G6_TEMP_CEILING
+            int "Thermal ceiling temperature (°C)"
             default 70
             range 50 85
             help
-                Maximum allowed chip temperature before proactive throttling.
+                Hard ASIC temperature limit. Proactive derating triggers near this value.
 
-        config NER_THRESHOLD
-            int "NER threshold (x10)"
-            default 25
-            range 10 100
+        config G6_NER_THRESHOLD
+            int "NER (nonce error rate) threshold (x100)"
+            default 250
+            range 50 2000
             help
-                Non-Ergodic Rate threshold (in 0.1% units).
-                Example: 25 = 2.5%
+                Nonce Error Rate threshold in 0.01% units (250 = 2.5%). Triggers back-off.
 
     endmenu
 
     menu "Optimization Behavior"
 
-        config DFS_STEP_MHZ
-            int "DFS frequency step (MHz)"
+        config G6_DFS_STEP_MHZ
+            int "DFS frequency step size (MHz)"
             default 25
             range 5 50
             help
-                Frequency step size used during optimization.
+                Step size used for optimization suggestions and slew limiting.
 
     endmenu
 
