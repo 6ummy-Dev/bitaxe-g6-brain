@@ -26,11 +26,13 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 | **[API.md](API.md)**                | Full public API reference                         | Need function details |
 | **[KCONFIG.md](KCONFIG.md)**        | All configuration options explained               | Tuning safety limits or debugging |
 | **[SAFETY.md](SAFETY.md)**          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
+| **[MONITORING.md](MONITORING.md)**  | Real-time observability and telemetry             | Monitoring brain health |
 
 **Additional project docs (root):**
 - `AGENTS.md` — Safety invariants & engineering principles
 - `GLOSSARY.md` — Terminology
 - `CHANGELOG.md` — Version history
+- `MANIFESTO.md` — Project philosophy
 
 ---
 
@@ -39,6 +41,7 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 - Pure RLS quadratic modeling (fully explainable)
 - Strong predictive safety layers
 - Per-chip NVS fingerprinting (warm start)
+- Clean telemetry export API
 - Modular and auditable design
 - Aerospace-style QA hardening
 
