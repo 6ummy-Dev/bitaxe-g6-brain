@@ -133,12 +133,13 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
     if (err != ESP_OK) return err;
 
-    size_t blob_size = sizeof(uint32_t)*2 + sizeof(brain->theta) + sizeof(brain->P) +
-                       sizeof(brain->power_theta) + sizeof(brain->power_P);
+    size_t expected_blob_size = sizeof(uint32_t)*2 + sizeof(brain->theta) + sizeof(brain->P) +
+                                sizeof(brain->power_theta) + sizeof(brain->power_P);
     uint8_t buffer[1024];
+    size_t blob_size = expected_blob_size;
 
     err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &blob_size);
-    if (err == ESP_OK && blob_size == sizeof(buffer)) {
+    if (err == ESP_OK && blob_size == expected_blob_size) {
         uint32_t stored_version = 0, stored_size = 0;
         memcpy(&stored_version, buffer, sizeof(uint32_t));
         memcpy(&stored_size, buffer + sizeof(uint32_t), sizeof(uint32_t));
