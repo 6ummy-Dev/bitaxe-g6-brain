@@ -1,6 +1,8 @@
 /*
  * g6_brain.c
  * Bitaxe G6 Brain — v1.0.0-beta2 (QA Hardened v2)
+ *
+ * Restored RLS learning logic
  */
 
 #include "g6_brain.h"
@@ -80,12 +82,13 @@ esp_err_t g6_brain_init(G6BrainState *brain)
         brain->theta[i] = 0.0f;
     }
 
-    brain->model_quality = 0.0f;
-    brain->last_efficiency = 0.0f;
-    brain->cold_start = true;
+    brain->ridge_epsilon     = 1e-6f;
+    brain->model_quality     = 0.0f;
+    brain->last_efficiency   = 0.0f;
+    brain->cold_start        = true;
     brain->last_update_timestamp = xTaskGetTickCount();
 
-    ESP_LOGI(TAG, "G6 Brain initialized (RLS stabilized)");
+    ESP_LOGI(TAG, "G6 Brain initialized with RLS");
     return ESP_OK;
 }
 
@@ -101,9 +104,16 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     uint32_t now = xTaskGetTickCount();
+    float dt = (now - brain->last_update_timestamp) * portTICK_PERIOD_MS / 1000.0f;
+
+    // Throttle updates
+    if (dt < 2.0f) {
+        return ESP_OK;
+    }
+
     brain->last_update_timestamp = now;
 
-    // Feature vector for RLS (quadratic model)
+    // Feature vector (quadratic + interaction terms)
     float x[RLS_N] = {
         1.0f,
         f_mhz,
@@ -115,23 +125,62 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     float y = hr_ths;
 
-    float err = y;
+    // Prediction error
+    float y_hat = 0.0f;
     for (int i = 0; i < RLS_N; i++) {
-        err -= brain->theta[i] * x[i];
+        y_hat += brain->theta[i] * x[i];
     }
+    float err = y - y_hat;
 
+    // Variable forgetting factor
     float lambda = compute_gradient_vff(err, 1.0f);
 
-    // Basic efficiency tracking
+    // Check if innovation is significant enough to update
+    if (!has_significant_innovation(brain, x)) {
+        return ESP_OK;
+    }
+
+    // RLS gain vector K = P*x / (lambda + x^T P x)
+    float Px[RLS_N] = {0};
+    for (int i = 0; i < RLS_N; i++) {
+        for (int j = 0; j < RLS_N; j++) {
+            Px[i] += brain->P[i][j] * x[j];
+        }
+    }
+
+    float denom = lambda;
+    for (int i = 0; i < RLS_N; i++) {
+        denom += x[i] * Px[i];
+    }
+    if (denom < 1e-8f) denom = 1e-8f;
+
+    float K[RLS_N];
+    for (int i = 0; i < RLS_N; i++) {
+        K[i] = Px[i] / denom;
+    }
+
+    // Update theta
+    for (int i = 0; i < RLS_N; i++) {
+        brain->theta[i] += K[i] * err;
+    }
+
+    // Update P matrix: P = (P - K x^T P) / lambda
+    for (int i = 0; i < RLS_N; i++) {
+        for (int j = 0; j < RLS_N; j++) {
+            brain->P[i][j] = (brain->P[i][j] - K[i] * Px[j]) / lambda;
+        }
+    }
+
+    // Numerical stabilization
+    rls_symmetrize_clamp_and_stabilize(brain);
+
+    // Update efficiency
     if (power_w > 0.1f) {
         brain->last_efficiency = hr_ths / power_w;
     }
 
-    // TODO: Full RLS matrix update + safety logic will go here in next iteration
-    (void)lambda;
-    (void)share_count;
-    (void)temp_c;
-    (void)err_pct;
+    brain->update_count++;
+    brain->cold_start = false;
 
     return ESP_OK;
 }
@@ -146,7 +195,6 @@ void g6_brain_get_optimal(const G6BrainState *brain,
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
 
-    // Quadratic prediction using current theta
     float fn = (*opt_f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (*opt_v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
@@ -200,11 +248,12 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
     float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
     if (cond > 5e5f) ok = false;
 
-    ESP_LOGI(TAG, "Self-test: %s (q=%.3f, eff=%.2f, cond=%.1f)",
+    ESP_LOGI(TAG, "Self-test: %s (q=%.3f, eff=%.2f, cond=%.1f, updates=%lu)",
              ok ? "PASS" : "DEGRADED",
              brain->model_quality,
              brain->last_efficiency,
-             cond);
+             cond,
+             (unsigned long)brain->update_count);
 
     return ok ? ESP_OK : ESP_FAIL;
 }
