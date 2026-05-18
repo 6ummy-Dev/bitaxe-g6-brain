@@ -48,10 +48,11 @@ Full installation guide → [`docs/INSTALL.md`](docs/INSTALL.md)
 
 ## 📖 Documentation
 - [Installation & Integration](docs/INSTALL.md)
-- [Public API Reference](docs/API.md)
-- [Kconfig Options (now live)](docs/KCONFIG.md)
-- [Safety & Engineering Principles](docs/SAFETY.md)
-- [AGENTS.md](AGENTS.md) — Core invariants and design decisions
+- [Public API](docs/API.md)
+- [Kconfig Options](docs/KCONFIG.md)
+- [Monitoring Guide](docs/MONITORING.md)
+- [Safety Principles](docs/SAFETY.md)
+- [Manifesto](MANIFESTO.md)
 
 ---
 
