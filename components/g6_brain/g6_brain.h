@@ -156,6 +156,8 @@ typedef struct {
     bool  use_efficiency_mode;          // when true → optimize J/TH instead of raw hashrate
 
 } G6BrainState;
+    /* Phase 2 telemetry tracking (real last_innovation) */
+    float last_innovation;              // last RLS innovation value (for g6_brain_get_telemetry)
 
 /* ====================== TELEMETRY STRUCT (Phase 2 — lightweight export) ====================== */
 /*
