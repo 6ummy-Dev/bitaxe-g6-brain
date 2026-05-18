@@ -623,7 +623,7 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out) {
 
     /* innovation & safety (lightweight snapshot) */
     out->last_innovation = 0.0f;                    // placeholder - real tracking added later
-    out->safety_status = 0;                         // 0 = OK (full enum in later file)
+    out->safety_status = (uint8_t)G6_SAFETY_OK;     // real enum (will become dynamic in later files)
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;  // last known safe voltage
 
