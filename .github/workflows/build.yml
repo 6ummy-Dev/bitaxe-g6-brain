@@ -5,18 +5,32 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build & Test G6 Brain
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup ESP-IDF v5.3
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.3
+          command: 'true'
 
       - name: Prepare minimal test project
         run: |
@@ -28,15 +42,22 @@ jobs:
           project(test_g6_brain)
           EOF
 
-          echo 'idf_component_register()' > test_app/main/CMakeLists.txt
+          cat > test_app/main/CMakeLists.txt << 'EOF'
+          idf_component_register(SRCS "main.c")
+          EOF
+
+          cat > test_app/main/main.c << 'EOF'
+          void app_main(void) {}
+          EOF
+
           cp -r components/g6_brain test_app/components/
 
-      - name: Build component
+      - name: Build G6 Brain (ESP32-S3)
         working-directory: test_app
         run: |
           idf.py set-target esp32s3
           idf.py build
 
-      - name: Run tests
+      - name: Run Unity tests
         working-directory: test_app
         run: idf.py test
