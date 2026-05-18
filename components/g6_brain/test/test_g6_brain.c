@@ -32,11 +32,12 @@ void tearDown(void) {
 
 /* ====================== TEST CASES ====================== */
 
-TEST_CASE("g6_brain_init initializes correctly with Kconfig + control_mode", "[g6_brain][phase0]") {
+TEST_CASE("g6_brain_init initializes correctly with Kconfig + control_mode + Phase 0.1 VFF", "[g6_brain][phase0][phase0.1]") {
     // Already called in setUp()
     TEST_ASSERT_EQUAL(G6_MODE_RECOMMEND, test_brain.control_mode);  // Phase 0 default
     TEST_ASSERT_EQUAL_FLOAT((float)CONFIG_G6_TEMP_CEILING, test_brain.temp_ceiling);
     TEST_ASSERT_EQUAL_FLOAT((float)CONFIG_G6_NER_THRESHOLD / 100.0f, test_brain.ner_threshold);
+    TEST_ASSERT_EQUAL_FLOAT(RLS_VFF_SIGMA_SQ, 0.008f);              // Phase 0.1: verify new tunable default
     TEST_ASSERT_TRUE(test_brain.cold_start);
     TEST_ASSERT_EQUAL_FLOAT(RLS_RIDGE_EPSILON, test_brain.ridge_epsilon);
 }
