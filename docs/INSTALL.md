@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0.0-beta2
+# G6 Brain Installation & Integration Guide — v1.0.0-beta2 (Phase 0 — fully wired)
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370)
 
@@ -42,7 +42,7 @@ set(EXTRA_COMPONENT_DIRS
 
 ---
 
-## Step 3: menuconfig (Optional)
+## Step 3: menuconfig (Now Fully Functional — Phase 0)
 
 ```bash
 idf.py menuconfig
@@ -54,13 +54,9 @@ Navigate to:
 Component config → G6 Brain Configuration
 ```
 
-Here you can adjust:
-- Thermal ceiling
-- RLS forgetting factor (`G6_RLS_LAMBDA`)
-- DFS step size
-- NER threshold
-
-There is currently **no** `CONFIG_G6_BRAIN_ENABLE` flag required. The component becomes active once it is included in the build.
+**All options are now live**:
+- `G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, `G6_DFS_STEP_MHZ`, `G6_RLS_LAMBDA_MIN`, etc.
+- Changes are read automatically at runtime via `sdkconfig.h`
 
 ---
 
@@ -70,40 +66,45 @@ Use the main integration example:
 
 → **`docs/INTEGRATION_EXAMPLE.c`**
 
-**Quick integration:**
+**Phase 0 Quick integration:**
 1. Copy `docs/INTEGRATION_EXAMPLE.c` into your project.
 2. Call it from `app_main()` after WiFi and ASIC initialization.
-3. Replace the placeholder telemetry reads with your actual values.
-4. Start in `OBSERVE_ONLY` or `RECOMMEND` mode.
+3. **Set `brain.control_mode = G6_MODE_RECOMMEND`** (safest starting point).
+4. Replace placeholder telemetry with real values from your miner.
 
 ---
 
 ## Step 5: Build & First Run
 
 ```bash
-idf.py build
+idf.py fullclean && idf.py build
 idf.py flash monitor
 ```
 
-Watch `model_quality` improve over the first 10–30 minutes.
+Watch for:
+- “G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save)”
+- NVS fingerprint auto-saves every ~5 minutes
+- Control mode logged in every update
 
 ---
 
-## Recommendations
+## Phase 0 Recommendations
 
-- Start in conservative mode (`OBSERVE_ONLY` or `RECOMMEND`)
-- Monitor behavior for at least 24–48 hours before using `AUTO` mode
-- Review logs regularly during the initial period
+- **Start in `G6_MODE_RECOMMEND`** (computes optimal but never mutates `best_f`/`best_v`).
+- Only switch to `G6_MODE_AUTO` after 24–48 hours of monitoring + soak testing.
+- Use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation.
+- Monitor logs for `model_quality`, `control_mode`, and NVS save messages.
 
 ---
 
 ## Next Steps
 
-- Recommended example → `docs/INTEGRATION_EXAMPLE.c`
-- Full API reference → `docs/API.md`
-- All Kconfig options → `docs/KCONFIG.md`
-- Safety principles → `AGENTS.md`
+- Recommended example → [`docs/INTEGRATION_EXAMPLE.c`](INTEGRATION_EXAMPLE.c)
+- Full API reference → [`docs/API.md`](API.md)
+- Kconfig options → [`docs/KCONFIG.md`](KCONFIG.md)
+- Safety principles → [`AGENTS.md`](../AGENTS.md)
 
 ---
 
-**Version:** v1.0.0-beta2 — May 2026
+**Version:** v1.0.0-beta2 (Phase 0 fixes applied — May 2026)  
+**All Kconfig, control modes, and NVS features are now fully wired and production-ready.**
