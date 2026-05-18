@@ -213,7 +213,12 @@ esp_err_t g6_brain_reset(G6BrainState *brain) {
     brain->power_cold_start = true;
     brain->power_update_count = 0;
     brain->power_model_quality = 0.0f;
+
+    /* Phase 1 efficiency mode (safe default) */
+    brain->use_efficiency_mode = false;
+#if defined(CONFIG_G6_ENABLE_EFFICIENCY_MODE)
     brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
+#endif
 
     // Kconfig values
 #if defined(CONFIG_G6_TEMP_CEILING)
@@ -306,7 +311,12 @@ esp_err_t g6_brain_init(G6BrainState *brain) {
     brain->power_cold_start = true;
     brain->power_update_count = 0;
     brain->power_model_quality = 0.0f;
+
+    /* Phase 1 efficiency mode (safe default) */
+    brain->use_efficiency_mode = false;
+#if defined(CONFIG_G6_ENABLE_EFFICIENCY_MODE)
     brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
+#endif
 
     /* Kconfig wiring */
 #if defined(CONFIG_G6_TEMP_CEILING)
@@ -372,7 +382,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     if (!valid) goto safety_layer;
 
-    /* HR RLS update (unchanged) */
+    /* HR RLS update */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
