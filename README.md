@@ -57,4 +57,9 @@ Pull requests are welcome. Please respect the safety invariants defined in `AGEN
 
 Built for the Bitaxe community with focus on mathematical correctness, reliability, and hardware safety.
 
-**G6 Brain v1.0.0-beta2** — The brain your Bitaxe always wanted.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
+[![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
+
+**G6 Brain v1.0.0-beta2** — The brain your Bitaxe always wanted.  
+*With ❤️ and rigorous engineering • May 2026*
