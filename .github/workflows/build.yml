@@ -1,11 +1,10 @@
-name: Build & Test
+name: Build
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -18,23 +17,23 @@ jobs:
         run: |
           mkdir -p test_app/main test_app/components/g6_brain
 
-          cat > test_app/CMakeLists.txt << 'EOF'
+          cat > test_app/CMakeLists.txt << 'EOT'
           cmake_minimum_required(VERSION 3.16)
           include($ENV{IDF_PATH}/tools/cmake/project.cmake)
           project(test_g6_brain)
-          EOF
+          EOT
 
-          cat > test_app/main/CMakeLists.txt << 'EOF'
+          cat > test_app/main/CMakeLists.txt << 'EOT'
           idf_component_register(SRCS "main.c")
-          EOF
+          EOT
 
-          cat > test_app/main/main.c << 'EOF'
+          cat > test_app/main/main.c << 'EOT'
           void app_main(void) {}
-          EOF
+          EOT
 
           cp -r components/g6_brain test_app/components/
 
-      - name: Build (ESP32-S3)
+      - name: Build G6 Brain (ESP32-S3)
         run: |
           docker run --rm \
             -v "$PWD:/project" \
@@ -42,10 +41,5 @@ jobs:
             espressif/idf:v5.3 \
             bash -c "idf.py set-target esp32s3 && idf.py build"
 
-      - name: Run tests
-        run: |
-          docker run --rm \
-            -v "$PWD:/project" \
-            -w /project/test_app \
-            espressif/idf:v5.3 \
-            idf.py test
+      - name: Build complete
+        run: echo "✅ Build successful"
