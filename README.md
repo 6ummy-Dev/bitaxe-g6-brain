@@ -2,7 +2,9 @@
 
 **v1.0.0-beta2** — Adaptive stabilized RLS optimizer with real-time quadratic efficiency modeling for BM1370
 
-The **G6 Brain** dynamically learns the unique quadratic efficiency surface (frequency × voltage × hashrate) of your ASIC in real time using a hardened conventional RLS algorithm.
+The G6 Brain dynamically models the quadratic relationship between frequency, voltage, and hashrate in real time using a stabilized conventional RLS (P-matrix with symmetrization, ridge regularization, and trace monitoring). It continuously learns the unique efficiency surface of your ASIC and selects the most efficient operating point (J/TH) while maintaining strict numerical stability and hardware safety constraints.
+
+This is the flagship module of the **Bitaxe Brains Project** — a clean, modular architecture designed for long-term reliability and extensibility.
 
 ---
 
