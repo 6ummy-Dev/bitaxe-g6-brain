@@ -220,6 +220,16 @@ esp_err_t g6_brain_reset(G6BrainState *brain) {
     brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
 #endif
 
+        /* Phase 2 — Telemetry + full power model zeroing (guarantees clean start) */
+    brain->power_model_quality = 0.0f;
+    brain->power_update_count = 0;
+    brain->power_cold_start = true;
+
+    /* Telemetry snapshot safety (no-op on state, just ensures last_recommended_voltage is sane) */
+    if (brain->best_v < BM1370_V_MIN || brain->best_v > BM1370_V_MAX) {
+        brain->best_v = BM1370_V_CENTER;
+    }
+
     // Kconfig values
 #if defined(CONFIG_G6_TEMP_CEILING)
     brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
