@@ -324,15 +324,6 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
         for (int inner = 0; inner < G6_JTH_INNER_STEPS; inner++) {
 
-            float hr_i = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
-            float pw_i = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
-
-            // Sufficient-descent guard: if J/TH got worse on this step, stop inner loop
-            float jth_i = pw_i / fmaxf(hr_i, 1.0f);
-            if (jth_i >= lambda) {
-                break;
-            }
-
             float dhr_fn, dhr_vn, dp_fn, dp_vn;
             get_quadratic_gradient(brain->theta, fn_inner, vn_inner, &dhr_fn, &dhr_vn);
             get_quadratic_gradient(brain->power_theta, fn_inner, vn_inner, &dp_fn, &dp_vn);
