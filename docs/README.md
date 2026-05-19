@@ -59,7 +59,4 @@ In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelba
 
 ---
 
-**The brain your Bitaxe always wanted.**  
-Start safe. Learn. Then optimize. ⚡
-
-**Made with ❤️ and rigorous engineering for the Bitaxe community**
+**The brain your Bitaxe always wanted.** Start safe. Learn. Then optimize. ⚡
