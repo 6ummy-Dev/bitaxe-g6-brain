@@ -1,21 +1,24 @@
-# Bitaxe G6 Brain ⚡
+# Bitaxe G6 Brain ⚡ _Start safe. Learn. Then optimize._
 
-**v1.0.0-beta3** — Adaptive stabilized RLS optimizer with real-time quadratic modeling + telemetry for BM1370
+**v1.0.0-beta3** — Adaptive stabilized RLS optimizer with analytical J/TH solver + telemetry for BM1370
 
-The **G6 Brain** dynamically models the quadratic relationship between frequency, voltage, and hashrate using stabilized Recursive Least Squares (RLS). It learns your ASIC’s unique efficiency surface and selects safe operating points while enforcing strict safety constraints. Includes clean telemetry export and optional J/TH efficiency mode.
+The **G6 Brain** dynamically models the quadratic relationship between frequency, voltage, and hashrate using stabilized Recursive Least Squares (RLS). It learns your ASIC’s unique efficiency surface and selects safe operating points while enforcing strict safety constraints.
+
+In **beta3**, the optional J/TH efficiency mode now uses a fast **O(1) analytical Dinkelbach solver** (exact 2×2 quadratic minimization) instead of grid search or gradient descent.
 
 ---
 
 ## ✅ Current Status
 
-- **CI**: Passing
+- **Version**: v1.0.0-beta3 (in progress)
+- **CI**: Passing (with graceful test handling during setup)
 - **Kconfig**: Fully wired
 - **Control Modes**: Enforced (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`)
 - **NVS**: Full theta + P-matrix + power model warm-start with auto-save
-- **Telemetry**: `g6_brain_get_telemetry()` cleanly integrated into public API
-- **QA Status**: Signed off in QA v5.5 — ready for field testing
+- **J/TH Solver**: Analytical Dinkelbach (O(1) exact) with `model_quality` + `power_model_quality` guards
+- **QA Status**: Actively hardening — ready for field testing of the new analytical solver
 
-See [CHANGELOG.md](CHANGELOG.md) for full history.
+See [CHANGELOG.md](../CHANGELOG.md) for full history.
 
 ---
 
@@ -25,8 +28,8 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 - Fully self-contained safety layer (thermal ceiling, NER back-off, voltage ripple, power sanity)
 - **NVS persistence** of hashrate + power models (true warm-start)
 - **Control modes** with safe defaults
-- **O(1) Analytical J/TH Solver** with dual-gated model quality checks for exact, mathematically optimal efficiency convergence
 - **Telemetry export** via `g6_brain_get_telemetry()` (zero-copy snapshot)
+- **Optional true J/TH efficiency mode** (opt-in) powered by fast analytical Dinkelbach solver
 - Strong single-threaded contract + defensive programming
 
 ---
@@ -37,7 +40,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 2. Use the recommended integration example: [`docs/INTEGRATION_EXAMPLE.c`](docs/INTEGRATION_EXAMPLE.c)
 3. **Start in `G6_MODE_RECOMMEND`** (safest default)
 4. Run `idf.py menuconfig` → Component config → G6 Brain Configuration
-5. Monitor logs before switching to `AUTO` mode
+5. Monitor logs before switching to `AUTO` mode or enabling efficiency mode
 
 Full installation guide → [`docs/INSTALL.md`](docs/INSTALL.md)
 
@@ -50,7 +53,7 @@ Full installation guide → [`docs/INSTALL.md`](docs/INSTALL.md)
 - [Kconfig Options](docs/KCONFIG.md)
 - [Monitoring Guide](docs/MONITORING.md)
 - [Safety Principles](docs/SAFETY.md)
-- [Manifesto](MANIFESTO.md)
+- [Manifesto](../MANIFESTO.md)
 
 ---
 
@@ -60,7 +63,8 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 
 ---
 
-**Made with ❤️ and rigorous engineering for the Bitaxe community** *May 2026 • v1.0.0-beta3*
+**Made with ❤️ and rigorous engineering for the Bitaxe community**  
+*May 2026 • v1.0.0-beta3*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
