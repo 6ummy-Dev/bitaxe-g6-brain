@@ -1,5 +1,4 @@
 # Bitaxe G6 Brain ⚡ 
-_Start safe. Learn. Then optimize._
 
 **v1.0.0-beta3** — Adaptive stabilized RLS optimizer with analytical J/TH solver + telemetry for BM1370
 
@@ -7,6 +6,7 @@ The **G6 Brain** dynamically models the quadratic relationship between frequency
 
 In **beta3**, the optional J/TH efficiency mode now uses a fast **O(1) analytical Dinkelbach solver** (exact 2×2 quadratic minimization) instead of grid search or gradient descent.
 
+_Start safe. Learn. Then optimize._
 ---
 
 ## ✅ Current Status
