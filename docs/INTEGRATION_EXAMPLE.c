@@ -1,5 +1,5 @@
 /*
- * G6 Brain Integration Example — v1.0.0-beta3 (Final)
+ * G6 Brain Integration Example — v1.0.0-beta3
  *
  * Recommended integration for Bitaxe ESP-Miner (Gamma 602+ / BM1370).
  */
@@ -12,22 +12,6 @@
 static const char *TAG = "G6_BRAIN_EXAMPLE";
 
 static G6BrainState brain;
-
-/* Example helper: safe slew-rate limiting */
-static void apply_with_slew(float target_f, float target_v, float current_f, float current_v)
-{
-    float new_f = current_f;
-    float new_v = current_v;
-
-    if (target_f > current_f) new_f = fminf(current_f + MAX_FREQ_STEP, target_f);
-    else if (target_f < current_f) new_f = fmaxf(current_f - MAX_FREQ_STEP, target_f);
-
-    if (target_v > current_v) new_v = fminf(current_v + MAX_VOLT_STEP, target_v);
-    else if (target_v < current_v) new_v = fmaxf(current_v - MAX_VOLT_STEP, target_v);
-
-    // TODO: call your ASIC driver here
-    ESP_LOGI(TAG, "SLEW → f=%.1f MHz @ v=%.0f mV", new_f, new_v);
-}
 
 void g6_brain_example_task(void *arg)
 {
@@ -63,9 +47,11 @@ void g6_brain_example_task(void *arg)
         ESP_LOGI(TAG, "Quality=%.2f | Mode=%d | Current: %.1f MHz @ %.0f mV | Recommended: %.1f MHz @ %.0f mV",
                  quality, brain.control_mode, freq_mhz, volt_mv, opt_f, opt_v);
 
-        // Optional: safe application with slew limiting
+        // Apply safe, internally slew-limited targets directly to the ASIC
         if (brain.control_mode == G6_MODE_AUTO && quality > 0.75f) {
-            // apply_with_slew(opt_f, opt_v, freq_mhz, volt_mv);
+            // TODO: call your ASIC driver here with opt_f and opt_v
+            // asic_set_voltage(opt_v);
+            // asic_set_frequency(opt_f);
         }
 
         vTaskDelay(pdMS_TO_TICKS(30000));
