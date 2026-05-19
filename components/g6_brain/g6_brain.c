@@ -789,7 +789,7 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
         for (int j = i + 1; j < RLS_N; j++)
-            if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETOW_TOLERANCE)
+            if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETRY_TOLERANCE) // Fixed typo here
                 ok = false;
     }
 
