@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta2 (Final)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Phase 2)
  *
  * RLS-based self-optimizing control brain with J/TH efficiency mode and telemetry.
  */
@@ -265,6 +265,107 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 }
 
 /* ============================================================================
+ *                              J/TH OPTIMIZER (Dinkelbach-based) — Beta3
+ * ========================================================================== */
+
+/*
+ * Lightweight Dinkelbach solver for minimizing J/TH = P/HR.
+ * Designed for embedded use: bounded iterations + early stopping.
+ */
+static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *opt_v)
+{
+    if (!brain || !opt_f || !opt_v) return;
+    if (!brain->use_efficiency_mode) return;
+
+    /* === NEW: model_quality gate (QA recommendation) === */
+    if (brain->model_quality < 0.6f) {
+        ESP_LOGD(TAG, "Skipping J/TH optimization (model_quality=%.2f < 0.6)", brain->model_quality);
+        return;
+    }
+
+    float f = *opt_f;
+    float v = *opt_v;
+
+    float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
+    float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
+
+    float hr = 0.0f, pw = 0.0f;
+    for (int i = 0; i < RLS_N; i++) {
+        float x = (i==0?fn*fn : i==1?vn*vn : i==2?fn*vn : i==3?fn : i==4?vn : 1.0f);
+        hr += brain->theta[i] * x;
+        pw += brain->power_theta[i] * x;
+    }
+
+    if (hr < 8.0f) return;
+
+    float lambda = pw / hr;
+
+    for (int outer = 0; outer < G6_JTH_MAX_OUTER_ITERS; outer++) {
+        float f_inner = f;
+        float v_inner = v;
+
+        for (int inner = 0; inner < G6_JTH_INNER_STEPS; inner++) {
+            float fn_i = (f_inner - BM1370_F_CENTER) / BM1370_F_SCALE;
+            float vn_i = (v_inner - BM1370_V_CENTER) / BM1370_V_SCALE;
+
+            float hr_i = 0.0f, pw_i = 0.0f;
+            float dhr_fn = 0.0f, dhr_vn = 0.0f;
+            float dp_fn  = 0.0f, dp_vn  = 0.0f;
+
+            for (int i = 0; i < RLS_N; i++) {
+                float x  = (i==0?fn_i*fn_i : i==1?vn_i*vn_i : i==2?fn_i*vn_i : i==3?fn_i : i==4?vn_i : 1.0f);
+                float dx_fn = (i==0?2*fn_i : i==2?vn_i : i==3?1.0f : 0.0f);
+                float dx_vn = (i==1?2*vn_i : i==2?fn_i : i==4?1.0f : 0.0f);
+
+                hr_i += brain->theta[i] * x;
+                pw_i += brain->power_theta[i] * x;
+
+                dhr_fn += brain->theta[i] * dx_fn;
+                dhr_vn += brain->theta[i] * dx_vn;
+                dp_fn  += brain->power_theta[i] * dx_fn;
+                dp_vn  += brain->power_theta[i] * dx_vn;
+            }
+
+            float grad_f = dp_fn  - lambda * dhr_fn;
+            float grad_v = dp_vn  - lambda * dhr_vn;
+
+            f_inner = fmaxf(BM1370_F_MIN, fminf(BM1370_F_MAX, f_inner - 1.2f * grad_f));
+            v_inner = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, v_inner - 1.2f * grad_v));
+        }
+
+        float fn_new = (f_inner - BM1370_F_CENTER) / BM1370_F_SCALE;
+        float vn_new = (v_inner - BM1370_V_CENTER) / BM1370_V_SCALE;
+
+        float hr_new = 0.0f, pw_new = 0.0f;
+        for (int i = 0; i < RLS_N; i++) {
+            float x = (i==0?fn_new*fn_new : i==1?vn_new*vn_new : i==2?fn_new*vn_new :
+                       i==3?fn_new : i==4?vn_new : 1.0f);
+            hr_new += brain->theta[i] * x;
+            pw_new += brain->power_theta[i] * x;
+        }
+
+        if (hr_new < 8.0f) break;
+
+        float new_lambda = pw_new / hr_new;
+
+        if (new_lambda < lambda) {
+            f = f_inner;
+            v = v_inner;
+            lambda = new_lambda;
+        } else {
+            break;
+        }
+
+        if (outer > 2 && fabsf(new_lambda - lambda) < 0.001f) {
+            break;
+        }
+    }
+
+    *opt_f = f;
+    *opt_v = v;
+}
+
+/* ============================================================================
  *                              SAMPLE STATE MACHINE (internal)
  * ========================================================================== */
 
@@ -440,9 +541,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             brain->P[i][i] += brain->ridge_epsilon;
         }
 
-        /* Store innovation for telemetry */
         brain->last_innovation = hr_ths - y_pred;
-
         rls_symmetrize_clamp_and_stabilize(brain->P);
 
         brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + 1.0f));
@@ -554,37 +653,9 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
         }
     }
 
+    /* === J/TH optimization now protected by model_quality gate inside optimize_jth_dinkelbach() === */
     if (brain->use_efficiency_mode) {
-        float best_jth = 1e9f;
-        float best_f = *opt_f;
-        float best_v = *opt_v;
-
-        for (float df = -50.0f; df <= 50.0f; df += 10.0f) {
-            for (float dv = -30.0f; dv <= 30.0f; dv += 10.0f) {
-                float f = fminf(fmaxf(BM1370_F_MIN, *opt_f + df), BM1370_F_MAX);
-                float v = fminf(fmaxf(BM1370_V_MIN, *opt_v + dv), BM1370_V_MAX);
-
-                float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
-                float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
-
-                float hr = a*fn*fn + b*vn*vn + c*fn*vn + d*fn + e*vn + g;
-                float pw = 0.0f;
-                for (int i = 0; i < RLS_N; i++) {
-                    float xval[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
-                    pw += brain->power_theta[i] * xval[i];
-                }
-                if (hr > 10.0f && pw > 1.0f) {
-                    float jth = pw / hr;
-                    if (jth < best_jth) {
-                        best_jth = jth;
-                        best_f = f;
-                        best_v = v;
-                    }
-                }
-            }
-        }
-        *opt_f = best_f;
-        *opt_v = best_v;
+        optimize_jth_dinkelbach((G6BrainState *)brain, opt_f, opt_v);
     }
 
     if (pred_hr) {
