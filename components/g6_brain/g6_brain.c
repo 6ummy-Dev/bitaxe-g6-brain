@@ -265,19 +265,23 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 }
 
 /* ============================================================================
- *                              J/TH OPTIMIZER (Dinkelbach-based) — Beta3
+ * J/TH OPTIMIZER (Dinkelbach-based) — Beta3
+ *
+ * This replaces the previous brute-force grid search with a more efficient
+ * parametric optimization method (inspired by Dinkelbach's algorithm).
+ *
+ * Key features:
+ * - Bounded iterations (configurable via Kconfig)
+ * - Early stopping when improvement becomes marginal
+ * - Protected by model_quality gate (skips if model is still weak)
  * ========================================================================== */
 
-/*
- * Lightweight Dinkelbach solver for minimizing J/TH = P/HR.
- * Designed for embedded use: bounded iterations + early stopping.
- */
 static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *opt_v)
 {
     if (!brain || !opt_f || !opt_v) return;
     if (!brain->use_efficiency_mode) return;
 
-    /* === NEW: model_quality gate (QA recommendation) === */
+    /* Skip optimization if the model is not yet reliable */
     if (brain->model_quality < 0.6f) {
         ESP_LOGD(TAG, "Skipping J/TH optimization (model_quality=%.2f < 0.6)", brain->model_quality);
         return;
@@ -286,6 +290,7 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
     float f = *opt_f;
     float v = *opt_v;
 
+    /* Initial evaluation */
     float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
@@ -300,10 +305,12 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
     float lambda = pw / hr;
 
+    /* Dinkelbach outer loop */
     for (int outer = 0; outer < G6_JTH_MAX_OUTER_ITERS; outer++) {
         float f_inner = f;
         float v_inner = v;
 
+        /* Inner gradient-based minimization of (P - λ·HR) */
         for (int inner = 0; inner < G6_JTH_INNER_STEPS; inner++) {
             float fn_i = (f_inner - BM1370_F_CENTER) / BM1370_F_SCALE;
             float vn_i = (v_inner - BM1370_V_CENTER) / BM1370_V_SCALE;
@@ -333,6 +340,7 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             v_inner = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, v_inner - 1.2f * grad_v));
         }
 
+        /* Evaluate new candidate */
         float fn_new = (f_inner - BM1370_F_CENTER) / BM1370_F_SCALE;
         float vn_new = (v_inner - BM1370_V_CENTER) / BM1370_V_SCALE;
 
@@ -348,6 +356,7 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
         float new_lambda = pw_new / hr_new;
 
+        /* Accept improvement */
         if (new_lambda < lambda) {
             f = f_inner;
             v = v_inner;
@@ -356,6 +365,7 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             break;
         }
 
+        /* Early stopping */
         if (outer > 2 && fabsf(new_lambda - lambda) < 0.001f) {
             break;
         }
@@ -653,7 +663,6 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
         }
     }
 
-    /* === J/TH optimization now protected by model_quality gate inside optimize_jth_dinkelbach() === */
     if (brain->use_efficiency_mode) {
         optimize_jth_dinkelbach((G6BrainState *)brain, opt_f, opt_v);
     }

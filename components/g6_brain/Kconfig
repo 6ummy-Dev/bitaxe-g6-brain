@@ -1,4 +1,4 @@
-# G6 Brain Configuration — v1.0.0-beta2 (Phase 0 + Phase 0.1 + Phase 1 Completed)
+# G6 Brain Configuration — v1.0.0-beta3 (Phase 2)
 
 menu "G6 Brain Configuration"
 
@@ -62,11 +62,27 @@ menu "G6 Brain Configuration"
                 Step size used for optimization suggestions and slew limiting.
 
         config G6_ENABLE_EFFICIENCY_MODE
-            bool "Enable true J/TH efficiency optimization (Phase 1)"
+            bool "Enable true J/TH efficiency optimization (Phase 1+)"
             default n
             help
-                When enabled, the brain uses a separate power RLS model to optimize for minimum J/TH (Watts per TH/s).
-                When disabled (default), it remains a safe hashrate maximizer (exact previous behavior).
+                When enabled, the brain uses a separate power RLS model + Dinkelbach-based
+                J/TH optimizer to minimize Watts per TH/s.
+
+        config G6_JTH_MAX_OUTER_ITERS
+            int "Maximum outer iterations for J/TH Dinkelbach solver"
+            default 7
+            range 3 15
+            help
+                Maximum number of outer iterations in the Dinkelbach-based J/TH optimizer.
+                Higher values may give slightly better results at the cost of more CPU time.
+
+        config G6_JTH_INNER_STEPS
+            int "Inner gradient steps per Dinkelbach iteration"
+            default 5
+            range 2 10
+            help
+                Number of gradient steps used to minimize the parametric sub-problem
+                inside each Dinkelbach iteration.
 
     endmenu
 
