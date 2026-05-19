@@ -12,7 +12,7 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 
 1. Read **[INSTALL.md](INSTALL.md)** — add the component and enable it
 2. Use the **recommended integration example**: `docs/INTEGRATION_EXAMPLE.c`
-3. Adapt it into your firmware and start in `OBSERVE_ONLY` or `RECOMMEND` mode
+3. Start in `OBSERVE_ONLY` or `RECOMMEND` mode
 4. Monitor the logs. The brain will begin learning within minutes.
 
 ---
@@ -21,12 +21,12 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 
 | Document                        | Purpose                                           | When to read |
 |--------------------------------|---------------------------------------------------|--------------|
-| **[INSTALL.md](INSTALL.md)**        | Installation & integration guide                  | Adding the brain to your firmware |
-| `INTEGRATION_EXAMPLE.c`             | **Recommended integration example** (main)        | Starting point for real integration |
-| **[API.md](API.md)**                | Full public API reference                         | Need function details |
-| **[KCONFIG.md](KCONFIG.md)**        | All configuration options explained               | Tuning safety limits or debugging |
-| **[SAFETY.md](SAFETY.md)**          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
-| **[MONITORING.md](MONITORING.md)**  | Real-time observability and telemetry             | Monitoring brain health |
+| [INSTALL.md](INSTALL.md)        | Installation & integration guide                  | Adding the brain to your firmware |
+| `INTEGRATION_EXAMPLE.c`         | **Recommended integration example**               | Starting point for real integration |
+| [API.md](API.md)                | Full public API reference                         | Need function details |
+| [KCONFIG.md](KCONFIG.md)        | All configuration options explained               | Tuning safety limits or debugging |
+| [SAFETY.md](SAFETY.md)          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
+| [MONITORING.md](MONITORING.md)  | Real-time observability and telemetry             | Monitoring brain health |
 
 **Additional project docs (root):**
 - `AGENTS.md` — Safety invariants & engineering principles
@@ -50,7 +50,7 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 ## Status
 
 - **Version:** v1.0.0-beta2 (May 2026)
-- **Maturity:** Beta — ready for community field testing
+- **Maturity:** Beta — signed off and ready for field testing
 - **License:** MIT
 
 ---
