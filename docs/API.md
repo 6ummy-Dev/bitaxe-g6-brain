@@ -1,7 +1,6 @@
 # G6 Brain Public API — v1.0.0-beta3
 
-**Modular, self-optimizing control brain for Bitaxe ESP-Miner (Gamma 602+ / BM1370).**  
-Pure Recursive Least Squares (RLS) quadratic response surface modeling with built-in predictive safety and telemetry export.
+**Modular, self-optimizing control brain for Bitaxe ESP-Miner (Gamma 602+ / BM1370).** Pure Recursive Least Squares (RLS) quadratic response surface modeling with built-in predictive safety and telemetry export.
 
 ---
 
@@ -9,13 +8,13 @@ Pure Recursive Least Squares (RLS) quadratic response surface modeling with buil
 
 ### J/TH Optimization (Phase 2 / beta3)
 
-The brain now includes a more efficient **Dinkelbach-based J/TH optimizer** when `G6_ENABLE_EFFICIENCY_MODE` is enabled.
+The brain now includes a highly efficient **Dinkelbach-based J/TH optimizer** when `G6_ENABLE_EFFICIENCY_MODE` is enabled.
 
-This replaces the previous brute-force grid search with a bounded parametric optimization method.
+This replaces the previous brute-force grid search with an exact $O(1)$ analytical minimum solver.
 
 **Key behaviors:**
-- Protected by `model_quality` gate (skips optimization if `model_quality < 0.6`)
-- Configurable via Kconfig (`G6_JTH_MAX_OUTER_ITERS` and `G6_JTH_INNER_STEPS`)
+- Protected by dual quality gates (skips optimization if `model_quality < 0.6` or `power_model_quality < 0.6`)
+- Configurable via Kconfig (`G6_JTH_MAX_OUTER_ITERS`)
 - Always respects safe operating limits
 
 ---
