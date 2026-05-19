@@ -138,3 +138,17 @@ TEST_CASE("Cold start flag clears after sufficient updates", "[g6_brain]") {
 
     TEST_ASSERT_FALSE(test_brain.cold_start);
 }
+
+/* ====================== SAFETY COVERAGE ====================== */
+
+/* Restored from QA beta3 review — exercises proactive thermal derating path */
+TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain][safety]") {
+    test_brain.temp_ceiling = 65.0f;
+
+    // Feed a sample above the proactive threshold (temp_ceiling - 5°C)
+    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 110.0f, 18.0f, 62.0f, 0.8f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    // best_f should have been proactively scaled down
+    TEST_ASSERT_LESS_OR_EQUAL(700.0f, test_brain.best_f);
+}
