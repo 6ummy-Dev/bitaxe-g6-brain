@@ -4,6 +4,10 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Phase 2 Early Work
+- Wired real `idf.py test` execution in CI (replaced dummy echo step). CI badge is now meaningful.
+- Added `model_quality` gate in J/TH optimizer: skips aggressive optimization when `model_quality < 0.6` (QA recommendation for safer behavior with the analytical solver).
+
 ---
 
 ## [1.0.0-beta2] - 2026-05-18 *Completed*
