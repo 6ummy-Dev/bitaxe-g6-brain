@@ -1,7 +1,6 @@
 # G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta3
 
-**This is not a happy-path optimizer.**  
-The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
+**This is not a happy-path optimizer.** The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
 
 ---
 
@@ -17,47 +16,37 @@ The brain must prioritize hardware longevity and stability over marginal hashrat
 
 The following safety behaviors are **fully active**:
 
-1. **Thermal Protection**  
-   Hard `G6_TEMP_CEILING` (Kconfig) with proactive scaling 5 °C below the limit. Always runs via `goto safety_layer` pattern.
+1. **Thermal Protection** Hard `G6_TEMP_CEILING` (Kconfig) with proactive scaling 5 °C below the limit. Runs via strict post-optimization override to ensure final priority.
 
-2. **Voltage & Range Protection**  
-   Hard BM1370 limits (400–950 MHz, 1050–1350 mV) + ripple/out-of-range clamping on every update.
+2. **Voltage & Range Protection** Hard BM1370 limits (400–950 MHz, 1050–1350 mV) + ripple/out-of-range clamping on every update.
 
-3. **Sample Quality State Machine**  
-   Settle time + measurement window + minimum share count validation + thermal gate before any RLS update.
+3. **Sample Quality State Machine** Settle time + measurement window + minimum share count validation + thermal gate before any RLS update.
 
-4. **Numerical Stability**  
-   Covariance symmetrization, diagonal clamping, ridge regularization, trace monitoring, innovation gating, and Variable Forgetting Factor. All Kconfig-wired.
+4. **Joseph Stabilized Covariance** Avionics-standard covariance updates guarantee that the P-matrix remains positive semi-definite and symmetric under floating-point round-off, preventing model collapse.
 
-5. **Error Rate Handling**  
-   Conservative back-off + model quality reduction when NER exceeds `G6_NER_THRESHOLD`.
+5. **Statistical Outlier Gating** 3-Sigma innovation variance validation. Telemetry samples presenting errors outside expected statistical bounds are flagged as hardware noise and rejected before updating estimators.
 
-6. **Power Sanity Check**  
-   Rejects obviously impossible power values.
+6. **Power Sanity Check** Rejects impossible power values.
 
-7. **Control Mode Enforcement**  
-   - `G6_MODE_OBSERVE_ONLY`: Safety only — no best_f/v mutation  
+7. **Control Mode Enforcement** - `G6_MODE_ONLY`: Safety only — no best_f/v mutation  
    - `G6_MODE_RECOMMEND` (default): Computes optimal but never mutates setpoints  
    - `G6_MODE_AUTO`: Full optimizer  
-   All modes still run the complete safety layer.
+   All modes run the complete safety layer.
 
-8. **NVS Warm-Start**  
-   Full theta + P-matrix + power model auto-saved. Survives power cycles.
+8. **NVS Warm-Start** Full theta + P-matrix + power model auto-saved. Survives power cycles.
 
-9. **Fail-Closed Design**  
-   Safety logic (thermal, NER, voltage, clamps) **always** executes even on rejected/invalid samples.
+9. **Fail-Closed Design** Safety logic (thermal, NER, voltage, clamps) **always** executes even on rejected/invalid samples.
 
-10. **Model Quality Gates (beta3)**  
-    The J/TH efficiency optimizer is protected by **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. On cold boots or early learning, efficiency optimization is safely skipped.
+10. **Internal Slew Limiting** Slew-rate logic is embedded directly within the tracking update loop, ensuring frequency and voltage steps match the learning plant state.
+
+11. **Model Quality Gates** The J/TH efficiency optimizer is protected by **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. On cold boots or early learning, efficiency optimization is safely skipped.
 
 ---
 
 ## Efficiency Reality (beta3)
 
 - The brain is a **safe hashrate maximizer** by default.
-- When `G6_ENABLE_EFFICIENCY_MODE` is enabled, it can optimize for true **J/TH** using a fast **analytical Dinkelbach solver** (exact 2×2 quadratic minimization).
-- This is still **opt-in** and guarded. It is not enabled by default.
-- The solver is mathematically stronger than the previous grid-search approach, but it is still relatively new. Thorough field testing is recommended before relying on it in production.
+- When `G6_ENABLE_EFFICIENCY_MODE` is enabled, it optimizes for true **J/TH** using a fast **analytical Dinkelbach solver** (exact 2×2 quadratic minimization).
 
 ---
 
