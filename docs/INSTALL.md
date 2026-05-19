@@ -113,5 +113,4 @@ Watch for:
 
 ---
 
-**The brain your Bitaxe always wanted.**  
-Start safe. Learn. Then optimize. ⚡
+**The brain your Bitaxe always wanted.** Start safe. Learn. Then optimize. ⚡
