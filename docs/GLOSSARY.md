@@ -22,7 +22,11 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Cold Start** The initial phase after power-on or reset when the brain has insufficient data and operates conservatively while collecting samples.
 
-**Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) stored per physical chip in NVS. Enables true warm-start after reboot (auto-saved every ~5 min after 10+ updates).
+**Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) stored per physical chip in NVS. Enables warm-start after reboot (auto-saved every ~5 min after 10+ updates).
+
+**Joseph Form Update** A mathematically stabilized formulation of the covariance update equation. Guarantees matrix symmetry and positive semi-definiteness under floating-point precision limits, preventing numerical divergence.
+
+**Statistical Outlier Gating** A data validation layer that calculates expected innovation variance. Telemetry errors that exceed a 3-sigma statistical bound are blocked to preserve surface model accuracy.
 
 ---
 
@@ -31,10 +35,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 **BrainSampleState** Internal state machine that controls when samples are trusted:  
 `IDLE → APPLY_CANDIDATE → SETTLE_WAIT → MEASURE_WINDOW → VALIDATE_SAMPLE → RLS_UPDATE → DECIDE_NEXT`
 
-**Triple-8 Certification** Production validation protocol:  
-- 8 hours at 105% best frequency  
-- 8 hours with WiFi interference  
-- 8 dirty power cycles  
+**Triple-8 Certification** Production validation protocol: 8 hours at 105% best frequency, 8 hours with WiFi interference, and 8 dirty power cycles.
 
 **ΔT/dt (Delta Temperature over Delta Time)** Rate of temperature change. Used for proactive thermal protection (Phase 2).
 
@@ -55,11 +56,9 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **G6_NER_THRESHOLD** Nonce Error Rate threshold (×100). Default: 250 (= 2.5 %).
 
-**G6_DFS_STEP_MHZ** Frequency step size (MHz). Currently reserved for slew-rate limiting inside `get_optimal()`.
+**G6_DFS_STEP_MHZ** Frequency step size (MHz). Used for internal step-by-step loop constraint regulation.
 
-**G6_RLS_LAMBDA_MIN / G6_RLS_RIDGE_EPSILON / G6_RLS_TRACE_MAX** RLS tuning parameters, all live at runtime via `sdkconfig.h`.
-
-**Slew Rate** The controlled rate of change for frequency and voltage to prevent thermal shock and voltage droop.
+**Slew Rate** The internally controlled rate of change for frequency and voltage to mitigate thermal shock and supply voltage droop.
 
 ---
 
@@ -69,23 +68,11 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **theta[6]** The 6 RLS coefficients of the quadratic model.
 
-**P[6][6]** The covariance matrix used by RLS (used for numerical stability monitoring).
+**P[6][6]** The covariance matrix used by RLS.
 
 **update_count** Number of successful RLS updates performed since initialization.
-
-**last_efficiency** Stored as W/TH (power / hashrate).
-
----
-
-## Project Terms
-
-**Bitaxe Brains Project** The broader initiative to create swappable, modular optimization "brains" for Bitaxe hardware (G6 Brain is the flagship module).
-
-**G6 Puzzle Extras** Optional nonce/work optimization features for improved mining puzzle handling (currently gated behind safety checks).
-
-**Aerospace QA Hardening** The engineering approach of applying rigorous safety, signal integrity, and unhappy-path analysis typically found in aerospace electronics.
 
 ---
 
 **Last updated:** May 2026 (v1.0.0-beta3)  
-**Maintainer:** 6ummy-Dev + Grok (xAI)
+**Maintainer:** 6ummy-Dev
