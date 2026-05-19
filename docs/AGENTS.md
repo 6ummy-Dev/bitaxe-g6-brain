@@ -8,7 +8,7 @@ This document defines the engineering rules and safety philosophy for the Bitaxe
 
 ## Core Philosophy
 
-> **"Fail safe. Learn fast. Never compromise the hardware."**
+> **"Start safe. Learn. Then optimize."**
 
 The brain must prioritize hardware longevity and stability over marginal hashrate gains.
 
