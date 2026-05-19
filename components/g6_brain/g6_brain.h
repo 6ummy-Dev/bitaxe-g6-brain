@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta2 (Final)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Phase 2)
  *
  * Public interface for the RLS-based self-optimizing control brain.
  */
@@ -94,6 +94,19 @@ typedef enum {
 #define MIN_GAIN            0.5f
 #define MAX_FREQ_STEP       50.0f
 #define MAX_VOLT_STEP       25.0f
+
+/* J/TH Dinkelbach solver (beta3 / Phase 2) */
+#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
+#define G6_JTH_MAX_OUTER_ITERS   CONFIG_G6_JTH_MAX_OUTER_ITERS
+#else
+#define G6_JTH_MAX_OUTER_ITERS   7
+#endif
+
+#if defined(CONFIG_G6_JTH_INNER_STEPS)
+#define G6_JTH_INNER_STEPS       CONFIG_G6_JTH_INNER_STEPS
+#else
+#define G6_JTH_INNER_STEPS       5
+#endif
 
 /* ============================================================================
  *                              STATE MACHINE
