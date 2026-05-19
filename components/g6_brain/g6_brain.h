@@ -154,7 +154,7 @@ typedef enum {
  * G6BrainState
  *
  * Main internal state of the brain.
- * This struct is intentionally large because it holds both models + safety state.
+ * Struct members are ordered by size/type to minimize compiler padding waste.
  */
 typedef struct {
     /* ------------------ RLS Hashrate Model ------------------ */
@@ -162,9 +162,7 @@ typedef struct {
     float P[RLS_N][RLS_N];
     float ridge_epsilon;
     float model_quality;
-    bool  cold_start;
     uint32_t update_count;
-    bool  nvs_valid;
 
     /* ------------------ Recommended Operating Point ------------------ */
     float best_f;
@@ -180,8 +178,6 @@ typedef struct {
 
     /* ------------------ Internal Timing / State ------------------ */
     uint32_t nonce_offset;
-    bool enable_low_latency_jobs;
-
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
     uint32_t last_setting_change_tick;
@@ -199,9 +195,13 @@ typedef struct {
     float power_theta[RLS_N];
     float power_P[RLS_N][RLS_N];
     float power_model_quality;
-    bool  power_cold_start;
     uint32_t power_update_count;
 
+    /* ------------------ Boolean Flags (Grouped for Alignment) ----- */
+    bool cold_start;
+    bool nvs_valid;
+    bool enable_low_latency_jobs;
+    bool power_cold_start;
     bool use_efficiency_mode;
 
 } G6BrainState;
