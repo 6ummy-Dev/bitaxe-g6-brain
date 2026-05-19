@@ -6,7 +6,7 @@ This document defines the engineering rules and safety philosophy for the Bitaxe
 
 ---
 
-## Core Philosophy (unchanged)
+## Core Philosophy
 
 > **"Fail safe. Learn fast. Never compromise the hardware."**
 
@@ -18,72 +18,50 @@ The brain must prioritize hardware longevity and stability over marginal hashrat
 
 The following safety behaviors are **now implemented and enforced**:
 
-1. **Thermal Protection** Hard `G6_TEMP_CEILING` (Kconfig, default 70 °C) with proactive scaling. Always executes via `goto safety_layer`.
+1. **Deterministic Safety Priority**: Core overrides (thermal ceiling, voltage ripple, error thresholds) run post-optimization as the final step before returning recommendations, guaranteeing priority execution.
 
-2. **Voltage & Range Protection** BM1370 hard limits + ripple clamping on every cycle.
+2. **Thermal Protection**: Hard `G6_TEMP_CEILING` (Kconfig, default 70 °C) with proactive scaling steps 5 °C below the limit.
 
-3. **Sample Quality State Machine** Settle + measure windows + share count validation + thermal gate before RLS updates.
+3. **Voltage & Range Protection**: BM1370 hard limits + ripple clamping applied unconditionally on every operational loop.
 
-4. **Numerical Stability** Covariance symmetrization, ridge regularization (`G6_RLS_RIDGE_EPSILON`), trace monitoring (`G6_RLS_TRACE_MAX`), innovation gating, Variable Forgetting Factor — all Kconfig-driven.
+4. **Internal Slew Limiting**: Slew-rate constraints are managed directly inside the tracking loop based on active physical state changes to keep empirical models coupled to real plant transitions.
 
-5. **Error Rate Handling** Conservative back-off when NER > `G6_NER_THRESHOLD` (Kconfig, default 2.5 %).
+5. **Numerical Stability**: 
+   - **Joseph Form Updates**: Replaces conventional subtraction to mathematically ensure covariance matrix symmetry and positive semi-definiteness under floating-point constraints.
+   - Centralized parameters for ridge regularization (`G6_RLS_RIDGE_EPSILON`), trace constraints (`G6_RLS_TRACE_MAX`), and adaptive Variable Forgetting Factor.
 
-6. **Control Mode Enforcement**
-   - `G6_MODE_OBSERVE_ONLY`: safety only, no setpoint mutation  
-   - `G6_MODE_RECOMMEND` (safe default): computes optimal but never mutates `best_f`/`best_v`  
-   - `G6_MODE_AUTO`: full optimizer + safety  
-   Enforced in `g6_brain_update()` and `g6_brain_get_optimal()`.
+6. **Statistical Outlier Gating**: 3-Sigma innovation variance validation to automatically filter and reject corrupted sensor frames before updating estimators.
 
-7. **NVS Warm-Start**
-   Full theta + P-matrix auto-saved every ~5 minutes after 10+ updates. True per-chip persistence.
+7. **Error Rate Handling**: Conservative back-off targets when NER exceeds `G6_NER_THRESHOLD` (Kconfig, default 2.5 %).
 
-8. **Fail-Closed Design** Safety layer runs **even on rejected/invalid samples**.
+8. **Control Mode Enforcement**:
+   - `G6_MODE_OBSERVE_ONLY`: Safety validation only, no setpoint mutations.
+   - `G6_MODE_RECOMMEND` (safe default): Computes targets but does not apply mutations.
+   - `G6_MODE_AUTO`: Active state machine optimization + safety.
 
-9. **Power Sanity & Input Validation** Full defensive checks on every `update()` call.
+9. **NVS Fingerprint Checkpointing**: Automatic background saving of model parameters every 5 minutes after initialization thresholds are satisfied.
 
----
-
-## Efficiency Reality (Phase 1)
-
-True J/TH efficiency optimization is now implemented via a separate power surface model and an $O(1)$ analytical minimum solver. It is strictly gated by both `model_quality` and `power_model_quality`.
+10. **Fail-Closed Execution**: Safety handlers always run, even on samples rejected by data quality or outlier gates.
 
 ---
 
-## Planned / aspirational invariants (Phase 2)
+## Efficiency Optimization
 
-- Active thermal slope detection (`ΔT/dt`) and automated response
-- Persistent Excitation (ESC Dither) to prevent covariance collapse
-- PID fan control integration
-- Advanced P-VUS (Predictive Voltage Undershoot)
-- Full power-cycle / zombie ASIC recovery logic
-
-These remain **not yet implemented**.
+True J/TH efficiency tracking uses a discrete secondary power model and an exact $O(1)$ analytical fraction minimizer. Solver updates are strictly gated by independent model convergence thresholds (`model_quality >= 0.6` and `power_model_quality >= 0.6`).
 
 ---
 
-## Design Principles
+## Planned Invariants (Phase 2)
 
-- Numerical Stability Over Speed
-- Fail-Closed Philosophy — When in doubt, stay safe.
-- Defensive Programming — Assume bad data, bad power, bad conditions.
-- Transparency — Internal state (quality, mode, covariance) is observable.
-- Kconfig + runtime configurability
+- Active thermal slope tracking (`ΔT/dt`)
+- Persistent Excitation (ESC Dither)
+- PID fan control coupling
+- Predictive Voltage Undershoot (P-VUS) protections
 
 ---
 
 ## Forbidden Patterns
 
-- Never bypass thermal or voltage limits.
-- Never remove safety checks to chase performance.
-- Never apply large frequency/voltage changes without slew limiting in the integration layer.
-
----
-
-## Contribution Rules
-
-All changes must respect the current safety behavior and clearly document any new planned invariants.
-
----
-
-**Last updated:** May 2026 (v1.0.0-beta3)  
-**Maintainer:** 6ummy-Dev + Grok (xAI)
+- Never bypass safety priority checks.
+- Never clear tracking matrices without valid re-initialization invariants.
+- Never use unbound floating-point computations or unregularized updates.
