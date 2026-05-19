@@ -12,7 +12,7 @@ The Bitaxe community deserves better than cowboy hill-climbing scripts and “tr
 Every chip is unique. Every power supply is dirty. Every heatsink is different.  
 Our job is to give each individual ASIC the best possible life while **never** compromising hardware longevity.
 
-> **"Fail safe. Learn fast. Never compromise the hardware."**
+> **"Start safe. Learn. Then optimize."**
 
 This single sentence is the unbreakable core of everything we ship.
 
