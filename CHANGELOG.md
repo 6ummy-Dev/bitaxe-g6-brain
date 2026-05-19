@@ -2,7 +2,7 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta2] - 2026-05-18
+## [1.0.0-beta2] - 2026-05-18 *Completed*
 
 **Status**: First signed-off beta release. Ready for field testing and soak testing.
 
@@ -15,7 +15,7 @@ This release consolidates work completed across May 2026.
 - All critical bugs from previous QA rounds resolved and verified
 - Documentation refreshed for consistency
 
-### Phase 1 — J/TH Efficiency Mode (Completed 2026-05-18)
+### Phase 1 — J/TH Efficiency Mode (2026-05-18)
 - Added separate RLS power model (`power_theta` + `power_P`)
 - New Kconfig option `G6_ENABLE_EFFICIENCY_MODE` (opt-in, default = `n`)
 - When enabled: brain optimizes for minimum J/TH using the predicted power surface
@@ -24,7 +24,7 @@ This release consolidates work completed across May 2026.
 - `g6_brain_reset()` extended to handle Phase 1 fields
 - No breaking changes — existing integrations continue to work unchanged
 
-### 2026-05-17 — Polish, Tests & Documentation
+### 2026-05-17 — Polish, Tests & Documentation (2026-05-18)
 - Significantly expanded Unity test suite:
   - Input validation and rejection tests
   - Safety layer execution on invalid/overheated samples
@@ -39,7 +39,7 @@ This release consolidates work completed across May 2026.
 - Tightened self-test condition number threshold (from 1e6 → 5e5)
 - Updated all version strings and documentation to v1.0.0-beta2
 
-### Phase 0 + 0.1 — Foundation (Completed earlier)
+### Phase 0 + 0.1 — Foundation (2026-05-17)
 - Full Kconfig wiring and control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`)
 - NVS auto-save + true warm-start
 - Strong single-threaded contract documented
