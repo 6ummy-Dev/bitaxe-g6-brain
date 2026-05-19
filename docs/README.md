@@ -1,10 +1,12 @@
-# G6 Brain Documentation — v1.0.0-beta2
+# G6 Brain Documentation — v1.0.0-beta3
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
 Welcome to the official documentation for the **G6 Brain** — the flagship module of the Bitaxe Brains Project.
 
 This is a fully modular, production-hardened control brain that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict aerospace-grade safety constraints.
+
+In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelbach J/TH solver** (exact closed-form 2×2 minimization) instead of grid search.
 
 ---
 
@@ -27,6 +29,7 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 | [KCONFIG.md](KCONFIG.md)        | All configuration options explained               | Tuning safety limits or debugging |
 | [SAFETY.md](SAFETY.md)          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
 | [MONITORING.md](MONITORING.md)  | Real-time observability and telemetry             | Monitoring brain health |
+| [TESTING.md](TESTING.md)        | Community testing guide for beta3                 | Field testing the new analytical solver |
 
 **Additional project docs (root):**
 - `AGENTS.md` — Safety invariants & engineering principles
@@ -42,6 +45,7 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 - Strong predictive safety layers
 - Per-chip NVS fingerprinting (warm start)
 - Clean telemetry export API
+- **Analytical J/TH optimization** (beta3) — exact O(1) solver instead of heuristics
 - Modular and auditable design
 - Aerospace-style QA hardening
 
@@ -49,11 +53,13 @@ This is a fully modular, production-hardened control brain that uses **Recursive
 
 ## Status
 
-- **Version:** v1.0.0-beta2 (May 2026)
-- **Maturity:** Beta — signed off and ready for field testing
+- **Version:** v1.0.0-beta3 (May 2026)
+- **Maturity:** Beta — actively hardening the new analytical J/TH solver
 - **License:** MIT
 
 ---
 
 **The brain your Bitaxe always wanted.**  
 Start safe. Learn. Then optimize. ⚡
+
+**Made with ❤️ and rigorous engineering for the Bitaxe community**
