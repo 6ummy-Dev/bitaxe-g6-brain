@@ -8,7 +8,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Wired real `idf.py test` execution in CI (replaced dummy echo step). CI badge is now meaningful.
 - Added `model_quality` gate in J/TH optimizer: skips aggressive optimization when `model_quality < 0.6` (QA recommendation for safer behavior with the analytical solver).
 
-### 2026-05-, 2026-05-19 — J/TH Solver Polish & Configuration
+### 2026-05-19 — J/TH Solver Polish & Configuration
 - Polished the Dinkelbach-based J/TH optimizer with improved comments and structure.
 - Added Kconfig options for the J/TH solver:
   - `G6_JTH_MAX_OUTER_ITERS`
@@ -22,14 +22,14 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 This release consolidates work completed across May 2026.
 
-### Highlights of this release (2026-05-18)
+### 2026-05-18 — Highlights of this release 
 - NVS warm-start fully fixed (models now correctly restore after reboot)
 - Schema version made consistent across header and implementation (`G6_NVS_SCHEMA_VERSION = 2u`)
 - `g6_brain_get_telemetry()` cleanly integrated into the public API
 - All critical bugs from previous QA rounds resolved and verified
 - Documentation refreshed for consistency
 
-### Phase 1 — J/TH Efficiency Mode (2026-05-18)
+### 2026-05-18 — Phase 1 — J/TH Efficiency Mode
 - Added separate RLS power model (`power_theta` + `power_P`)
 - New Kconfig option `G6_ENABLE_EFFICIENCY_MODE` (opt-in, default = `n`)
 - When enabled: brain optimizes for minimum J/TH using the predicted power surface
@@ -53,7 +53,7 @@ This release consolidates work completed across May 2026.
 - Tightened self-test condition number threshold (from 1e6 → 5e5)
 - Updated all version strings and documentation to v1.0.0-beta2
 
-### Phase 0 + 0.1 — Foundation (2026-05-17)
+### 2026-05-17 — Phase 0 + 0.1 — Foundation
 - Full Kconfig wiring and control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`)
 - NVS auto-save + true warm-start
 - Strong single-threaded contract documented
