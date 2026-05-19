@@ -1,4 +1,5 @@
-# Bitaxe G6 Brain ⚡ _Start safe. Learn. Then optimize._
+# Bitaxe G6 Brain ⚡ 
+_Start safe. Learn. Then optimize._
 
 **v1.0.0-beta3** — Adaptive stabilized RLS optimizer with analytical J/TH solver + telemetry for BM1370
 
