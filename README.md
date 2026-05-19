@@ -4,7 +4,7 @@
 
 The **G6 Brain** dynamically models the quadratic relationship between frequency, voltage, and hashrate using stabilized Recursive Least Squares (RLS). It learns your ASIC’s unique efficiency surface and selects safe operating points while enforcing strict safety constraints. Includes clean telemetry export and optional J/TH efficiency mode.
 
-> **Note**: Work on `v1.0.0-beta3` (Phase 2) is in progress, including a more efficient Dinkelbach-based J/TH optimizer.
+> **Note**: Work on `v1.0.0-beta3` (Phase 2) is in progress, including improvements to the J/TH efficiency optimizer.
 
 ---
 
@@ -28,7 +28,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 - **NVS persistence** of hashrate + power models (true warm-start)
 - **Control modes** with safe defaults
 - **Telemetry export** via `g6_brain_get_telemetry()` (zero-copy snapshot)
-- Optional true J/TH efficiency mode (opt-in) — *improved solver in beta3*
+- Optional true J/TH efficiency mode (opt-in)
 - Strong single-threaded contract + defensive programming
 
 ---
@@ -63,7 +63,7 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 ---
 
 **Made with ❤️ and rigorous engineering for the Bitaxe community**  
-*May 2026 • v1.0.0-beta2* (beta3 work in progress)
+*May 2026 • v1.0.0-beta2*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
