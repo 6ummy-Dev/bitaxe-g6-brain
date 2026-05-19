@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0.0-beta2 (Phase 0 — fully wired)
+# G6 Brain Installation & Integration Guide — v1.0.0-beta3
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370)
 
@@ -42,7 +42,7 @@ set(EXTRA_COMPONENT_DIRS
 
 ---
 
-## Step 3: menuconfig (Now Fully Functional — Phase 0)
+## Step 3: menuconfig (Fully Functional)
 
 ```bash
 idf.py menuconfig
@@ -54,9 +54,10 @@ Navigate to:
 Component config → G6 Brain Configuration
 ```
 
-**All options are now live**:
-- `G6_TEMP_CEILING`, `G6_NER_THRESHOLD`, `G6_DFS_STEP_MHZ`, `G6_RLS_LAMBDA_MIN`, etc.
-- Changes are read automatically at runtime via `sdkconfig.h`
+All options are live, including:
+- `G6_ENABLE_EFFICIENCY_MODE` (opt-in J/TH optimization)
+- `G6_JTH_MAX_OUTER_ITERS`
+- Safety and RLS tuning parameters
 
 ---
 
@@ -66,7 +67,7 @@ Use the main integration example:
 
 → **`docs/INTEGRATION_EXAMPLE.c`**
 
-**Phase 0 Quick integration:**
+**Quick integration:**
 1. Copy `docs/INTEGRATION_EXAMPLE.c` into your project.
 2. Call it from `app_main()` after WiFi and ASIC initialization.
 3. **Set `brain.control_mode = G6_MODE_RECOMMEND`** (safest starting point).
@@ -82,18 +83,18 @@ idf.py flash monitor
 ```
 
 Watch for:
-- “G6 Brain v1.0.0-beta2 initialized (Kconfig + control_mode + NVS auto-save)”
-- NVS fingerprint auto-saves every ~5 minutes
-- Control mode logged in every update
+- “G6 Brain initialized”
+- NVS fingerprint auto-saves
+- Control mode and model quality logs
 
 ---
 
-## Phase 0 Recommendations
+## Phase Recommendations (beta3)
 
 - **Start in `G6_MODE_RECOMMEND`** (computes optimal but never mutates `best_f`/`best_v`).
-- Only switch to `G6_MODE_AUTO` after 24–48 hours of monitoring + soak testing.
+- Only switch to `G6_MODE_AUTO` after monitoring for 24–48 hours.
 - Use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation.
-- Monitor logs for `model_quality`, `control_mode`, and NVS save messages.
+- **Efficiency mode** (`G6_ENABLE_EFFICIENCY_MODE`) is opt-in. It now uses a fast analytical Dinkelbach solver. Enable it only after the brain has collected enough data (`model_quality` and `power_model_quality` reasonably high).
 
 ---
 
@@ -103,8 +104,14 @@ Watch for:
 - Full API reference → [`docs/API.md`](API.md)
 - Kconfig options → [`docs/KCONFIG.md`](KCONFIG.md)
 - Safety principles → [`AGENTS.md`](../AGENTS.md)
+- Testing guide → [`docs/TESTING.md`](TESTING.md)
 
 ---
 
-**Version:** v1.0.0-beta2 (Phase 0 fixes applied — May 2026)  
-**All Kconfig, control modes, and NVS features are now fully wired and production-ready.**
+**Version:** v1.0.0-beta3 (May 2026)  
+**Note:** The J/TH efficiency path now uses an analytical O(1) Dinkelbach solver with dual model quality gates.
+
+---
+
+**The brain your Bitaxe always wanted.**  
+Start safe. Learn. Then optimize. ⚡
