@@ -12,7 +12,6 @@
 #include <string.h>
 #include <math.h>
 
-static const char *TAG = "G6_BRAIN_TEST";
 static G6BrainState test_brain;
 
 void setUp(void) {
