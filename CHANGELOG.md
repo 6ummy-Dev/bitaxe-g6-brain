@@ -33,7 +33,6 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Updated documentation:
   - `docs/API.md`: Added note about the new Dinkelbach J/TH optimizer.
   - `docs/KCONFIG.md`: Documented the two new J/TH solver options.
-  - `CHANGELOG.md`: Consolidated and cleaned up beta2 entries.
 
 ---
 
@@ -43,7 +42,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 This release consolidates work completed across May 2026.
 
-### 2026-05-18 — Highlights of this release 
+### 2026-05-18 — Highlights of this release
 - NVS warm-start fully fixed (models now correctly restore after reboot)
 - Schema version made consistent across header and implementation (`G6_NVS_SCHEMA_VERSION = 2u`)
 - `g6_brain_get_telemetry()` cleanly integrated into the public API
@@ -59,7 +58,7 @@ This release consolidates work completed across May 2026.
 - `g6_brain_reset()` extended to handle Phase 1 fields
 - No breaking changes — existing integrations continue to work unchanged
 
-### 2026-05-17 — Polish, Tests & Documentation (2026-05-18)
+### 2026-05-17 — Polish, Tests & Documentation
 - Significantly expanded Unity test suite:
   - Input validation and rejection tests
   - Safety layer execution on invalid/overheated samples
@@ -92,10 +91,6 @@ This release consolidates work completed across May 2026.
 
 ---
 
-**Next Phase (Phase 2)**: Analytical J/TH solver, RLS improvements, active thermal slope detection, PID fan control, and extended soak testing.
-
----
-
 ## [1.0.0-beta1] - 2026-05-12 *Completed*
 
 **Status**: Extensively reviewed and hardened. Ready for community field testing.
@@ -119,3 +114,39 @@ This release consolidates work completed across May 2026.
 **Notes**
 - Public API is 100% backward compatible.
 - Many improvements came from independent technical audits.
+
+---
+
+## [v1.0.0-beta] - May 2026 (Early Development)
+
+**Avionics-Class Hardening**
+- Added Enhanced Feed-Forward Predictive Cooling (dP/dt + K_ff term for Vcore prediction)
+- Added I2C Heartbeat + 9-clock sanitization at init
+- Added Voltage-Floor Interlock (hard 400mV–1200mV clamp for BM1366 safety)
+- Added Brown-out RTC Logging stub for post-mortem analysis
+- Integrated IRAM_ATTR comments on hot paths
+
+**QA Audit v3 Response — Critical fixes**
+- RLS PSD safeguard upgraded to strict Positive Definite (nonzero ridge_epsilon enforced)
+- Cold-start guard extended from 10 → 30 ticks
+- Removed overstated "satellite-grade reliability" claims
+- Added GLOSSARY.md and AGENTS.md safety invariants section
+- Legacy v1.8 branch deleted; main branch locked as sole development line
+
+**Final v1.0 Beta Release Lock**
+- All version strings locked to "v1.0 Beta"
+- CHANGELOG made strictly append-only
+- Full quadratic prediction, safety integration, and numerical stability confirmed
+- Ready for hardware soak testing
+
+---
+
+## Earlier History (Pre-Beta)
+
+- **v1.0.0-beta.0**: Initial quadratic RLS + safety foundations + NVS fingerprint (Bierman-Thornton prototype)
+- Pre-v1.0 work archived in `v1.8` branch history
+- Early development focused on RLS modeling, safety interlocks, and ESP-Miner integration patterns
+
+---
+
+**Next Phase (Phase 2)**: Analytical J/TH solver improvements, RLS enhancements, active thermal slope detection (ΔT/dt), PID fan control integration, and extended soak testing.
