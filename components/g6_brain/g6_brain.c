@@ -1,13 +1,14 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (QA Fixed - May 19, 2026)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Fully QA Fixed + Polished - May 19, 2026)
  *
  * RLS-based self-optimizing control brain with J/TH efficiency mode and telemetry.
  *
- * QA Fixes Applied:
- * - Fixed critical gradient scaling bug in Dinkelbach J/TH optimizer (now works in normalized space)
- * - Made NVS buffer dynamic to prevent future overflow
- * - Minor performance improvement (exp2f)
+ * All QA fixes applied:
+ * - Critical: Dinkelbach J/TH optimizer now works correctly in normalized space
+ * - NVS: Symmetric read/write buffers + no VLA on stack
+ * - Minor: exp2f performance improvement
+ * - Tests: More robust
  */
 
 #include "g6_brain.h"
@@ -27,8 +28,10 @@ static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
-
 static const uint32_t NVS_SCHEMA_VERSION = 2u;
+
+/* QA Polish: Fixed buffer size for NVS fingerprint (removes VLA + makes read/write symmetric) */
+#define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
 
 /* ============================================================================
  *                              RLS HELPERS
@@ -38,7 +41,7 @@ static float compute_gradient_vff(float err, float sigma_sq)
 {
     if (sigma_sq < 1e-8f) sigma_sq = 1e-8f;
     float L = (err * err) / sigma_sq;
-    return RLS_LAMBDA_MIN + (1.0f - RLS_LAMBDA_MIN) * exp2f(-L);   // QA Fix: exp2f for performance
+    return RLS_LAMBDA_MIN + (1.0f - RLS_LAMBDA_MIN) * exp2f(-L);
 }
 
 static bool has_significant_innovation(const float P[RLS_N][RLS_N], const float x[RLS_N])
@@ -129,7 +132,7 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
 }
 
 /* ============================================================================
- *                              NVS PERSISTENCE (QA FIXED - Dynamic Buffer)
+ *                              NVS PERSISTENCE (Fully Polished)
  * ========================================================================== */
 
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
@@ -140,7 +143,8 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
 
     size_t expected_blob_size = sizeof(uint32_t)*2 + sizeof(brain->theta) + sizeof(brain->P) +
                                 sizeof(brain->power_theta) + sizeof(brain->power_P);
-    uint8_t buffer[1024];
+
+    uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
     size_t blob_size = expected_blob_size;
 
     err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &blob_size);
@@ -180,11 +184,10 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) return err;
 
-    // QA FIX: Dynamic buffer size instead of hardcoded 512
     size_t data_size = sizeof(brain->theta) + sizeof(brain->P) +
                        sizeof(brain->power_theta) + sizeof(brain->power_P);
-    
-    uint8_t buffer[sizeof(uint32_t)*2 + data_size];
+
+    uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
     uint32_t version = NVS_SCHEMA_VERSION;
     uint32_t size_field = (uint32_t)data_size;
 
@@ -272,13 +275,7 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 }
 
 /* ============================================================================
- * J/TH OPTIMIZER (Dinkelbach-based) — BETA3 QA FIXED
- *
- * Critical fix: Inner gradient descent now performed entirely in 
- * normalized space (fn_i / vn_i). Only converted back to absolute
- * f/v at the end of each inner iteration.
- *
- * This fixes the unit/scaling mismatch that existed previously.
+ * J/TH OPTIMIZER (Dinkelbach-based) — QA FIXED (Normalized Space)
  * ========================================================================== */
 
 static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *opt_v)
@@ -286,7 +283,6 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
     if (!brain || !opt_f || !opt_v) return;
     if (!brain->use_efficiency_mode) return;
 
-    /* Skip optimization if the model is not yet reliable */
     if (brain->model_quality < 0.6f) {
         ESP_LOGD(TAG, "Skipping J/TH optimization (model_quality=%.2f < 0.6)", brain->model_quality);
         return;
@@ -295,7 +291,6 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
     float f = *opt_f;
     float v = *opt_v;
 
-    /* Work in normalized space from the start */
     float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
@@ -310,13 +305,11 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
     float lambda = pw / hr;
 
-    /* Dinkelbach outer loop */
     for (int outer = 0; outer < G6_JTH_MAX_OUTER_ITERS; outer++) {
         
         float fn_inner = fn;
         float vn_inner = vn;
 
-        /* === INNER GRADIENT DESCENT - FULLY IN NORMALIZED SPACE (QA FIXED) === */
         for (int inner = 0; inner < G6_JTH_INNER_STEPS; inner++) {
 
             float hr_i = 0.0f, pw_i = 0.0f;
@@ -345,11 +338,9 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             float grad_fn = dp_fn  - lambda * dhr_fn;
             float grad_vn = dp_vn  - lambda * dhr_vn;
 
-            /* Update in normalized space (this is the key fix) */
             fn_inner -= 0.8f * grad_fn;
             vn_inner -= 0.8f * grad_vn;
 
-            /* Clamp normalized values */
             float fn_min = (BM1370_F_MIN - BM1370_F_CENTER) / BM1370_F_SCALE;
             float fn_max = (BM1370_F_MAX - BM1370_F_CENTER) / BM1370_F_SCALE;
             float vn_min = (BM1370_V_MIN - BM1370_V_CENTER) / BM1370_V_SCALE;
@@ -359,11 +350,9 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             vn_inner = fmaxf(vn_min, fminf(vn_max, vn_inner));
         }
 
-        /* Convert best normalized candidate back to absolute units */
         float f_new = fn_inner * BM1370_F_SCALE + BM1370_F_CENTER;
         float v_new = vn_inner * BM1370_V_SCALE + BM1370_V_CENTER;
 
-        /* Evaluate new point to update lambda */
         float fn_eval = fn_inner;
         float vn_eval = vn_inner;
 
@@ -379,7 +368,6 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
         float new_lambda = pw_new / hr_new;
 
-        /* Accept improvement */
         if (new_lambda < lambda) {
             f = f_new;
             v = v_new;
@@ -390,7 +378,6 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             break;
         }
 
-        /* Early stopping */
         if (outer > 2 && fabsf(new_lambda - lambda) < 0.001f) {
             break;
         }
@@ -401,7 +388,7 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 }
 
 /* ============================================================================
- *                              SAMPLE STATE MACHINE (internal)
+ *                              SAMPLE STATE MACHINE
  * ========================================================================== */
 
 static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares)
@@ -542,7 +529,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
     if (!valid) goto safety_layer;
 
-    /* --- HR RLS update --- */
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
@@ -584,7 +570,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         if (brain->update_count > 25) brain->cold_start = false;
     }
 
-    /* --- Power RLS update (for efficiency mode) --- */
     if (brain->use_efficiency_mode && valid) {
         float y_power_pred = 0.0f;
         for (int i = 0; i < RLS_N; i++)
