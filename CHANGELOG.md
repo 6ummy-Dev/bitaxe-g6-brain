@@ -4,6 +4,23 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Code Quality & Maintainability Pass
+
+**Non-functional improvements** (no behavior changes):
+
+- Added small, clean helper functions (`evaluate_quadratic()` and `get_quadratic_gradient()`) to reduce code duplication and improve readability of quadratic model evaluations.
+- Reorganized `g6_brain.c` into a clearer logical structure:
+  - Small pure helpers → RLS helpers → Safety → NVS → Core algorithms → Public API.
+- Cleaned up `g6_brain.h`:
+  - Better grouping of constants (RLS, BM1370 limits, timing, J/TH solver, NVS).
+  - Improved documentation of the `G6BrainState` struct with section comments.
+  - Overall improved readability and long-term maintainability.
+
+**Impact**
+- Code is now easier to read, navigate, and maintain.
+- Better aligned with the project manifesto (“clean, deliberate, rigorous”).
+- No functional or behavioral changes.
+
 ### 2026-05-19 — QA Fixes & Polish (Critical + Robustness)
 
 **Critical Fixes**
