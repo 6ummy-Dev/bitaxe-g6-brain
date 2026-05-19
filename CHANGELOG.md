@@ -2,6 +2,10 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta3] - 2026-05-19 *In Progress*
+
+---
+
 ## [1.0.0-beta2] - 2026-05-18 *Completed*
 
 **Status**: First signed-off beta release. Ready for field testing and soak testing.
@@ -61,7 +65,7 @@ This release consolidates work completed across May 2026.
 
 ---
 
-## [1.0.0-beta1] - 2026-05-12
+## [1.0.0-beta1] - 2026-05-12 *Completed*
 
 **Status**: Extensively reviewed and hardened. Ready for community field testing.
 
