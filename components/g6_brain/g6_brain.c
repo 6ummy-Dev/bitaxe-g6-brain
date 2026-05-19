@@ -1,11 +1,11 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (Aerospace-Grade Hardened - May 2026)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (May 2026)
  *
  * All QA fixes applied:
  * - Critical: O(1) Exact Quadratic Minimization replaces heuristic gradient descent.
- * - Aerospace: Joseph Stabilized Covariance Update guarantees positive-definite matrices.
- * - Aerospace: Statistical Outlier Gating (3-Sigma) rejects physical sensor glitches.
+ * - Joseph Stabilized Covariance Update guarantees positive-definite matrices.
+ * - Statistical Outlier Gating (3-Sigma) rejects physical sensor glitches.
  * - Safety: Fixed thermal override execution order.
  * - Control: Integrated Slew-Rate Limiter internally to couple models to physical reality.
  * - NVS: Symmetric read/write buffers + no VLA on stack.
@@ -171,7 +171,7 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             memcpy(brain->theta, buffer + offset, sizeof(brain->theta));
             offset += sizeof(brain->theta);
             memcpy(brain->P, buffer + offset, sizeof(brain->P));
-            offset += sizeof(brain->P);
+            offset += sizeof(brain->theta);
             memcpy(brain->power_theta, buffer + offset, sizeof(brain->power_theta));
             offset += sizeof(brain->power_theta);
             memcpy(brain->power_P, buffer + offset, sizeof(brain->power_P));
@@ -587,7 +587,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             for (int j = 0; j < RLS_N; j++) {
                 float sum = 0.0f;
                 for (int l = 0; l < RLS_N; l++) {
-                    sum += T_mat[i][l] * M[j][l]; // M[j][l] is M^T
+                    sum += T_mat[i][l] * M[j][l];
                 }
                 brain->P[i][j] = sum / lambda_eff;
             }
@@ -674,6 +674,8 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         }
     }
 
+    return ESP_OK;
+
 safety_layer:
 
     /* 1. Calculate Theoretical Mathematical Optimum */
@@ -725,7 +727,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     if (!brain || !opt_f || !opt_v) return;
 
     float a = brain->theta[0], b = brain->theta[1], c = brain->theta[2];
-    float d = brain->theta[3], e = brain->theta[4], // g = brain->theta[5];
+    float d = brain->theta[3], e = brain->theta[4];
 
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
@@ -787,7 +789,7 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
         for (int j = i + 1; j < RLS_N; j++)
-            if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETRY_TOLERANCE)
+            if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETOW_TOLERANCE)
                 ok = false;
     }
 
