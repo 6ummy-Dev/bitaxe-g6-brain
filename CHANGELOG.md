@@ -12,6 +12,8 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - **Resolved Header Dependency Failures**: Added `nvs_flash` to the explicit component dependency requirements array inside the test execution container (`test_app/main/CMakeLists.txt`), resolving a fatal missing header compilation error for `nvs_flash.h`.
 - **Fixed Syntax Redeclaration Error**: Replaced an accidental local variable trailing comma with a declaration statement semicolon inside `g6_brain_get_optimal()`, correcting a parser parsing bug that previously triggered downstream signature compilation crashes.
 - **Removed Dead Build Warnings**: Extracted the unused global variable declaration `TAG` from `test_g6_brain.c` to comply with strict embedded `-Werror=unused-variable` compile parameters.
+- **Fixed Self-Test Typo**: Corrected `RLS_SYMMETOW_TOLERANCE` to `RLS_SYMMETRY_TOLERANCE` within the covariance validation block inside `g6_brain_self_test()`.
+- **Cleared Test Variable Clutter**: Removed the dead string declaration `TAG` from `test_g6_brain.c` to resolve unused variable compiler build drops.
 
 **Documentation & Slogan Stabilization Pass**
 - **Grounded Vocabulary Migration**: Stripped hyper-inflated marketing jargon and unneeded adjectives (e.g., "aerospace-grade", "avionics-class") across all asset descriptions. Replaced them with exact technical definitions ("Joseph Form Covariance Stabilization", "Statistical Outlier Gating").
