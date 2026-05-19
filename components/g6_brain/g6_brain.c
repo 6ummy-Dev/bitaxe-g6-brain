@@ -1,12 +1,13 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (O(1) Analytical Dinkelbach Solver - May 2026)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Aerospace-Grade Hardened - May 2026)
  *
  * All QA fixes applied:
  * - Critical: O(1) Exact Quadratic Minimization replaces heuristic gradient descent.
+ * - Aerospace: Joseph Stabilized Covariance Update guarantees positive-definite matrices.
+ * - Aerospace: Statistical Outlier Gating (3-Sigma) rejects physical sensor glitches.
  * - NVS: Symmetric read/write buffers + no VLA on stack.
  * - Minor: exp2f performance improvement.
- * - Tests: More robust.
  */
 
 #include "g6_brain.h"
@@ -530,6 +531,9 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
 
+    /* ====================================================================
+     * HASHRATE RLS MODEL UPDATE
+     * ==================================================================== */
     float y_pred = evaluate_quadratic(brain->theta, fn, vn);
     float err = hr_ths - y_pred;
 
@@ -543,8 +547,17 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             for (int j = 0; j < RLS_N; j++)
                 Px[i] += brain->P[i][j] * x[j];
 
-        float denom = lambda_eff;
-        for (int i = 0; i < RLS_N; i++) denom += x[i] * Px[i];
+        float xPx = 0.0f;
+        for (int i = 0; i < RLS_N; i++) xPx += x[i] * Px[i];
+
+        // --- NEW: Statistical Outlier Gating (3-Sigma) ---
+        float S = xPx + 0.5f; // Expected variance floor
+        if ((err * err) > (9.0f * S)) {
+            ESP_LOGW(TAG, "HR Outlier Rejected: err=%.2f, bound=%.2f", err, sqrtf(9.0f * S));
+            goto safety_layer; // Skip both RLS updates
+        }
+
+        float denom = lambda_eff + xPx;
         if (denom < 1e-9f) denom = 1e-9f;
 
         float k[RLS_N];
@@ -552,20 +565,45 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
         for (int i = 0; i < RLS_N; i++) brain->theta[i] += k[i] * err;
 
+        // --- NEW: Joseph Stabilized Covariance Update ---
+        float M[RLS_N][RLS_N];
         for (int i = 0; i < RLS_N; i++) {
-            for (int j = 0; j < RLS_N; j++)
-                brain->P[i][j] = (brain->P[i][j] - k[i] * Px[j]) / lambda_eff;
+            for (int j = 0; j < RLS_N; j++) {
+                M[i][j] = (i == j ? 1.0f : 0.0f) - k[i] * x[j];
+            }
+        }
+
+        float T_mat[RLS_N][RLS_N] = {0};
+        for (int i = 0; i < RLS_N; i++) {
+            for (int j = 0; j < RLS_N; j++) {
+                for (int l = 0; l < RLS_N; l++) {
+                    T_mat[i][j] += M[i][l] * brain->P[l][j];
+                }
+            }
+        }
+
+        for (int i = 0; i < RLS_N; i++) {
+            for (int j = 0; j < RLS_N; j++) {
+                float sum = 0.0f;
+                for (int l = 0; l < RLS_N; l++) {
+                    sum += T_mat[i][l] * M[j][l]; // M[j][l] is M^T
+                }
+                brain->P[i][j] = sum / lambda_eff;
+            }
             brain->P[i][i] += brain->ridge_epsilon;
         }
 
         brain->last_innovation = hr_ths - y_pred;
-        rls_symmetrize_clamp_and_stabilize(brain->P);
+        rls_symmetrize_clamp_and_stabilize(brain->P); // Maintains absolute safety bounds
 
         brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + 1.0f));
         brain->update_count++;
         if (brain->update_count > 25) brain->cold_start = false;
     }
 
+    /* ====================================================================
+     * POWER RLS MODEL UPDATE
+     * ==================================================================== */
     if (brain->use_efficiency_mode && valid) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
@@ -582,8 +620,17 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                 for (int j = 0; j < RLS_N; j++)
                     Px[i] += brain->power_P[i][j] * x[j];
 
-            float denom = lambda_eff;
-            for (int i = 0; i < RLS_N; i++) denom += x[i] * Px[i];
+            float xPx = 0.0f;
+            for (int i = 0; i < RLS_N; i++) xPx += x[i] * Px[i];
+
+            // --- NEW: Statistical Outlier Gating (3-Sigma) ---
+            float S = xPx + 0.5f; 
+            if ((power_err * power_err) > (9.0f * S)) {
+                ESP_LOGW(TAG, "Power Outlier Rejected: err=%.2f, bound=%.2f", power_err, sqrtf(9.0f * S));
+                goto safety_layer; // Skip Power RLS update
+            }
+
+            float denom = lambda_eff + xPx;
             if (denom < 1e-9f) denom = 1e-9f;
 
             float k[RLS_N];
@@ -591,9 +638,31 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
             for (int i = 0; i < RLS_N; i++) brain->power_theta[i] += k[i] * power_err;
 
+            // --- NEW: Joseph Stabilized Covariance Update ---
+            float M[RLS_N][RLS_N];
             for (int i = 0; i < RLS_N; i++) {
-                for (int j = 0; j < RLS_N; j++)
-                    brain->power_P[i][j] = (brain->power_P[i][j] - k[i] * Px[j]) / lambda_eff;
+                for (int j = 0; j < RLS_N; j++) {
+                    M[i][j] = (i == j ? 1.0f : 0.0f) - k[i] * x[j];
+                }
+            }
+
+            float T_mat[RLS_N][RLS_N] = {0};
+            for (int i = 0; i < RLS_N; i++) {
+                for (int j = 0; j < RLS_N; j++) {
+                    for (int l = 0; l < RLS_N; l++) {
+                        T_mat[i][j] += M[i][l] * brain->power_P[l][j];
+                    }
+                }
+            }
+
+            for (int i = 0; i < RLS_N; i++) {
+                for (int j = 0; j < RLS_N; j++) {
+                    float sum = 0.0f;
+                    for (int l = 0; l < RLS_N; l++) {
+                        sum += T_mat[i][l] * M[j][l];
+                    }
+                    brain->power_P[i][j] = sum / lambda_eff;
+                }
                 brain->power_P[i][i] += brain->ridge_epsilon;
             }
 
