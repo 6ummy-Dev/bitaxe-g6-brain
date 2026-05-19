@@ -298,8 +298,9 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
     if (!brain || !opt_f || !opt_v) return;
     if (!brain->use_efficiency_mode) return;
 
-    if (brain->model_quality < 0.6f) {
-        ESP_LOGD(TAG, "Skipping J/TH optimization (model_quality=%.2f < 0.6)", brain->model_quality);
+    if (brain->model_quality < 0.6f || brain->power_model_quality < 0.6f) {
+        ESP_LOGD(TAG, "Skipping J/TH optimization (hr_q=%.2f pw_q=%.2f)",
+                 brain->model_quality, brain->power_model_quality);
         return;
     }
 
@@ -325,6 +326,12 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
             float hr_i = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
             float pw_i = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
+
+            // Sufficient-descent guard: if J/TH got worse on this step, stop inner loop
+            float jth_i = pw_i / fmaxf(hr_i, 1.0f);
+            if (jth_i >= lambda) {
+                break;
+            }
 
             float dhr_fn, dhr_vn, dp_fn, dp_vn;
             get_quadratic_gradient(brain->theta, fn_inner, vn_inner, &dhr_fn, &dhr_vn);
@@ -360,12 +367,13 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
             v = v_new;
             fn = fn_inner;
             vn = vn_inner;
+            float prev_lambda = lambda;
             lambda = new_lambda;
-        } else {
-            break;
-        }
 
-        if (outer > 2 && fabsf(new_lambda - lambda) < 0.001f) {
+            if (outer > 2 && fabsf(prev_lambda - lambda) < 0.001f) {
+                break;
+            }
+        } else {
             break;
         }
     }
