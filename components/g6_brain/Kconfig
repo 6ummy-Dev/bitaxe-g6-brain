@@ -31,7 +31,6 @@ menu "G6 Brain Configuration"
             range 10 200
             help
                 Sigma squared used in Variable Forgetting Factor gradient.
-
     endmenu
 
     menu "Safety & Thermal"
@@ -42,14 +41,13 @@ menu "G6 Brain Configuration"
             range 50 85
             help
                 Hard ASIC temperature limit.
-
+        
         config G6_NER_THRESHOLD
             int "NER (nonce error rate) threshold (x100)"
             default 250
             range 50 2000
             help
                 Nonce Error Rate threshold in 0.01% units.
-
     endmenu
 
     menu "Optimization Behavior"
@@ -60,14 +58,14 @@ menu "G6 Brain Configuration"
             range 5 50
             help
                 Step size used for optimization suggestions and slew limiting.
-
+        
         config G6_ENABLE_EFFICIENCY_MODE
             bool "Enable true J/TH efficiency optimization (Phase 1+)"
             default n
             help
                 When enabled, the brain uses a separate power RLS model + Dinkelbach-based
                 J/TH optimizer to minimize Watts per TH/s.
-
+        
         config G6_JTH_MAX_OUTER_ITERS
             int "Maximum outer iterations for J/TH Dinkelbach solver"
             default 7
@@ -75,14 +73,6 @@ menu "G6 Brain Configuration"
             help
                 Maximum number of outer iterations in the Dinkelbach-based J/TH optimizer.
                 Higher values may give slightly better results at the cost of more CPU time.
-
-        config G6_JTH_INNER_STEPS
-            int "Inner gradient steps per Dinkelbach iteration"
-            default 5
-            range 2 10
-            help
-                Number of gradient steps used to minimize the parametric sub-problem
-                inside each Dinkelbach iteration.
 
     endmenu
 
