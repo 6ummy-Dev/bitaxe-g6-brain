@@ -4,6 +4,17 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Aerospace-Grade Mathematical Hardening & C Optimization
+
+**Mathematical Stability**
+- **Joseph Stabilized Covariance Update**: Replaced standard RLS covariance subtraction with the Joseph form. Guarantees the covariance matrix remains symmetric and positive semi-definite despite floating-point truncation, preventing matrix collapse.
+- **Statistical Outlier Gating (3-Sigma)**: The brain now dynamically calculates the expected variance of the innovation. Samples with errors exceeding the 3-sigma bound are rejected as physical sensor glitches, protecting the response surface from corruption.
+
+**Embedded C Optimizations**
+- **Struct Packing**: Reordered `G6BrainState` to group 1-byte booleans, eliminating invisible compiler padding. The struct is now tightly packed, improving cache-line utilization during heavy matrix operations.
+- **Internal Slew-Rate Limiting**: Moved slew-rate constraints inside the brain. The brain now safely steps towards the mathematical optimum based on the ASIC's current physical state, ensuring internal models perfectly match physical reality.
+- **Fast Math**: Replaced `powf` with hardware-accelerated `exp2f` for VFF gradients.
+
 ### 2026-05-19 — O(1) Analytical J/TH Solver (Architectural Leap)
 
 **Major Optimization**
