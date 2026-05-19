@@ -1,11 +1,9 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (Cleanliness Review - May 2026)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Reorganized for Clarity - May 2026)
  *
- * Changes in this version:
- * - Added small, clean helper functions for quadratic evaluation (reduce duplication)
- * - Improved readability and maintainability without changing behavior or adding features
- * - All previous QA fixes retained (Dinkelbach math, NVS polish, exp2f, etc.)
+ * This version only reorganizes the code for better readability and logical flow.
+ * No behavior changes. All previous QA fixes and cleanliness improvements retained.
  */
 
 #include "g6_brain.h"
@@ -30,12 +28,9 @@ static const uint32_t NVS_SCHEMA_VERSION = 2u;
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
 
 /* ============================================================================
- *                              SMALL CLEAN HELPERS (Cleanliness Review)
+ *                              SMALL PURE HELPERS
  * ========================================================================== */
 
-/**
- * Evaluate quadratic model: a*fn² + b*vn² + c*fn*vn + d*fn + e*vn + g
- */
 static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float vn)
 {
     return theta[0]*fn*fn +
@@ -46,9 +41,6 @@ static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float
            theta[5];
 }
 
-/**
- * Compute partial derivatives of the quadratic with respect to fn and vn.
- */
 static inline void get_quadratic_gradient(const float theta[RLS_N], float fn, float vn,
                                           float *df, float *dv)
 {
@@ -298,7 +290,7 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 }
 
 /* ============================================================================
- * J/TH OPTIMIZER (Current gradient version - to be replaced in Phase 2)
+ * J/TH OPTIMIZER
  * ========================================================================== */
 
 static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *opt_v)
