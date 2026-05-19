@@ -1,14 +1,11 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (Fully QA Fixed + Polished - May 19, 2026)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (Cleanliness Review - May 2026)
  *
- * RLS-based self-optimizing control brain with J/TH efficiency mode and telemetry.
- *
- * All QA fixes applied:
- * - Critical: Dinkelbach J/TH optimizer now works correctly in normalized space
- * - NVS: Symmetric read/write buffers + no VLA on stack
- * - Minor: exp2f performance improvement
- * - Tests: More robust
+ * Changes in this version:
+ * - Added small, clean helper functions for quadratic evaluation (reduce duplication)
+ * - Improved readability and maintainability without changing behavior or adding features
+ * - All previous QA fixes retained (Dinkelbach math, NVS polish, exp2f, etc.)
  */
 
 #include "g6_brain.h"
@@ -30,8 +27,34 @@ static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
 static const uint32_t NVS_SCHEMA_VERSION = 2u;
 
-/* QA Polish: Fixed buffer size for NVS fingerprint (removes VLA + makes read/write symmetric) */
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
+
+/* ============================================================================
+ *                              SMALL CLEAN HELPERS (Cleanliness Review)
+ * ========================================================================== */
+
+/**
+ * Evaluate quadratic model: a*fn² + b*vn² + c*fn*vn + d*fn + e*vn + g
+ */
+static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float vn)
+{
+    return theta[0]*fn*fn +
+           theta[1]*vn*vn +
+           theta[2]*fn*vn +
+           theta[3]*fn +
+           theta[4]*vn +
+           theta[5];
+}
+
+/**
+ * Compute partial derivatives of the quadratic with respect to fn and vn.
+ */
+static inline void get_quadratic_gradient(const float theta[RLS_N], float fn, float vn,
+                                          float *df, float *dv)
+{
+    if (df) *df = 2.0f * theta[0] * fn + theta[2] * vn + theta[3];
+    if (dv) *dv = 2.0f * theta[1] * vn + theta[2] * fn + theta[4];
+}
 
 /* ============================================================================
  *                              RLS HELPERS
@@ -132,7 +155,7 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
 }
 
 /* ============================================================================
- *                              NVS PERSISTENCE (Fully Polished)
+ *                              NVS PERSISTENCE
  * ========================================================================== */
 
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
@@ -275,7 +298,7 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 }
 
 /* ============================================================================
- * J/TH OPTIMIZER (Dinkelbach-based) — QA FIXED (Normalized Space)
+ * J/TH OPTIMIZER (Current gradient version - to be replaced in Phase 2)
  * ========================================================================== */
 
 static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *opt_v)
@@ -294,12 +317,8 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
     float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
-    float hr = 0.0f, pw = 0.0f;
-    for (int i = 0; i < RLS_N; i++) {
-        float x = (i==0?fn*fn : i==1?vn*vn : i==2?fn*vn : i==3?fn : i==4?vn : 1.0f);
-        hr += brain->theta[i] * x;
-        pw += brain->power_theta[i] * x;
-    }
+    float hr = evaluate_quadratic(brain->theta, fn, vn);
+    float pw = evaluate_quadratic(brain->power_theta, fn, vn);
 
     if (hr < 8.0f) return;
 
@@ -312,28 +331,12 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
 
         for (int inner = 0; inner < G6_JTH_INNER_STEPS; inner++) {
 
-            float hr_i = 0.0f, pw_i = 0.0f;
-            float dhr_fn = 0.0f, dhr_vn = 0.0f;
-            float dp_fn  = 0.0f, dp_vn  = 0.0f;
+            float hr_i = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
+            float pw_i = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
 
-            for (int i = 0; i < RLS_N; i++) {
-                float x  = (i==0 ? fn_inner*fn_inner : 
-                            i==1 ? vn_inner*vn_inner : 
-                            i==2 ? fn_inner*vn_inner : 
-                            i==3 ? fn_inner : 
-                            i==4 ? vn_inner : 1.0f);
-
-                float dx_fn = (i==0 ? 2*fn_inner : i==2 ? vn_inner : i==3 ? 1.0f : 0.0f);
-                float dx_vn = (i==1 ? 2*vn_inner : i==2 ? fn_inner : i==4 ? 1.0f : 0.0f);
-
-                hr_i += brain->theta[i] * x;
-                pw_i += brain->power_theta[i] * x;
-
-                dhr_fn += brain->theta[i] * dx_fn;
-                dhr_vn += brain->theta[i] * dx_vn;
-                dp_fn  += brain->power_theta[i] * dx_fn;
-                dp_vn  += brain->power_theta[i] * dx_vn;
-            }
+            float dhr_fn, dhr_vn, dp_fn, dp_vn;
+            get_quadratic_gradient(brain->theta, fn_inner, vn_inner, &dhr_fn, &dhr_vn);
+            get_quadratic_gradient(brain->power_theta, fn_inner, vn_inner, &dp_fn, &dp_vn);
 
             float grad_fn = dp_fn  - lambda * dhr_fn;
             float grad_vn = dp_vn  - lambda * dhr_vn;
@@ -353,16 +356,8 @@ static void optimize_jth_dinkelbach(G6BrainState *brain, float *opt_f, float *op
         float f_new = fn_inner * BM1370_F_SCALE + BM1370_F_CENTER;
         float v_new = vn_inner * BM1370_V_SCALE + BM1370_V_CENTER;
 
-        float fn_eval = fn_inner;
-        float vn_eval = vn_inner;
-
-        float hr_new = 0.0f, pw_new = 0.0f;
-        for (int i = 0; i < RLS_N; i++) {
-            float x = (i==0?fn_eval*fn_eval : i==1?vn_eval*vn_eval : i==2?fn_eval*vn_eval :
-                       i==3?fn_eval : i==4?vn_eval : 1.0f);
-            hr_new += brain->theta[i] * x;
-            pw_new += brain->power_theta[i] * x;
-        }
+        float hr_new = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
+        float pw_new = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
 
         if (hr_new < 8.0f) break;
 
@@ -533,8 +528,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
 
-    float y_pred = 0.0f;
-    for (int i = 0; i < RLS_N; i++) y_pred += brain->theta[i] * x[i];
+    float y_pred = evaluate_quadratic(brain->theta, fn, vn);
     float err = hr_ths - y_pred;
 
     if (has_significant_innovation(brain->P, x) && trace_P(brain->P) <= RLS_TRACE_MAX) {
@@ -571,9 +565,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
 
     if (brain->use_efficiency_mode && valid) {
-        float y_power_pred = 0.0f;
-        for (int i = 0; i < RLS_N; i++)
-            y_power_pred += brain->power_theta[i] * x[i];
+        float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
 
         if (has_significant_innovation(brain->power_P, x) &&
@@ -680,7 +672,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     if (pred_hr) {
         float fn = (*opt_f - BM1370_F_CENTER) / BM1370_F_SCALE;
         float vn = (*opt_v - BM1370_V_CENTER) / BM1370_V_SCALE;
-        *pred_hr = a*fn*fn + b*vn*vn + c*fn*vn + d*fn + e*vn + g;
+        *pred_hr = evaluate_quadratic(brain->theta, fn, vn);
     }
 }
 
