@@ -8,7 +8,6 @@ This guide is intended for community members testing the **v1.0.0-beta3** releas
 - **`power_model_quality`** monitoring and gating — the brain now refuses J/TH optimization if the power model is not yet reliable.
 - New Kconfig options for fine-tuning the solver:
   - `G6_JTH_MAX_OUTER_ITERS`
-  - `G6_JTH_INNER_STEPS`
 
 These changes are **opt-in** via `G6_ENABLE_EFFICIENCY_MODE`.
 
