@@ -2,41 +2,37 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta2] - 2026-05-18 (Final)
+## [1.0.0-beta2] - 2026-05-18
 
-**Status**: Production-ready beta2 with full Phase 1 J/TH efficiency mode + clean telemetry export.
+**Status**: First signed-off beta release. Ready for field testing and soak testing.
 
-### Final Cleanup (this build)
-- **Critical fix**: NVS warm-start load guard corrected (`blob_size == expected_blob_size` instead of `sizeof(buffer)`). Warm-start now actually works after reboot.
-- **Regression fix**: Restored `G6_NVS_SCHEMA_VERSION` to `2u` in header to match implementation.
-- Moved `g6_brain_get_telemetry()` into the main PUBLIC API section.
-- Removed broken recursive NVS wrapper functions and unnecessary section headers.
-- Full documentation refresh across `API.md`, `README.md`, `MONITORING.md`, `INTEGRATION_EXAMPLE.c`, and this changelog.
-- Codebase is now structurally clean and ready for beta3 / field testing.
+### Highlights of this release
+- NVS warm-start fully fixed (models now correctly restore after reboot)
+- Schema version made consistent across header and implementation (`G6_NVS_SCHEMA_VERSION = 2u`)
+- `g6_brain_get_telemetry()` cleanly integrated into the public API
+- All critical bugs from previous QA rounds resolved and verified
+- Documentation refreshed for consistency
 
-### Phase 1 — J/TH Efficiency (Completed)
-- Separate RLS power model (`power_theta` + `power_P`).
-- New Kconfig option `G6_ENABLE_EFFICIENCY_MODE`.
-- Grid-based J/TH optimization when enabled (safe, opt-in).
-- NVS schema v2 with full power model persistence.
-- No breaking changes to existing integrations.
+### Phase 1 — J/TH Efficiency Mode
+- Added separate RLS power model (`power_theta` + `power_P`)
+- New Kconfig option `G6_ENABLE_EFFICIENCY_MODE` (opt-in)
+- Grid-based J/TH optimization when enabled
+- NVS schema v2 with full power model persistence
 
-### Phase 0.1 + Phase 0 (Previously Completed)
-- Full Kconfig wiring
-- Control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`)
+### Phase 0 + 0.1 — Foundation
+- Full Kconfig wiring and control mode enforcement
 - NVS auto-save + true warm-start
-- Strong single-threaded contract documented
-- Extensive safety layer + self-test
-- Unity test coverage
+- Strong single-threaded contract and safety layer
+- Extensive self-test and Unity test coverage
 
 **Notes**
 - Public API is 100% backward compatible.
-- Start in `G6_MODE_RECOMMEND`.
-- Telemetry via `g6_brain_get_telemetry()` is now cleanly part of the public interface.
+- Recommended starting mode: `G6_MODE_RECOMMEND`
+- Telemetry is now part of the stable public interface.
 
 ---
 
-**Next Phase (Phase 2)**: Analytical J/TH solver (replace grid search), active thermal slope, PID fan, extended soak testing.
+**Next Phase (Phase 2)**: Analytical J/TH solver, active thermal slope detection, PID fan control, and extended soak testing.
 
 ---
 
