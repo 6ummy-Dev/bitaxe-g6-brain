@@ -1,65 +1,63 @@
-# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta3 (Phase 1)
+# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta3
 
-**This is not a happy-path optimizer.** The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
+**This is not a happy-path optimizer.**  
+The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
 
 ---
 
-## Core Safety Philosophy (unchanged)
+## Core Safety Philosophy
 
-> **"Fail safe. Learn fast. Never compromise the hardware."**
+> **"Start safe. Learn. Then optimize. ⚡"**
 
 The brain must prioritize hardware longevity and stability over marginal hashrate gains. Every decision passes through multiple protective layers before any frequency or voltage change is recommended.
 
 ---
 
-## Implemented Safety Mechanisms (Current — Phase 1)
+## Implemented Safety Mechanisms (Current — beta3)
 
 The following safety behaviors are **fully active**:
 
-1. **Thermal Protection** Hard `G6_TEMP_CEILING` (Kconfig, default 70 °C) with proactive scaling 5 °C below the limit. Always runs via `goto safety_layer` pattern.
+1. **Thermal Protection**  
+   Hard `G6_TEMP_CEILING` (Kconfig) with proactive scaling 5 °C below the limit. Always runs via `goto safety_layer` pattern.
 
-2. **Voltage & Range Protection** Hard BM1370 limits (400–950 MHz, 1050–1350 mV) + ripple/out-of-range clamping. Enforced on every update.
+2. **Voltage & Range Protection**  
+   Hard BM1370 limits (400–950 MHz, 1050–1350 mV) + ripple/out-of-range clamping on every update.
 
-3. **Sample Quality State Machine** Settle time + measurement window + minimum share count validation (when provided). Thermal gate before any RLS update.
+3. **Sample Quality State Machine**  
+   Settle time + measurement window + minimum share count validation + thermal gate before any RLS update.
 
-4. **Numerical Stability** Covariance symmetrization, diagonal clamping, ridge regularization (`G6_RLS_RIDGE_EPSILON`), trace monitoring (`G6_RLS_TRACE_MAX`), innovation gating, and Variable Forgetting Factor. All Kconfig-wired.
+4. **Numerical Stability**  
+   Covariance symmetrization, diagonal clamping, ridge regularization, trace monitoring, innovation gating, and Variable Forgetting Factor. All Kconfig-wired.
 
-5. **Error Rate Handling** Conservative back-off + model reset when NER exceeds `G6_NER_THRESHOLD` (Kconfig, default 2.5%).
+5. **Error Rate Handling**  
+   Conservative back-off + model quality reduction when NER exceeds `G6_NER_THRESHOLD`.
 
-6. **Power Sanity Check** Rejects obviously impossible power values (<0 W or >100 W).
+6. **Power Sanity Check**  
+   Rejects obviously impossible power values.
 
-7. **Control Mode Enforcement**
+7. **Control Mode Enforcement**  
    - `G6_MODE_OBSERVE_ONLY`: Safety only — no best_f/v mutation  
-   - `G6_MODE_RECOMMEND` (safe default): Computes optimal but never mutates best_f/v  
-   - `G6_MODE_AUTO`: Full optimizer
+   - `G6_MODE_RECOMMEND` (default): Computes optimal but never mutates setpoints  
+   - `G6_MODE_AUTO`: Full optimizer  
    All modes still run the complete safety layer.
 
-8. **NVS Warm-Start**
-   Full theta + P-matrix auto-saved every ~5 minutes after 10+ updates. Survives power cycles.
+8. **NVS Warm-Start**  
+   Full theta + P-matrix + power model auto-saved. Survives power cycles.
 
-9. **Fail-Closed Design** Safety logic (thermal, NER, voltage, clamps) **always** executes even on rejected/invalid samples.
+9. **Fail-Closed Design**  
+   Safety logic (thermal, NER, voltage, clamps) **always** executes even on rejected/invalid samples.
 
-10. **Dual-Gated Optimizer Activation** The J/TH analytical solver is hard-gated by both `model_quality` and `power_model_quality`. It refuses to mutate setpoints if either model falls below 0.6, preventing noise-induced destabilization.
-
----
-
-## Efficiency Reality (Phase 1)
-
-True J/TH efficiency optimization is now implemented and available via Kconfig (`G6_ENABLE_EFFICIENCY_MODE`). It uses an exact $O(1)$ analytical minimum solver protected by the dual model-quality gates mentioned above.
+10. **Model Quality Gates (beta3)**  
+    The J/TH efficiency optimizer is protected by **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. On cold boots or early learning, efficiency optimization is safely skipped.
 
 ---
 
-## Phase 2 — Planned / Not Yet Implemented
+## Efficiency Reality (beta3)
 
-The following features are **still planned** but are **not yet implemented**:
-
-- Active ΔT/dt (temperature slope) detection and automated response (N=7 Thermal-Coupled RLS)
-- Persistent Excitation (ESC Dither)
-- PID fan control integration
-- Advanced P-VUS (Predictive Voltage Undershoot)
-- I2C/SPI guardian logic, hardware WDT, etc.
-
-These items remain targeted for **Phase 2**.
+- The brain is a **safe hashrate maximizer** by default.
+- When `G6_ENABLE_EFFICIENCY_MODE` is enabled, it can optimize for true **J/TH** using a fast **analytical Dinkelbach solver** (exact 2×2 quadratic minimization).
+- This is still **opt-in** and guarded. It is not enabled by default.
+- The solver is mathematically stronger than the previous grid-search approach, but it is still relatively new. Thorough field testing is recommended before relying on it in production.
 
 ---
 
@@ -68,7 +66,7 @@ These items remain targeted for **Phase 2**.
 The brain stays conservative when:
 - Temperature is near/at ceiling
 - Error rate is elevated
-- Model quality (or power model quality) is poor (< 0.6)
+- `model_quality` or `power_model_quality` is low
 - Control mode is not `AUTO`
 - Sample has not passed quality gates
 
@@ -88,11 +86,11 @@ Monitor these values in production:
 
 ## File References
 
-- Core logic: `components/g6_brain/g6_brain.c` (fully Kconfig + control_mode wired)
+- Core logic: `components/g6_brain/g6_brain.c`
 - Public API & constants: `components/g6_brain/g6_brain.h`
 - Engineering principles: `AGENTS.md`
 
 ---
 
-**Version:** v1.0.0-beta3 (Phase 1 — May 2026)  
-**Philosophy:** Fail safe. Learn fast. Never compromise the hardware.
+**Version:** v1.0.0-beta3 (May 2026)  
+**Philosophy:** Start safe. Learn. Then optimize. ⚡
