@@ -725,7 +725,7 @@ void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v,
     if (!brain || !opt_f || !opt_v) return;
 
     float a = brain->theta[0], b = brain->theta[1], c = brain->theta[2];
-    float d = brain->theta[3], e = brain->theta[4], g = brain->theta[5];
+    float d = brain->theta[3], e = brain->theta[4], // g = brain->theta[5];
 
     *opt_f = brain->best_f;
     *opt_v = brain->best_v;
