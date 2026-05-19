@@ -4,6 +4,29 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Repository Identity Streamlining & CI Target Repair
+
+**Documentation & Slogan Stabilization Pass**
+- **Grounded Vocabulary Migration**: Stripped marketing jargon and hyper-inflated adjectives (e.g., "aerospace-grade", "avionics-class", "fortress-level reliability") across all repository documentation files (`README.md`, `docs/SAFETY.md`, `docs/AGENTS.md`, `docs/INSTALL.md`, and `MANIFESTO.md`). Replaced them with precise technical definitions including "Joseph Form Covariance Stabilization" and "Statistical Outlier Gating".
+- **Slogan Consolidation**: Unified the fractured project messaging into a single, cohesive two-tier slogan architecture:
+  - *Core Engineering Philosophy*: Enforced `"Start safe. Learn. Then optimize."` uniformly across all primary technical layout assets.
+  - *Product Tagline*: Consolidated `"The brain your Bitaxe always wanted."` strictly for user-facing onboarding and integration entry points (`docs/README.md`, `docs/INSTALL.md`).
+  - Removed all obsolete variations (such as *"Fail safe. Learn fast. Never compromise the hardware."*) to prevent architectural clutter.
+
+**CI Pipeline Optimization**
+- **Fixed Ninja Target Crash**: Resolved environment compilation failures caused by an unknown native target error (`unknown target 'test'`). 
+- **Automated Compile Verification**: Linked `test_g6_brain.c` directly into the dummy `test_app` execution sources array in the GitHub Actions container environment. This guarantees rigorous compile-time syntax, API signature, and test suite validation for the ESP32-S3 platform on every push or pull request without relying on platform emulation wrappers.
+
+**Files changed**
+- `README.md`
+- `MANIFESTO.md`
+- `.github/workflows/build.yml`
+- `docs/README.md`
+- `docs/INSTALL.md`
+- `docs/SAFETY.md`
+- `docs/AGENTS.md`
+- `docs/TESTING.md`
+
 ### 2026-05-19 — Aerospace-Grade Mathematical Hardening & C Optimization
 
 **Mathematical Stability**
