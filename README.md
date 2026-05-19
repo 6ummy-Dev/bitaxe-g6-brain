@@ -1,10 +1,8 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0.0-beta2** — Adaptive stabilized RLS optimizer with real-time quadratic modeling + telemetry for BM1370
+**v1.0.0-beta3** — Adaptive stabilized RLS optimizer with real-time quadratic modeling + telemetry for BM1370
 
 The **G6 Brain** dynamically models the quadratic relationship between frequency, voltage, and hashrate using stabilized Recursive Least Squares (RLS). It learns your ASIC’s unique efficiency surface and selects safe operating points while enforcing strict safety constraints. Includes clean telemetry export and optional J/TH efficiency mode.
-
-> **Note**: Work on `v1.0.0-beta3` (Phase 2) is in progress, including improvements to the J/TH efficiency optimizer.
 
 ---
 
@@ -27,8 +25,8 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 - Fully self-contained safety layer (thermal ceiling, NER back-off, voltage ripple, power sanity)
 - **NVS persistence** of hashrate + power models (true warm-start)
 - **Control modes** with safe defaults
+- **O(1) Analytical J/TH Solver** with dual-gated model quality checks for exact, mathematically optimal efficiency convergence
 - **Telemetry export** via `g6_brain_get_telemetry()` (zero-copy snapshot)
-- Optional true J/TH efficiency mode (opt-in)
 - Strong single-threaded contract + defensive programming
 
 ---
@@ -62,8 +60,7 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 
 ---
 
-**Made with ❤️ and rigorous engineering for the Bitaxe community**  
-*May 2026 • v1.0.0-beta2*
+**Made with ❤️ and rigorous engineering for the Bitaxe community** *May 2026 • v1.0.0-beta3*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
