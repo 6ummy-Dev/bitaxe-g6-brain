@@ -4,6 +4,13 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — QA Fixes & Polish (Critical Math + Robustness)
+
+- Fixed **critical scaling bug** in Dinkelbach J/TH optimizer: inner gradient steps now performed entirely in normalized space (prevents unstable behavior).
+- Made NVS fingerprint buffer size dynamic (eliminates future overflow risk if RLS_N increases).
+- Improved test suite: removed hardcoded values that broke when Kconfig was changed.
+- Minor performance win: `powf(2.0f, -L)` → `exp2f(-L)` in VFF calculation.
+
 ### 2026-05-19 — Phase 2 Early Improvements (J/TH Solver + CI + Quality)
 
 - Added `model_quality` gate in the J/TH optimizer: skips aggressive optimization when `model_quality < 0.6` (important safety improvement for the analytical solver).
