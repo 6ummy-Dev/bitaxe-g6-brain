@@ -6,8 +6,9 @@
  * - Critical: O(1) Exact Quadratic Minimization replaces heuristic gradient descent.
  * - Aerospace: Joseph Stabilized Covariance Update guarantees positive-definite matrices.
  * - Aerospace: Statistical Outlier Gating (3-Sigma) rejects physical sensor glitches.
+ * - Safety: Fixed thermal override execution order.
+ * - Control: Integrated Slew-Rate Limiter internally to couple models to physical reality.
  * - NVS: Symmetric read/write buffers + no VLA on stack.
- * - Minor: exp2f performance improvement.
  */
 
 #include "g6_brain.h"
@@ -550,11 +551,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         float xPx = 0.0f;
         for (int i = 0; i < RLS_N; i++) xPx += x[i] * Px[i];
 
-        // --- NEW: Statistical Outlier Gating (3-Sigma) ---
-        float S = xPx + 0.5f; // Expected variance floor
+        // Statistical Outlier Gating (3-Sigma)
+        float S = xPx + 0.5f; 
         if ((err * err) > (9.0f * S)) {
             ESP_LOGW(TAG, "HR Outlier Rejected: err=%.2f, bound=%.2f", err, sqrtf(9.0f * S));
-            goto safety_layer; // Skip both RLS updates
+            goto safety_layer;
         }
 
         float denom = lambda_eff + xPx;
@@ -565,7 +566,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
         for (int i = 0; i < RLS_N; i++) brain->theta[i] += k[i] * err;
 
-        // --- NEW: Joseph Stabilized Covariance Update ---
+        // Joseph Stabilized Covariance Update
         float M[RLS_N][RLS_N];
         for (int i = 0; i < RLS_N; i++) {
             for (int j = 0; j < RLS_N; j++) {
@@ -594,7 +595,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         }
 
         brain->last_innovation = hr_ths - y_pred;
-        rls_symmetrize_clamp_and_stabilize(brain->P); // Maintains absolute safety bounds
+        rls_symmetrize_clamp_and_stabilize(brain->P); 
 
         brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + 1.0f));
         brain->update_count++;
@@ -623,11 +624,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             float xPx = 0.0f;
             for (int i = 0; i < RLS_N; i++) xPx += x[i] * Px[i];
 
-            // --- NEW: Statistical Outlier Gating (3-Sigma) ---
+            // Statistical Outlier Gating (3-Sigma)
             float S = xPx + 0.5f; 
             if ((power_err * power_err) > (9.0f * S)) {
                 ESP_LOGW(TAG, "Power Outlier Rejected: err=%.2f, bound=%.2f", power_err, sqrtf(9.0f * S));
-                goto safety_layer; // Skip Power RLS update
+                goto safety_layer; 
             }
 
             float denom = lambda_eff + xPx;
@@ -638,7 +639,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
             for (int i = 0; i < RLS_N; i++) brain->power_theta[i] += k[i] * power_err;
 
-            // --- NEW: Joseph Stabilized Covariance Update ---
+            // Joseph Stabilized Covariance Update
             float M[RLS_N][RLS_N];
             for (int i = 0; i < RLS_N; i++) {
                 for (int j = 0; j < RLS_N; j++) {
@@ -674,21 +675,31 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
 
 safety_layer:
-    g6_safety_proactive_thermal_scale(brain, temp_c);
-    g6_safety_check_voltage_ripple(brain, v_mv);
 
+    /* 1. Calculate Theoretical Mathematical Optimum */
     float candidate_f, candidate_v;
     g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
 
     if (brain->control_mode == G6_MODE_AUTO) {
-        brain->best_f = candidate_f;
-        brain->best_v = candidate_v;
+        /* 2. Internal Slew-Rate Limiting: Step safely towards candidate from the ASIC's CURRENT state */
+        if (candidate_f > f_mhz) brain->best_f = fminf(f_mhz + brain->dfs_step_mhz, candidate_f);
+        else if (candidate_f < f_mhz) brain->best_f = fmaxf(f_mhz - brain->dfs_step_mhz, candidate_f);
+        else brain->best_f = candidate_f;
+
+        if (candidate_v > v_mv) brain->best_v = fminf(v_mv + MAX_VOLT_STEP, candidate_v);
+        else if (candidate_v < v_mv) brain->best_v = fmaxf(v_mv - MAX_VOLT_STEP, candidate_v);
+        else brain->best_v = candidate_v;
     }
 
+    /* 3. Apply Absolute Hardware Limits */
     if (brain->best_f < BM1370_F_MIN) brain->best_f = BM1370_F_MIN;
     if (brain->best_f > BM1370_F_MAX) brain->best_f = BM1370_F_MAX;
     if (brain->best_v < BM1370_V_MIN) brain->best_v = BM1370_V_MIN;
     if (brain->best_v > BM1370_V_MAX) brain->best_v = BM1370_V_MAX;
+
+    /* 4. Apply Safety Overrides (Must run LAST to override math & slew logic!) */
+    g6_safety_proactive_thermal_scale(brain, temp_c);
+    g6_safety_check_voltage_ripple(brain, v_mv);
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
