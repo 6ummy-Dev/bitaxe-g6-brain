@@ -1,6 +1,6 @@
 # References & Scientific Foundations
 
-**G6 Brain v1.0.0-beta2 (Phase 0 QA Hardened)**
+**G6 Brain**
 
 G6 Brain builds on well-established research in **adaptive control**, **system identification**, and **response surface methodology**. All code is original implementation.
 
@@ -26,7 +26,7 @@ This file provides proper academic credit and stable references for the core tec
 
 ## Quadratic Response Surface Methodology (RSM)
 
-- **Box, G. E. P., & Wilson, K. B.** (1951). "On the Experimental Attainment of Optimum Conditions". *Journal of the Royal Statistical Society. Series B (Methodological)*, 13(1), 1–45.  
+- **Box, G. E. P., & Wilson, K. B.** (1951). On the Experimental Attainment of Optimum Conditions. *Journal of the Royal Statistical Society. Series B (Methodological)*, 13(1), 1–45.  
   https://doi.org/10.1111/j.2517-6161.1951tb00067.x  
   The original paper that introduced response surface methodology.
 
@@ -48,17 +48,31 @@ This file provides proper academic credit and stable references for the core tec
 
 ---
 
-## Notes (Phase 0 QA Updates)
+## Phase 2 – Analytical J/TH Optimization
+
+This section documents the mathematical foundations used for the Dinkelbach-based J/TH optimizer introduced in beta3.
+
+- **Dinkelbach, W.** (1967). On nonlinear fractional programming. *Management Science*, 13(7), 492–498.  
+  Foundational paper on Dinkelbach’s algorithm for fractional programming. Forms the basis of the parametric J/TH optimization method.
+
+- **Beck, A., & Teboulle, M.** (2009). A convex optimization approach for minimizing the ratio of two convex functions.  
+  Provides theoretical background for optimizing ratios of quadratic functions (relevant to minimizing J = Power / Hashrate).
+
+- **Boyd, S., & Vandenberghe, L.** (2004). *Convex Optimization*. Cambridge University Press.  
+  Useful general reference for quadratic forms and constrained optimization.
+
+---
+
+## Notes
 
 - The G6 Brain implements a **quadratic RLS model** with **variable forgetting factor**, **ridge regularization**, covariance symmetrization, trace monitoring, innovation gating, and full self-contained safety layers.
 - All numerical stability techniques draw from Bierman and Haykin.
 - Safety interlocks (thermal ceiling, NER back-off, voltage clamping, control-mode enforcement, NVS warm-start) follow fail-safe principles common in aerospace and automotive embedded control literature.
-- **Efficiency Reality (honesty patch)**: This is currently a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety clamps). True J/TH efficiency optimization (separate power model) is planned for Phase 1.
-- Kconfig options (`G6_RLS_*`, `G6_TEMP_CEILING`, etc.), control modes, and NVS auto-save are now fully wired and runtime-configurable.
-
+- **Efficiency Reality**: This is currently a **safe hashrate maximizer** (quadratic argmax of HR(f,v) with hard safety clamps). True J/TH efficiency optimization using a separate power model was introduced in Phase 1.
+- Kconfig options (`G6_RLS_*`, `G6_TEMP_CEILING`, etc.), control modes, and NVS auto-save are fully wired and runtime-configurable.
 - No proprietary algorithms or closed-source code from any paper have been used.
 
 ---
 
-**Last updated:** May 2026 (Phase 0 QA fixes applied)  
-**Maintainer:** 6ummy-Dev + Grok (xAI)
+**Last updated:** May 2026  
+**Maintainer:** 6ummy-Dev
