@@ -6,7 +6,7 @@ The **G6 Brain** dynamically models the quadratic relationship between frequency
 
 In **beta3**, the optional J/TH efficiency mode uses a fast **O(1) analytical Dinkelbach solver** (exact 2×2 quadratic minimization), backed by **Joseph Form Covariance Stabilization** and **3-Sigma Statistical Outlier Gating**.
 
-_Start safe. Learn. Then optimize._
+**_Start safe. Learn. Then optimize._**
 
 ---
 
