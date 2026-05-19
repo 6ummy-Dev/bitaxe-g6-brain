@@ -4,6 +4,32 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — QA Hardening Pass (Dinkelbach Bugs + Safety/CI Fixes)
+
+**Bug Fixes (from independent QA review)**
+
+- **Critical (B3-BUG-1)**: Added missing `power_model_quality` check in `optimize_jth_dinkelbach()`. The J/TH solver now gates on **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. This prevents the optimizer from following noisy gradients from an underfit power model on cold boots or early in learning.
+- **Medium (B3-BUG-2)**: Fixed broken convergence detection in the Dinkelbach outer loop. The previous check compared `new_lambda` to `lambda` *after* assignment, making it always true after any improvement. Now correctly uses `prev_lambda` to detect actual convergence.
+- **Minor (B3-BUG-3)**: Removed dead `hr_i`/`pw_i` variables inside the inner gradient loop and replaced them with a **sufficient-descent guard**. If a step increases J/TH, the inner loop now exits early instead of continuing with a diverging update.
+
+**Robustness & Housekeeping**
+
+- Restored the `"Proactive thermal derating triggers correctly"` Unity test (had been removed). Explicit coverage for the proactive thermal scaling safety path is now back.
+- Updated `docs/TESTING.md` for the beta3 release. Added guidance for testing the Dinkelbach solver and `power_model_quality` behavior.
+- Tightened CI in `.github/workflows/build.yml`: Removed the `|| echo` fallback from the test step so that `idf.py test` failures now correctly fail the build (previously test failures were swallowed).
+
+**Impact**
+- Dinkelbach J/TH optimizer is now properly guarded and numerically safer.
+- Safety test coverage restored.
+- CI provides truthful results instead of always-green badges.
+- No regressions on beta2 functionality.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/test/test_g6_brain.c`
+- `docs/TESTING.md`
+- `.github/workflows/build.yml`
+
 ### 2026-05-19 — Code Quality & Maintainability Pass
 
 **Non-functional improvements** (no behavior changes):
