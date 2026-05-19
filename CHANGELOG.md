@@ -4,6 +4,16 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — CI Pipeline Dependencies & Warning Clean Pass
+
+**Bug Fixes & Code Optimization**
+- **Resolved Include Path Failures**: Added `nvs_flash` to the explicit component requirement tracking array within the dummy CI verification application (`test_app/main/CMakeLists.txt`). This accurately passes down framework include paths, resolving the `nvs_flash.h` fatal header lookup error during test-compilation evaluation blocks.
+- **Eliminated Compiler Warning**: Removed the dead local assignment variable `g` (`brain->theta[5]`) from `g6_brain_get_optimal()`. This ensures zero build noise when building with strict compiler checks.
+
+**Files changed**
+- `.github/workflows/build.yml`
+- `components/g6_brain/g6_brain.c`
+
 ### 2026-05-19 — Repository Identity Streamlining & CI Target Repair
 
 **Documentation & Slogan Stabilization Pass**
