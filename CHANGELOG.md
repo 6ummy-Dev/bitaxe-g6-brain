@@ -19,7 +19,6 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
   - `docs/API.md`: Added note about the new Dinkelbach J/TH optimizer.
   - `docs/KCONFIG.md`: Documented the two new J/TH solver options.
   - `CHANGELOG.md`: Consolidated and cleaned up beta2 entries.
-- Wired real `idf.py test` execution in CI (replaced dummy echo step). CI badge is now meaningful.
 
 ---
 
