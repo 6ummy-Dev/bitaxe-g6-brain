@@ -23,11 +23,11 @@ jobs:
           project(test_g6_brain)
           EOT
 
-          # Route the unity test suite files directly into the build check targets
+          # Route the unity test suite files directly into the build check targets with nvs_flash requirements
           cat > test_app/main/CMakeLists.txt << 'EOT'
           idf_component_register(
               SRCS "main.c" "../components/g6_brain/test/test_g6_brain.c"
-              REQUIRES g6_brain unity
+              REQUIRES g6_brain unity nvs_flash
           )
           EOT
 
