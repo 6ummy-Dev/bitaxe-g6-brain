@@ -4,12 +4,20 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
-### 2026-05-19 — QA Fixes & Polish (Critical Math + Robustness)
+### 2026-05-19 — QA Fixes & Polish (Critical + Robustness)
 
-- Fixed **critical scaling bug** in Dinkelbach J/TH optimizer: inner gradient steps now performed entirely in normalized space (prevents unstable behavior).
-- Made NVS fingerprint buffer size dynamic (eliminates future overflow risk if RLS_N increases).
-- Improved test suite: removed hardcoded values that broke when Kconfig was changed.
-- Minor performance win: `powf(2.0f, -L)` → `exp2f(-L)` in VFF calculation.
+**Critical Fixes**
+- Fixed major math bug in Dinkelbach J/TH optimizer: inner gradient descent now correctly operates entirely in normalized space (`fn_inner`/`vn_inner`). Scaling mismatch between normalized gradients and absolute frequency/voltage is resolved.
+- Made NVS fingerprint read/write buffers symmetric and removed Variable Length Array (VLA) from the stack by introducing `#define G6_NVS_FINGERPRINT_BUFFER_SIZE`.
+
+**Improvements**
+- Replaced `powf(2.0f, -L)` with `exp2f(-L)` in Variable Forgetting Factor calculation for better performance on ESP32-S3.
+- Improved test robustness: removed brittle hardcoded `RLS_VFF_SIGMA_SQ` assertion and added `nvs_flash_init()` in `setUp()` for more reliable test execution.
+
+**Impact**
+- J/TH efficiency mode is now mathematically correct and safe to use.
+- NVS persistence is more robust and future-proof.
+- Overall code quality and maintainability improved.
 
 ### 2026-05-19 — Phase 2 Early Improvements (J/TH Solver + CI + Quality)
 
