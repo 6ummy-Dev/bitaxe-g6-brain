@@ -60,11 +60,10 @@ Pull requests are welcome. All changes must respect the safety invariants docume
 
 ---
 
+**Made with ❤️ and rigorous engineering for the Bitaxe community**  
+*May 2026 • v1.0.0-beta2*
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
 [![Platform: ESP32-S3](https://img.shields.io/badge/Platform-ESP32--S3-red.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![CI Status](https://github.com/6ummy-Dev/bitaxe-g6-brain/actions/workflows/build.yml/badge.svg)](https://github.com/6ummy-Dev/bitaxe-g6-brain/actions/workflows/build.yml)
-
----
-**Made with ❤️ and rigorous engineering for the Bitaxe community**  
-*May 2026 • v1.0.0-beta2*
