@@ -626,8 +626,16 @@ safety_layer:
     g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
 
     if (brain->control_mode == G6_MODE_AUTO) {
-        brain->best_f = candidate_f;
-        brain->best_v = candidate_v;
+        /* Internal slew-rate limiting */
+        float df = candidate_f - brain->best_f;
+        if (fabsf(df) > brain->dfs_step_mhz)
+            df = copysignf(brain->dfs_step_mhz, df);
+        brain->best_f += df;
+
+        float dv = candidate_v - brain->best_v;
+        if (fabsf(dv) > 5.0f)
+            dv = copysignf(5.0f, dv);
+        brain->best_v += dv;
     }
 
     if (brain->best_f < BM1370_F_MIN) brain->best_f = BM1370_F_MIN;
