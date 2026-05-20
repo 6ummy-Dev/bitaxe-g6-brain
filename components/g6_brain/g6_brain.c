@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta4
+ * Bitaxe G6 Brain — Latest (QA Fixes Applied)
  */
 
 #include "g6_brain.h"
@@ -141,9 +141,8 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
 
     err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &blob_size);
     if (err == ESP_OK && blob_size == expected_blob_size) {
-        uint32_t stored_version = 0, stored_size = 0;
+        uint32_t stored_version = 0;
         memcpy(&stored_version, buffer, sizeof(uint32_t));
-        memcpy(&stored_size, buffer + sizeof(uint32_t), sizeof(uint32_t));
 
         if (stored_version == G6_NVS_SCHEMA_VERSION) {
             size_t offset = sizeof(uint32_t)*2;
