@@ -4,24 +4,30 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta4] - 2026-05-20 _In Progress_
 
-### 2026-05-20 — QA Fixes & CI Hardening
+### 2026-05-20 — QA Fixes, CI Hardening & Documentation Alignment (beta4)
 
 **Bug Fixes (Core Correctness)**
 
-- **Tick vs Millisecond Unit Confusion**: Fixed `SETTLE_MS` and `MIN_WINDOW_MS` comparisons in the sample state machine. Raw tick deltas were being compared directly against millisecond constants, causing settle and measurement windows to be significantly longer than intended.
-- **Safety Status Telemetry Dead Code**: `safety_status` in telemetry was always reporting `G6_SAFETY_OK`. Added `last_safety_status` tracking and wired it through all safety paths (thermal, VR thermal, voltage, NER, power sanity, and outliers).
-- **Power Validation Fail-Open**: Invalid `power_w` values caused an early return before the safety layer could execute. Changed to `goto safety_layer;` to ensure safety handlers always run.
+- **Tick vs Millisecond Unit Confusion**: Fixed `SETTLE_MS` and `MIN_WINDOW_MS` comparisons in the sample state machine. Raw tick deltas were being compared directly against millisecond constants.
+- **Safety Status Telemetry Dead Code**: `safety_status` in telemetry was always reporting `G6_SAFETY_OK`. Added `last_safety_status` tracking and wired it through all safety paths.
+- **Power Validation Fail-Open**: Invalid `power_w` values caused an early return before the safety layer could execute. Changed to fail-closed behavior (`goto safety_layer;`).
 - **Missing Power Outlier Logging**: Added symmetric logging for power model outliers (`Power Outlier Rejected`).
-- **Dead Code Removal**: Removed unused `stored_size` variable read in `g6_brain_load_nvs_fingerprint()`.
+- **Dead Code Removal**: Removed unused `stored_size` read in `g6_brain_load_nvs_fingerprint()`.
 
 **CI Improvements**
 
 - Reworked the GitHub Actions workflow to properly include `test_g6_brain.c` as a build source.
-- Removed duplicate test folder during CI setup to prevent conflicts.
-- Improved test runner with better logging and failure reporting via `UNITY_END()`.
-- Tests are now compiled and linked as part of the CI process, improving reliability of test discovery and execution.
+- Removed duplicate test folder during CI setup.
+- Improved test runner logging and failure reporting.
 
-These changes focus on correctness, safety layer integrity, telemetry accuracy, and build/test reliability.
+**Documentation Updates**
+
+- Updated root `README.md` and multiple documentation files to reflect `v1.0.0-beta4`.
+- Added documentation for new VR thermal safety options (`G6_VR_TEMP_CEILING` and `G6_VR_TEMP_PROACTIVE_MARGIN`) in `docs/KCONFIG.md`.
+- Performed broader documentation sweep across `INSTALL.md`, `SAFETY.md`, `AGENTS.md`, `TESTING.md`, `GLOSSARY.md`, and `MONITORING.md`.
+- Updated Kconfig file header comment.
+
+These changes focus on correctness, safety layer integrity, telemetry accuracy, CI reliability, and documentation alignment for the beta4 release.
 
 ### 2026-05-20 — Integration Layer Data Quality (beta4 v3)
 
