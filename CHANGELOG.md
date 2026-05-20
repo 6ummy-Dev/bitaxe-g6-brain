@@ -4,6 +4,17 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-20 — Final QA Polish (beta3 v5)
+
+**Bug Fixes (from independent QA sign-off review)**
+- **Critical (B3-BUG-6)**: Fixed inverted safety layer semantics. The thermal scaling and voltage ripple checks were incorrectly repositioned above the internal slew limiter and `g6_brain_get_optimal()` calls during refactoring. Because the slew-rate limiter steps `best_f` toward a candidate target, running thermal derating *first* meant the safety reduction was immediately partially undone by the slew step within the same clock cycle. Re-ordered the execution so that hardware clamps and safety overrides (`g6_safety_proactive_thermal_scale` and `g6_safety_check_voltage_ripple`) strictly execute last as unconditional post-optimization constraints.
+- **Medium (B3-LATENT-1)**: Fixed silent power model truncation in NVS warm-start persistence. In `g6_brain_save_nvs_fingerprint()`, the memory `offset` variable was not incremented after copying `brain->power_P` into the serialization buffer, resulting in `nvs_set_blob()` saving a truncated 200-byte frame instead of the full 344 bytes. Added `offset += sizeof(brain->power_P)` before the save call, and bumped `NVS_SCHEMA_VERSION` to 3u to explicitly reject any stale v2 blobs stored without a power matrix.
+- **Medium (B3-TEST-1)**: Fixed the internal slew-rate validation test (`test_g6_brain.c`). The mock `theta` coefficients assigned in the test suite previously yielded a zero determinant ($4ab - c^2 = 0$), failing the convexity guard in `get_optimal()`. As a result, the solver safely fell back, `candidate` equaled `best_f` (df=0), and the slew rate logic test assertion failed. Added a negative `theta[1]` and bounded linear `theta[3]` constraint to guarantee a valid concave-down test surface determinant.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/test/test_g6_brain.c`
+
 ### 2026-05-19 — Production Sign-Off & Safety Core Alignment
 
 **Bug Fixes & Algorithmic Corrections**
