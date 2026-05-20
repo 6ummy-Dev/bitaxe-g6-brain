@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta3 (Phase 1 complete + Phase 2 early)**
+**G6 Brain v1.0.0-beta4**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 
@@ -14,34 +14,40 @@ The brain must prioritize hardware longevity and stability over marginal hashrat
 
 ---
 
-## Current Safety Behavior (Phase 1 — fully active)
+## Current Safety Behavior (beta4)
 
 The following safety behaviors are **now implemented and enforced**:
 
-1. **Deterministic Safety Priority**: Core overrides (thermal ceiling, voltage ripple, error thresholds) run post-optimization as the final step before returning recommendations, guaranteeing priority execution.
+1. **Deterministic Safety Priority**: Core overrides (thermal ceiling, voltage ripple, error thresholds, power sanity) run post-optimization as the final step before returning recommendations.
 
-2. **Thermal Protection**: Hard `G6_TEMP_CEILING` (Kconfig, default 70 °C) with proactive scaling steps 5 °C below the limit.
+2. **Two-tier Thermal Protection**:
+   - **ASIC die temperature** gates RLS learning updates.
+   - **VR regulator temperature** runs only in the safety layer as a proactive + hard constraint on setpoints.
 
-3. **Voltage & Range Protection**: BM1370 hard limits + ripple clamping applied unconditionally on every operational loop.
+3. **Thermal Protection**: Hard `G6_TEMP_CEILING` with proactive scaling. VR has its own independent ceiling (`G6_VR_TEMP_CEILING`) and proactive margin.
 
-4. **Internal Slew Limiting**: Slew-rate constraints are managed directly inside the tracking loop based on active physical state changes to keep empirical models coupled to real plant transitions.
+4. **Voltage & Range Protection**: BM1370 hard limits + ripple clamping applied unconditionally on every operational loop.
 
-5. **Numerical Stability**: 
-   - **Joseph Form Updates**: Replaces conventional subtraction to mathematically ensure covariance matrix symmetry and positive semi-definiteness under floating-point constraints.
-   - Centralized parameters for ridge regularization (`G6_RLS_RIDGE_EPSILON`), trace constraints (`G6_RLS_TRACE_MAX`), and adaptive Variable Forgetting Factor.
+5. **Internal Slew Limiting**: Slew-rate constraints are managed directly inside the tracking loop.
 
-6. **Statistical Outlier Gating**: 3-Sigma innovation variance validation to automatically filter and reject corrupted sensor frames before updating estimators.
+6. **Numerical Stability**:
+   - Joseph Form covariance updates
+   - Ridge regularization
+   - Trace constraints
+   - Adaptive Variable Forgetting Factor
 
-7. **Error Rate Handling**: Conservative back-off targets when NER exceeds `G6_NER_THRESHOLD` (Kconfig, default 2.5 %).
+7. **Statistical Outlier Gating**: 3-Sigma innovation variance validation.
 
-8. **Control Mode Enforcement**:
-   - `G6_MODE_OBSERVE_ONLY`: Safety validation only, no setpoint mutations.
-   - `G6_MODE_RECOMMEND` (safe default): Computes targets but does not apply mutations.
-   - `G6_MODE_AUTO`: Active state machine optimization + safety.
+8. **Error Rate Handling**: Conservative back-off when NER exceeds `G6_NER_THRESHOLD`.
 
-9. **NVS Fingerprint Checkpointing**: Background saving of model parameters after `update_count > 10` and on a tick-based throttle (`NVS_SAVE_INTERVAL_TICKS = 300000`). At a 1 kHz FreeRTOS tick rate that is ~5 minutes; at the ESP-IDF default of 100 Hz it is ~50 minutes. Tune your `CONFIG_FREERTOS_HZ` accordingly.
+9. **Control Mode Enforcement**:
+   - `G6_MODE_OBSERVE_ONLY`
+   - `G6_MODE_RECOMMEND` (safe default)
+   - `G6_MODE_AUTO`
 
-10. **Fail-Closed Execution**: Safety handlers always run, even on samples rejected by data quality or outlier gates.
+10. **NVS Fingerprint Checkpointing**: Background saving of model parameters.
+
+11. **Fail-Closed Execution**: Safety handlers always run, even on samples rejected by data quality or outlier gates.
 
 ---
 
