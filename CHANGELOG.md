@@ -6,6 +6,8 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ### 2026-05-20 — Final QA Polish (beta3 v5)
 
+- **Minor (B3-COSMETIC-1)**: Resolved a header/source schema version mismatch. Synchronized the public `#define G6_NVS_SCHEMA_VERSION` macro in `g6_brain.h` from `2u` to `3u` to perfectly match the internal operational constant in `g6_brain.c`. This eliminates technical debt and prevents confusion for future maintainers.
+
 **Bug Fixes (from independent QA sign-off review)**
 - **Critical (B3-BUG-6)**: Fixed inverted safety layer semantics. The thermal scaling and voltage ripple checks were incorrectly repositioned above the internal slew limiter and `g6_brain_get_optimal()` calls during refactoring. Because the slew-rate limiter steps `best_f` toward a candidate target, running thermal derating *first* meant the safety reduction was immediately partially undone by the slew step within the same clock cycle. Re-ordered the execution so that hardware clamps and safety overrides (`g6_safety_proactive_thermal_scale` and `g6_safety_check_voltage_ripple`) strictly execute last as unconditional post-optimization constraints.
 - **Medium (B3-LATENT-1)**: Fixed silent power model truncation in NVS warm-start persistence. In `g6_brain_save_nvs_fingerprint()`, the memory `offset` variable was not incremented after copying `brain->power_P` into the serialization buffer, resulting in `nvs_set_blob()` saving a truncated 200-byte frame instead of the full 344 bytes. Added `offset += sizeof(brain->power_P)` before the save call, and bumped `NVS_SCHEMA_VERSION` to 3u to explicitly reject any stale v2 blobs stored without a power matrix.
