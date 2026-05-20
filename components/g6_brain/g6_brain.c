@@ -1,9 +1,10 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (QA Production-Hardened)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (QA Production-Hardened v5)
  *
  * Enforces unified outlier checks, stable Joseph Form updates, 
  * internal state slew-rate regulation, and guaranteed safety fall-through.
+ * Safety overrides strictly execute LAST to prevent setpoint inversion.
  */
 
 #include "g6_brain.h"
@@ -23,7 +24,7 @@ static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
-static const uint32_t NVS_SCHEMA_VERSION = 2u;
+static const uint32_t NVS_SCHEMA_VERSION = 3u; // B3-LATENT-1: Bumped to 3 to reject stale truncated blobs
 
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
 
@@ -207,6 +208,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
     memcpy(buffer + offset, brain->P, sizeof(brain->P));         offset += sizeof(brain->P);
     memcpy(buffer + offset, brain->power_theta, sizeof(brain->power_theta)); offset += sizeof(brain->power_theta);
     memcpy(buffer + offset, brain->power_P, sizeof(brain->power_P));
+    offset += sizeof(brain->power_P); // B3-LATENT-1 Fix: correctly increment offset to include power_P in blob
 
     err = nvs_set_blob(nvs, NVS_FINGERPRINT_KEY, buffer, offset);
     if (err == ESP_OK) err = nvs_commit(nvs);
@@ -632,8 +634,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     /* Fall-through cleanly into safety execution logic block */
 
 safety_layer:
-    g6_safety_proactive_thermal_scale(brain, temp_c);
-    g6_safety_check_voltage_ripple(brain, v_mv);
+    // B3-BUG-6 Fix: g6_safety_proactive_thermal_scale and check_voltage_ripple moved BELOW slew and clamp logic
 
     float candidate_f, candidate_v;
     g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
@@ -654,6 +655,10 @@ safety_layer:
     if (brain->best_f > BM1370_F_MAX) brain->best_f = BM1370_F_MAX;
     if (brain->best_v < BM1370_V_MIN) brain->best_v = BM1370_V_MIN;
     if (brain->best_v > BM1370_V_MAX) brain->best_v = BM1370_V_MAX;
+
+    /* Safety Overrides MUST Execute Last to Prevent Slew Setpoint Inversion */
+    g6_safety_proactive_thermal_scale((G6BrainState *)brain, temp_c);
+    g6_safety_check_voltage_ripple((G6BrainState *)brain, v_mv);
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
