@@ -4,6 +4,17 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Production Sign-Off & Safety Core Alignment
+
+**Bug Fixes & Algorithmic Corrections**
+- **Enforced Safety Layer Fall-Through**: Extracted the premature `return ESP_OK;` statement preceding the `safety_layer:` label. This ensures that internal slew-rate limits, absolute hardware boundaries, and proactive thermal derating scaling overrides unconditionally execute on every operational update run instead of only executing during sample rejection cycles.
+- **Localized Statistical 3-Sigma Gating**: Restored localized, coordinate-specific innovation variance mapping ($x^T P x + 0.5f$) inside the telemetry validation filter. This aligns outlier rejection dynamically with the running operational load line, protecting the surface from being distorted by noise.
+- **Cleaned Test Suite Build Noise**: Removed the unused static global string declaration `TAG` from `test_g6_brain.c` to maintain clean compilation under strict `-Werror=unused-variable` parameters.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/test/test_g6_brain.c`
+
 ### 2026-05-19 — Final QA Polish & Pre-Release Hardening
 
 **Bug Fixes**
