@@ -1,20 +1,20 @@
-# G6 Brain Documentation — v1.0.0-beta3
+# G6 Brain Documentation — v1.0.0-beta4
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
-Welcome to the official documentation for the **G6 Brain** — an adaptive RLS-based optimizer for the Bitaxe Brains Project.
+Welcome to the official documentation for the **G6 Brain** — an adaptive RLS-based optimizer for the Bitaxe project.
 
 This is a clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints.
 
-In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelbach J/TH solver** (exact closed-form 2×2 minimization) instead of grid search.
+In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing between ASIC die temperature and voltage regulator (VR) temperature for more robust protection.
 
 ---
 
 ## Quick Start
 
-1. Read **[INSTALL.md](INSTALL.md)** — add the component and enable it
-2. Use the **recommended integration example**: `docs/INTEGRATION_EXAMPLE.c`
-3. Start in `OBSERVE_ONLY` or `RECOMMEND` mode
+1. Read **[INSTALL.md](INSTALL.md)** — add the component and enable it.
+2. Use the recommended integration example: `docs/INTEGRATION_EXAMPLE.c`.
+3. Start in `OBSERVE_ONLY` or `RECOMMEND` mode.
 4. Monitor the logs. The brain will begin learning within minutes.
 
 ---
@@ -24,12 +24,12 @@ In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelba
 | Document                        | Purpose                                           | When to read |
 |--------------------------------|---------------------------------------------------|--------------|
 | [INSTALL.md](INSTALL.md)        | Installation & integration guide                  | Adding the brain to your firmware |
-| `INTEGRATION_EXAMPLE.c`         | **Recommended integration example**               | Starting point for real integration |
+| `INTEGRATION_EXAMPLE.c`         | Recommended integration example                   | Starting point for real integration |
 | [API.md](API.md)                | Full public API reference                         | Need function details |
 | [KCONFIG.md](KCONFIG.md)        | All configuration options explained               | Tuning safety limits or debugging |
 | [SAFETY.md](SAFETY.md)          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
 | [MONITORING.md](MONITORING.md)  | Real-time observability and telemetry             | Monitoring brain health |
-| [TESTING.md](TESTING.md)        | Community testing guide for beta3                 | Field testing the new analytical solver |
+| [TESTING.md](TESTING.md)        | Community testing guide                           | Field testing guidance |
 
 **Additional project docs (root):**
 - `AGENTS.md` — Safety invariants & engineering principles
@@ -46,17 +46,17 @@ In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelba
 - 3-sigma statistical outlier gating
 - Per-chip NVS fingerprinting (warm start)
 - Clean telemetry export API
-- **Analytical J/TH optimization** (beta3) — exact O(1) solver instead of heuristics
+- **Two-tier thermal safety** (beta4) — Separate handling for ASIC and VR temperatures
 - Modular and auditable design
-- Hardened through 6 independent QA review cycles
+- Hardened through multiple QA review cycles
 
 ---
 
 ## Status
 
-- **Version:** v1.0.0-beta3 (May 2026)
-- **Maturity:** Beta — ready for community field testing
-- **QA:** 6 review cycles · 15+ findings resolved
+- **Version:** v1.0.0-beta4 (May 2026)
+- **Maturity:** Beta — preparing for field testing
+- **QA:** Code verified, documentation updates in progress
 - **License:** MIT
 
 ---
