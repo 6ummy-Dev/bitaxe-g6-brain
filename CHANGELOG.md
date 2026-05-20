@@ -23,7 +23,6 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 **Files changed**
 - `components/g6_brain/g6_brain.c`
 - `components/g6_brain/g6_brain.h`
-- `docs/INSTALL.md`
   
 ### 2026-05-19 — Critical Bug Fixes (beta3 v4)
 
