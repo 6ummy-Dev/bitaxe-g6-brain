@@ -13,6 +13,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - Added clear Phase 2 comments in `g6_brain.h` for three vestigial fields (`nonce_offset`, `enable_low_latency_jobs`, `valid_sample_count`) and the unused PID coefficients (`Kp`/`Ki`/`Kd`).
 - Improved `const` correctness in `g6_brain_get_optimal()` (removed unnecessary cast when calling the Dinkelbach solver).
 - Added recommended minimum task stack size documentation in `INSTALL.md`.
+- Implemented internal slew-rate limiting in `AUTO` mode (frequency steps by `dfs_step_mhz`, voltage limited to 5 mV steps).
 
 **Impact**
 - Stronger numerical consistency between hashrate and power models when efficiency mode is active.
