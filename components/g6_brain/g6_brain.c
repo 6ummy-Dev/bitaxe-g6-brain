@@ -8,7 +8,6 @@
  * Two-tier thermal safety: ASIC die temp gates RLS updates; VR regulator
  * temp constrains setpoints independently via the safety layer.
  */
-
 #include "g6_brain.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -16,23 +15,20 @@
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/portmacro.h"     // for portTICK_PERIOD_MS (tick → ms conversion)
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
 
 static const char *TAG = "G6_BRAIN";
-
 static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
-
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
-
-#define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
+#define G6_NVS_FINGERPRINT_BUFFER_SIZE 1024
 
 /* ============================================================================
  * SMALL PURE HELPERS
  * ========================================================================== */
-
 static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float vn)
 {
     return theta[0]*fn*fn +
@@ -46,7 +42,6 @@ static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float
 /* ============================================================================
  * RLS HELPERS
  * ========================================================================== */
-
 static float compute_gradient_vff(float err, float sigma_sq)
 {
     if (sigma_sq < 1e-8f) sigma_sq = 1e-8f;
@@ -99,7 +94,6 @@ static bool quadratic_has_valid_maximum(float a, float b, float c)
 /* ============================================================================
  * SAFETY HELPERS
  * ========================================================================== */
-
 static bool is_thermal_safe(const G6BrainState *brain, float temp_c)
 {
     if (!isfinite(temp_c) || !isfinite(brain->temp_ceiling))
@@ -110,7 +104,6 @@ static bool is_thermal_safe(const G6BrainState *brain, float temp_c)
 static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
 {
     if (!brain || !isfinite(temp_c)) return;
-
     if (temp_c > (brain->temp_ceiling - 5.0f)) {
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
@@ -121,7 +114,6 @@ static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
 static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv)
 {
     if (!brain || !isfinite(v_mv)) return;
-
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
         brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
         ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);
@@ -138,16 +130,11 @@ static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_t
     float proactive_threshold = brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT;
 
     if (vr_temp_c >= brain->vr_temp_ceiling) {
-        /* Hard ceiling: VR is at its limit — pull both voltage AND frequency to reduce
-         * total power dissipated through the regulator immediately. */
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.985f);
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         ESP_LOGE(TAG, "VR OVERHEAT: %.1f°C (ceil=%.1f) — hard throttle: best_f=%.1f best_v=%.1f",
                  vr_temp_c, brain->vr_temp_ceiling, brain->best_f, brain->best_v);
     } else if (vr_temp_c > proactive_threshold) {
-        /* Proactive zone: voltage drives VR heat (I²R), so step back voltage only.
-         * Frequency is not reduced here — that would change the optimal hashrate surface
-         * without a clear thermal benefit to the VR. */
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
         ESP_LOGW(TAG, "VR PROACTIVE THERMAL: %.1f°C (thresh=%.1f) → best_v=%.1f",
                  vr_temp_c, proactive_threshold, brain->best_v);
@@ -157,7 +144,6 @@ static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_t
 static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct)
 {
     if (!brain) return;
-
     if (err_pct > brain->ner_threshold) {
         brain->model_quality = fminf(brain->model_quality, 0.25f);
         brain->cold_start = true;
@@ -170,7 +156,6 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
 /* ============================================================================
  * NVS PERSISTENCE
  * ========================================================================== */
-
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
 {
     nvs_handle_t nvs;
@@ -179,7 +164,6 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
 
     size_t expected_blob_size = sizeof(uint32_t)*2 + sizeof(brain->theta) + sizeof(brain->P) +
                                 sizeof(brain->power_theta) + sizeof(brain->power_P);
-
     uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
     size_t blob_size = expected_blob_size;
 
@@ -198,7 +182,6 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             memcpy(brain->power_theta, buffer + offset, sizeof(brain->power_theta));
             offset += sizeof(brain->power_theta);
             memcpy(brain->power_P, buffer + offset, sizeof(brain->power_P));
-
             brain->nvs_valid = true;
             brain->cold_start = false;
             brain->power_cold_start = false;
@@ -222,7 +205,6 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
 
     size_t data_size = sizeof(brain->theta) + sizeof(brain->P) +
                        sizeof(brain->power_theta) + sizeof(brain->power_P);
-
     uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
     uint32_t version = G6_NVS_SCHEMA_VERSION;
     uint32_t size_field = (uint32_t)data_size;
@@ -232,10 +214,9 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
 
     size_t offset = sizeof(uint32_t)*2;
     memcpy(buffer + offset, brain->theta, sizeof(brain->theta)); offset += sizeof(brain->theta);
-    memcpy(buffer + offset, brain->P, sizeof(brain->P));         offset += sizeof(brain->P);
+    memcpy(buffer + offset, brain->P, sizeof(brain->P)); offset += sizeof(brain->P);
     memcpy(buffer + offset, brain->power_theta, sizeof(brain->power_theta)); offset += sizeof(brain->power_theta);
     memcpy(buffer + offset, brain->power_P, sizeof(brain->power_P));
-    offset += sizeof(brain->power_P); // B3-LATENT-1 Fix: correctly increment offset to include power_P in blob
 
     err = nvs_set_blob(nvs, NVS_FINGERPRINT_KEY, buffer, offset);
     if (err == ESP_OK) err = nvs_commit(nvs);
@@ -246,7 +227,6 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
 /* ============================================================================
  * RESET
  * ========================================================================== */
-
 esp_err_t g6_brain_reset(G6BrainState *brain)
 {
     if (!brain) return ESP_ERR_INVALID_ARG;
@@ -259,7 +239,6 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
     }
 
     memset(brain, 0, sizeof(G6BrainState));
-
     brain->best_f = BM1370_F_CENTER;
     brain->best_v = BM1370_V_CENTER;
     brain->ridge_epsilon = RLS_RIDGE_EPSILON;
@@ -282,18 +261,18 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
     brain->power_update_count = 0;
     brain->power_model_quality = 0.0f;
     brain->last_innovation = 0.0f;
-
     brain->use_efficiency_mode = false;
+
 #if defined(CONFIG_G6_ENABLE_EFFICIENCY_MODE)
     brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
 #endif
-
 #if defined(CONFIG_G6_TEMP_CEILING)
     brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
 #else
     brain->temp_ceiling = 70.0f;
 #endif
     brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
+
 #if defined(CONFIG_G6_NER_THRESHOLD)
     brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
 #else
@@ -315,12 +294,10 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 /* ============================================================================
  * J/TH OPTIMIZER (O(1) Exact Analytical Solver)
  * ========================================================================== */
-
 static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, float *opt_v)
 {
     if (!brain || !opt_f || !opt_v) return;
     if (!brain->use_efficiency_mode) return;
-
     if (brain->model_quality < 0.6f || brain->power_model_quality < 0.6f) {
         ESP_LOGD(TAG, "Skipping J/TH optimization (hr_q=%.2f pw_q=%.2f)",
                  brain->model_quality, brain->power_model_quality);
@@ -329,19 +306,16 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
 
     float f = *opt_f;
     float v = *opt_v;
-
     float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
 
     float hr = evaluate_quadratic(brain->theta, fn, vn);
     float pw = evaluate_quadratic(brain->power_theta, fn, vn);
-
     if (hr < 8.0f) return;
 
     float lambda = pw / hr;
 
     for (int outer = 0; outer < G6_JTH_MAX_OUTER_ITERS; outer++) {
-        
         float A = brain->power_theta[0] - lambda * brain->theta[0];
         float B = brain->power_theta[1] - lambda * brain->theta[1];
         float C = brain->power_theta[2] - lambda * brain->theta[2];
@@ -349,14 +323,13 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
         float E = brain->power_theta[4] - lambda * brain->theta[4];
 
         float det = (4.0f * A * B) - (C * C);
-
         float fn_inner = fn;
         float vn_inner = vn;
 
         if (det > 1e-6f && A > 0.0f) {
             fn_inner = (C * E - 2.0f * B * D) / det;
             vn_inner = (C * D - 2.0f * A * E) / det;
-            
+
             float fn_min = (BM1370_F_MIN - BM1370_F_CENTER) / BM1370_F_SCALE;
             float fn_max = (BM1370_F_MAX - BM1370_F_CENTER) / BM1370_F_SCALE;
             float vn_min = (BM1370_V_MIN - BM1370_V_CENTER) / BM1370_V_SCALE;
@@ -370,14 +343,12 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
 
         float f_new = fn_inner * BM1370_F_SCALE + BM1370_F_CENTER;
         float v_new = vn_inner * BM1370_V_SCALE + BM1370_V_CENTER;
-
         float hr_new = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
         float pw_new = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
 
         if (hr_new < 8.0f) break;
 
         float new_lambda = pw_new / hr_new;
-
         if (new_lambda < lambda) {
             f = f_new;
             v = v_new;
@@ -385,7 +356,6 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
             vn = vn_inner;
             float prev_lambda = lambda;
             lambda = new_lambda;
-
             if (outer > 2 && fabsf(prev_lambda - lambda) < 0.001f) {
                 break;
             }
@@ -401,7 +371,6 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
 /* ============================================================================
  * SAMPLE STATE MACHINE
  * ========================================================================== */
-
 static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares)
 {
     if (!isfinite(hr_ths) || hr_ths <= 0.0f) return false;
@@ -413,30 +382,51 @@ static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_
 static void advance_sample_state(G6BrainState *brain, uint32_t now)
 {
     switch (brain->sample_state) {
-        case BRAIN_STATE_IDLE:            brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE; break;
-        case BRAIN_STATE_APPLY_CANDIDATE: brain->settle_start_tick = now; brain->sample_state = BRAIN_STATE_SETTLE_WAIT; break;
+        case BRAIN_STATE_IDLE:
+            brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
+            break;
+
+        case BRAIN_STATE_APPLY_CANDIDATE:
+            brain->settle_start_tick = now;
+            brain->sample_state = BRAIN_STATE_SETTLE_WAIT;
+            break;
+
         case BRAIN_STATE_SETTLE_WAIT:
-            if (now - brain->settle_start_tick >= SETTLE_MS)
+            // Fixed: convert ticks → milliseconds so SETTLE_MS works as named
+            if ((now - brain->settle_start_tick) * portTICK_PERIOD_MS >= SETTLE_MS)
                 brain->sample_state = BRAIN_STATE_MEASURE_WINDOW;
             break;
+
         case BRAIN_STATE_MEASURE_WINDOW:
             if (brain->measure_start_tick == 0) brain->measure_start_tick = now;
-            if (now - brain->measure_start_tick >= MIN_WINDOW_MS) {
+            // Fixed: convert ticks → milliseconds so MIN_WINDOW_MS works as named
+            if ((now - brain->measure_start_tick) * portTICK_PERIOD_MS >= MIN_WINDOW_MS) {
                 brain->sample_state = BRAIN_STATE_VALIDATE_SAMPLE;
                 brain->measure_start_tick = 0;
             }
             break;
-        case BRAIN_STATE_VALIDATE_SAMPLE: brain->sample_state = BRAIN_STATE_RLS_UPDATE; break;
-        case BRAIN_STATE_RLS_UPDATE:      brain->sample_state = BRAIN_STATE_DECIDE_NEXT; break;
-        case BRAIN_STATE_DECIDE_NEXT:     brain->sample_state = BRAIN_STATE_IDLE; break;
-        default:                          brain->sample_state = BRAIN_STATE_IDLE; break;
+
+        case BRAIN_STATE_VALIDATE_SAMPLE:
+            brain->sample_state = BRAIN_STATE_RLS_UPDATE;
+            break;
+
+        case BRAIN_STATE_RLS_UPDATE:
+            brain->sample_state = BRAIN_STATE_DECIDE_NEXT;
+            break;
+
+        case BRAIN_STATE_DECIDE_NEXT:
+            brain->sample_state = BRAIN_STATE_IDLE;
+            break;
+
+        default:
+            brain->sample_state = BRAIN_STATE_IDLE;
+            break;
     }
 }
 
 /* ============================================================================
  * PUBLIC API
  * ========================================================================== */
-
 esp_err_t g6_brain_init(G6BrainState *brain)
 {
     if (!brain) return ESP_ERR_INVALID_ARG;
@@ -450,7 +440,6 @@ esp_err_t g6_brain_init(G6BrainState *brain)
     if (nvs_err == ESP_OK) nvs_close(nvs_test);
 
     memset(brain, 0, sizeof(G6BrainState));
-
     brain->best_f = BM1370_F_CENTER;
     brain->best_v = BM1370_V_CENTER;
     brain->ridge_epsilon = RLS_RIDGE_EPSILON;
@@ -473,18 +462,18 @@ esp_err_t g6_brain_init(G6BrainState *brain)
     brain->power_update_count = 0;
     brain->power_model_quality = 0.0f;
     brain->last_innovation = 0.0f;
-
     brain->use_efficiency_mode = false;
+
 #if defined(CONFIG_G6_ENABLE_EFFICIENCY_MODE)
     brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
 #endif
-
 #if defined(CONFIG_G6_TEMP_CEILING)
     brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
 #else
     brain->temp_ceiling = 70.0f;
 #endif
     brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
+
 #if defined(CONFIG_G6_NER_THRESHOLD)
     brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
 #else
@@ -497,7 +486,6 @@ esp_err_t g6_brain_init(G6BrainState *brain)
 #endif
 
     brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
-
     g6_brain_load_nvs_fingerprint(brain);
     brain->nvs_last_write_tick = xTaskGetTickCount();
 
@@ -520,6 +508,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
         return ESP_ERR_INVALID_ARG;
     }
+
     if (power_w < 0.0f || power_w > 100.0f) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -527,6 +516,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     if (!is_thermal_safe(brain, temp_c)) {
         goto safety_layer;
     }
+
     if (err_pct > brain->ner_threshold) {
         g6_asic_error_handle_non_blocking(brain, err_pct);
         goto safety_layer;
@@ -539,10 +529,12 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         brain->sample_state == BRAIN_STATE_MEASURE_WINDOW) {
         advance_sample_state(brain, now);
     }
+
     if (!valid) goto safety_layer;
 
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
     float vn = (v_mv - BM1370_V_CENTER) / BM1370_V_SCALE;
+
     float x[RLS_N] = {fn*fn, vn*vn, fn*vn, fn, vn, 1.0f};
 
     /* Pre-compute intermediate innovation products for localized 3-Sigma Gating */
@@ -566,16 +558,13 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float y_pred = evaluate_quadratic(brain->theta, fn, vn);
     float err = hr_ths - y_pred;
 
-    /* Innovation dead-zone: P has converged so tightly that an update would be
-     * numerically meaningless. Skip silently — this is NOT an outlier. */
+    /* Innovation dead-zone */
     if (!has_significant_innovation(brain->P, x)) goto safety_layer;
     if (brain->use_efficiency_mode && !has_significant_innovation(brain->power_P, x)) goto safety_layer;
 
-    /* 3-Sigma statistical outlier gate: large error relative to predicted variance.
-     * These are genuine sensor anomalies — log and reject. */
+    /* 3-Sigma statistical outlier gate */
     bool hr_outlier = (err * err > 9.0f * (xPx + 0.5f));
     bool pw_outlier = false;
-
     if (brain->use_efficiency_mode) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
@@ -583,11 +572,12 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
 
     if (hr_outlier || pw_outlier) {
-        if (hr_outlier) ESP_LOGW(TAG, "HR Outlier Rejected: err=%.2f, bound=%.2f", err, sqrtf(9.0f * (xPx + 0.5f)));
+        if (hr_outlier)
+            ESP_LOGW(TAG, "HR Outlier Rejected: err=%.2f, bound=%.2f", err, sqrtf(9.0f * (xPx + 0.5f)));
         goto safety_layer;
     }
 
-    // --- HR Model Update (Joseph Form Update) ---
+    // --- HR Model Update (Joseph Form) ---
     if (trace_P(brain->P) <= RLS_TRACE_MAX) {
         float lambda_eff = brain->cold_start ? 0.985f : compute_gradient_vff(fabsf(err), RLS_VFF_SIGMA_SQ);
         if (lambda_eff < RLS_LAMBDA_MIN) lambda_eff = RLS_LAMBDA_MIN;
@@ -597,6 +587,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
         float k[RLS_N];
         for (int i = 0; i < RLS_N; i++) k[i] = Px[i] / denom;
+
         for (int i = 0; i < RLS_N; i++) brain->theta[i] += k[i] * err;
 
         float M[RLS_N][RLS_N];
@@ -626,11 +617,10 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         if (brain->update_count > 25) brain->cold_start = false;
     }
 
-    // --- Power Model Update (Joseph Form Update) ---
+    // --- Power Model Update (Joseph Form) ---
     if (brain->use_efficiency_mode && trace_P(brain->power_P) <= RLS_TRACE_MAX) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
-
         float lambda_eff = brain->power_cold_start ? 0.985f : compute_gradient_vff(fabsf(power_err), RLS_VFF_SIGMA_SQ);
         if (lambda_eff < RLS_LAMBDA_MIN) lambda_eff = RLS_LAMBDA_MIN;
 
@@ -639,6 +629,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
         float k[RLS_N];
         for (int i = 0; i < RLS_N; i++) k[i] = power_Px[i] / denom;
+
         for (int i = 0; i < RLS_N; i++) brain->power_theta[i] += k[i] * power_err;
 
         float M[RLS_N][RLS_N];
@@ -667,16 +658,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         if (brain->power_update_count > 25) brain->power_cold_start = false;
     }
 
-    /* Fall-through cleanly into safety execution logic block */
-
 safety_layer:
-
-    /* Evaluate whether any safety condition is currently active.
-     * When active, the slew step toward the mathematical optimum is suppressed —
-     * preventing the optimizer from fighting the safety derating on the same tick. */
     bool vr_safety_active = (vr_temp_c >= 0.0f && isfinite(vr_temp_c) &&
                               brain->vr_temp_ceiling > 0.0f &&
                               vr_temp_c > (brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT));
+
     bool safety_active = (temp_c > (brain->temp_ceiling - 5.0f)) ||
                          (err_pct > brain->ner_threshold) ||
                          vr_safety_active;
@@ -701,10 +687,9 @@ safety_layer:
     if (brain->best_v < BM1370_V_MIN) brain->best_v = BM1370_V_MIN;
     if (brain->best_v > BM1370_V_MAX) brain->best_v = BM1370_V_MAX;
 
-    /* Safety Overrides MUST Execute Last to Prevent Slew Setpoint Inversion */
+    /* Safety Overrides MUST Execute Last */
     g6_safety_proactive_thermal_scale((G6BrainState *)brain, temp_c);
     g6_safety_check_voltage_ripple((G6BrainState *)brain, v_mv);
-    /* VR thermal: runs after ASIC thermal. vr_temp_c < 0 = no sensor, silently skipped. */
     g6_safety_proactive_vr_thermal_scale((G6BrainState *)brain, vr_temp_c);
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
@@ -772,6 +757,7 @@ float g6_brain_get_model_quality(const G6BrainState *brain)
 float g6_brain_get_cov_condition(const G6BrainState *brain)
 {
     if (!brain) return 0.0f;
+
     float min_diag = 1e30f, max_diag = 0.0f;
     for (int i = 0; i < RLS_N; i++) {
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
@@ -792,6 +778,7 @@ esp_err_t g6_brain_self_test(G6BrainState *brain)
             ok = false;
         if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
         if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
+
         for (int j = i + 1; j < RLS_N; j++)
             if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETRY_TOLERANCE)
                 ok = false;
@@ -813,10 +800,8 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
 
     memcpy(out->theta_hashrate, brain->theta, sizeof(brain->theta));
     out->trace_P_hashrate = trace_P(brain->P);
-
     memcpy(out->theta_power, brain->power_theta, sizeof(brain->power_theta));
     out->trace_P_power = trace_P(brain->power_P);
-
     out->last_innovation = brain->last_innovation;
     out->safety_status = G6_SAFETY_OK;
     out->efficiency_mode_active = brain->use_efficiency_mode;
