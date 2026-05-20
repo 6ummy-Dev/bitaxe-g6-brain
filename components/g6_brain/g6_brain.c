@@ -449,7 +449,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     if (power_w < 0.0f || power_w > 100.0f) {
         brain->last_safety_status = G6_SAFETY_POWER_SANITY;
-        return ESP_ERR_INVALID_ARG;
+        goto safety_layer;
     }
 
     brain->last_safety_status = G6_SAFETY_OK;
@@ -512,7 +512,10 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     if (hr_outlier || pw_outlier) {
         if (hr_outlier) brain->last_safety_status = G6_SAFETY_SAMPLE_QUALITY;
-        if (pw_outlier) brain->last_safety_status = G6_SAFETY_POWER_SANITY;
+        if (pw_outlier) {
+            brain->last_safety_status = G6_SAFETY_POWER_SANITY;
+            ESP_LOGW(TAG, "Power Outlier Rejected");
+        }
         goto safety_layer;
     }
 
