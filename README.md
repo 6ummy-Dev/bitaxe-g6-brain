@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0.0-beta4** — Modular adaptive RLS brain with analytical J/TH optimization for BM1370
+**v1.0.0-beta4** — Modular adaptive RLS quadratic optimizer with analytical J/TH optimization for BM1370
 
 The G6 Brain is a self-contained ESP-IDF component that models the quadratic relationship between frequency, voltage, hashrate, and power using stabilized Recursive Least Squares. It learns each individual ASIC’s response surface in real time while enforcing strict hardware safety constraints on every update.
 
