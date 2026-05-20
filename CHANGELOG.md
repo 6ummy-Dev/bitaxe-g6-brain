@@ -2,7 +2,9 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta3] - 2026-05-19 *Completed*
+## [1.0.0-beta3] - 2026-05-20 *Completed*
+
+**Status**: Signed-off and deployed for community soak testing. This release officially introduces the O(1) analytical J/TH solver, Joseph-form covariance stabilization, and 3-Sigma outlier gating.
 
 ### 2026-05-20 — Final QA Polish (beta3 v5)
 
