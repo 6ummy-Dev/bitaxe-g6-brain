@@ -85,7 +85,7 @@ typedef enum {
 
 #define G6_JTH_MAX_OUTER_ITERS   7
 
-#define G6_NVS_SCHEMA_VERSION   2u
+#define G6_NVS_SCHEMA_VERSION   3u
 
 /* ============================================================================
  * STATE MACHINE
