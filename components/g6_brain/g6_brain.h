@@ -1,9 +1,8 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta3 (Cleaned Header)
+ * Bitaxe G6 Brain — v1.0.0-beta3 (QA Hardened)
  *
  * Public interface for the RLS-based self-optimizing control brain.
- * Light cleanup: better organization + improved struct documentation.
  */
 
 #pragma once
@@ -18,34 +17,28 @@ extern "C" {
 #endif
 
 /* ============================================================================
- * CRITICAL NOTES
+ * SINGLE-THREADED CONTRACT
  * ========================================================================== */
-
-/*
- * SINGLE-THREADED ASSUMPTION (IMPORTANT)
- * --------------------------------------
- * This module is NOT thread-safe. There are no mutexes.
- * All calls to g6_brain_update(), g6_brain_get_optimal(), g6_brain_reset(), etc.
- * MUST be serialized by the caller.
- */
+ /*
+  * This module is NOT thread-safe. All calls to g6_brain_update(),
+  * g6_brain_get_optimal(), g6_brain_reset(), etc. MUST be serialized
+  * by the caller.
+  */
 
 /* ============================================================================
  * CONTROL MODES
  * ========================================================================== */
 
 typedef enum {
-    G6_MODE_OBSERVE_ONLY = 0,   // Safety monitoring only — no optimization
-    G6_MODE_RECOMMEND,          // Compute optimal point but do not apply (recommended default)
-    G6_MODE_AUTO                // Full optimizer + safety
+    G6_MODE_OBSERVE_ONLY = 0,
+    G6_MODE_RECOMMEND,
+    G6_MODE_AUTO
 } G6ControlMode;
 
 /* ============================================================================
  * CONSTANTS
  * ========================================================================== */
 
-// -----------------------------
-// RLS Parameters
-// -----------------------------
 #define RLS_N                           6
 
 #if defined(CONFIG_G6_RLS_LAMBDA_MIN)
@@ -77,9 +70,6 @@ typedef enum {
 #define RLS_P_CLAMP_MIN                 1e-6f
 #define RLS_P_CLAMP_MAX                 1e6f
 
-// -----------------------------
-// BM1370 Hardware Limits
-// -----------------------------
 #define BM1370_F_CENTER     650.0f
 #define BM1370_F_SCALE      250.0f
 #define BM1370_V_CENTER     1220.0f
@@ -89,33 +79,12 @@ typedef enum {
 #define BM1370_V_MIN        1050.0f
 #define BM1370_V_MAX        1350.0f
 
-// -----------------------------
-// Sample State Machine Timing
-// -----------------------------
 #define SETTLE_MS           8000
 #define MIN_WINDOW_MS       5000
 #define MIN_SHARE_COUNT     20
-#define MAX_TEMP_SLOPE      0.5f
 
-// -----------------------------
-// Optimization / Slew Limits
-// -----------------------------
-#define MIN_GAIN            0.5f
-#define MAX_FREQ_STEP       50.0f
-#define MAX_VOLT_STEP       25.0f
-
-// -----------------------------
-// J/TH Dinkelbach Solver
-// -----------------------------
-#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
-#define G6_JTH_MAX_OUTER_ITERS   CONFIG_G6_JTH_MAX_OUTER_ITERS
-#else
 #define G6_JTH_MAX_OUTER_ITERS   7
-#endif
 
-// -----------------------------
-// NVS
-// -----------------------------
 #define G6_NVS_SCHEMA_VERSION   2u
 
 /* ============================================================================
@@ -150,34 +119,28 @@ typedef enum {
  * MAIN STATE STRUCT
  * ========================================================================== */
 
-/**
- * G6BrainState
- *
- * Main internal state of the brain.
- * Struct members are ordered by size/type to minimize compiler padding waste.
- */
 typedef struct {
-    /* ------------------ RLS Hashrate Model ------------------ */
+    /* RLS Hashrate Model */
     float theta[RLS_N];
     float P[RLS_N][RLS_N];
     float ridge_epsilon;
     float model_quality;
+    bool  cold_start;
     uint32_t update_count;
+    bool  nvs_valid;
 
-    /* ------------------ Recommended Operating Point ------------------ */
+    /* Recommended Operating Point */
     float best_f;
     float best_v;
 
-    /* ------------------ Safety & Configuration ------------------ */
+    /* Safety & Configuration */
     float ner_threshold;
-    float Kp, Ki, Kd;
     float temp_ceiling;
     float dfs_step_mhz;
 
     G6ControlMode control_mode;
 
-    /* ------------------ Internal Timing / State ------------------ */
-    uint32_t nonce_offset;
+    /* Internal Timing / State */
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
     uint32_t last_setting_change_tick;
@@ -185,24 +148,29 @@ typedef struct {
     BrainSampleState sample_state;
     uint32_t settle_start_tick;
     uint32_t measure_start_tick;
-    uint32_t valid_sample_count;
 
-    /* ------------------ Telemetry ------------------ */
+    /* Telemetry */
     float last_efficiency;
     float last_innovation;
 
-    /* ------------------ Power Model (for J/TH) ------------------ */
+    /* Power Model (for J/TH) */
     float power_theta[RLS_N];
     float power_P[RLS_N][RLS_N];
     float power_model_quality;
+    bool  power_cold_start;
     uint32_t power_update_count;
 
-    /* ------------------ Boolean Flags (Grouped for Alignment) ----- */
-    bool cold_start;
-    bool nvs_valid;
-    bool enable_low_latency_jobs;
-    bool power_cold_start;
     bool use_efficiency_mode;
+
+    /* ==================== Phase 2 Reserved Fields ==================== */
+    /* These fields are declared for future use (PID fan, low-latency jobs, etc.)
+     * They are currently unused in beta3. Do not rely on their values. */
+    uint32_t nonce_offset;            // Reserved for Phase 2
+    bool     enable_low_latency_jobs; // Reserved for Phase 2
+    uint32_t valid_sample_count;      // Reserved for Phase 2
+
+    /* PID Fan Control (Phase 2) */
+    float Kp, Ki, Kd;   // Reserved for future PID fan control loop
 
 } G6BrainState;
 
@@ -241,7 +209,6 @@ float g6_brain_get_cov_condition(const G6BrainState *brain);
 esp_err_t g6_brain_self_test(G6BrainState *brain);
 esp_err_t g6_brain_reset(G6BrainState *brain);
 
-/* NVS */
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
 
