@@ -13,43 +13,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare test app
+      - name: Prepare test application
         run: |
           mkdir -p test_app/main test_app/components/g6_brain
 
-          cat > test_app/CMakeLists.txt << 'EOT'
+          cat > test_app/CMakeLists.txt << 'EOF'
           cmake_minimum_required(VERSION 3.16)
           include($ENV{IDF_PATH}/tools/cmake/project.cmake)
           project(test_g6_brain)
-          EOT
+          EOF
 
-          cat > test_app/main/CMakeLists.txt << 'EOT'
+          cat > test_app/main/CMakeLists.txt << 'EOF'
           idf_component_register(
               SRCS "main.c"
               REQUIRES g6_brain unity nvs_flash
           )
-          EOT
+          EOF
 
-          cat > test_app/main/main.c << 'EOT'
+          # Copy the brain component
+          cp -r components/g6_brain test_app/components/
+
+          # Create a proper test runner
+          cat > test_app/main/main.c << 'EOF'
           #include "unity.h"
+          #include "esp_log.h"
 
-          extern void test_g6_brain_init(void);
-          extern void test_g6_brain_update(void);
-          // Add more test functions here as needed
+          static const char *TAG = "TEST_RUNNER";
 
-          void app_main(void) {
+          // Unity will automatically find TEST_CASE functions when using
+          // unity_run_all_tests() if they are properly linked.
+          void app_main(void)
+          {
+              ESP_LOGI(TAG, "Starting G6 Brain test suite...");
+
               UNITY_BEGIN();
 
-              // Run registered Unity tests
+              // Run all registered Unity tests
               unity_run_all_tests();
 
               UNITY_END();
           }
-          EOT
+          EOF
 
-          cp -r components/g6_brain test_app/components/
-
-      - name: Build + Run Tests (ESP32-S3)
+      - name: Build with tests (ESP32-S3)
         run: |
           docker run --rm \
             -v "$PWD:/project" \
@@ -60,5 +66,5 @@ jobs:
               idf.py build
             "
 
-      - name: Verify
-        run: echo "✅ Build + Unity tests compiled successfully"
+      - name: Success
+        run: echo "✅ Build + Test compilation successful"
