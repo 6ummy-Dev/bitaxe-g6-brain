@@ -2,7 +2,7 @@
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
-Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS brain with analytical J/TH optimization for BM1370.
+Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS quadratic optimizer with analytical J/TH optimization for BM1370.
 
 This is a clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints.
 
