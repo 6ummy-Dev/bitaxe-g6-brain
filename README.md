@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0.0-beta3** — Adaptive RLS optimizer with O(1) analytical J/TH solver for the BM1370 ASIC
+**v1.0.0-beta3** — Modular RLS brain with analytical J/TH optimization for BM1370
 
 The G6 Brain is a self-contained ESP-IDF component that models the quadratic relationship between frequency, voltage, hashrate, and power using stabilized Recursive Least Squares. It learns each individual ASIC’s response surface in real time while enforcing strict hardware safety constraints on every update.
 
@@ -19,6 +19,22 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 | **Default Mode** | `G6_MODE_RECOMMEND` |
 
 beta3 is suitable for community field testing. The core mathematics (Joseph-form RLS, analytical Dinkelbach solver) and safety architecture have been hardened through multiple QA passes.
+
+---
+
+## Roadmap
+
+**v1 (Current focus)**
+- Production-ready modular brain component
+- Highest stable hashrate with zero hardware risk
+- Thermal awareness + predictive safety layers
+- Clean modularity, strong diagnostics, and rigorous QA
+
+**v1.5+ (Planned)**
+- Puzzle solver features and on-device stochastic exploration
+- Advanced active learning techniques
+
+Full firmware-level work is out of scope for the brain v1 series. We ship a trustworthy, swappable brain module first.
 
 ---
 
