@@ -1,80 +1,75 @@
 # Bitaxe G6 Brain Manifesto
 
 **For new contributors, collaborators, and future maintainers**  
-*Version 1.0 — May 2026*
+*Version 1.1 — May 2026*
 
-We are not building another miner autotuner.  
-We are building **the most trustworthy, mathematically sound, and safety-first control brain** the Bitaxe ecosystem has ever seen.
+We are building **the most trustworthy, mathematically sound, and modular control brain** for the Bitaxe ecosystem.
 
 ### 1. Our Why
 
-The Bitaxe community deserves better than cowboy hill-climbing scripts and “trust me bro” voltage tables.  
-Every chip is unique. Every power supply is dirty. Every heatsink is different.  
-Our job is to give each individual ASIC the best possible life while **never** compromising hardware longevity.
+Solo miners and people learning Bitcoin mining hardware deserve better tools than cowboy voltage tables and opaque autotuners.
+
+Every chip is different. Every power supply is imperfect. Every cooling solution varies.
+
+Our job is to give each individual ASIC the **highest stable hashrate possible while guaranteeing zero hardware risk**. We do this through rigorous math, strong safety layers, and a clean modular design that others can actually use and learn from.
 
 > **"Start safe. Learn. Then optimize."**
 
-This single sentence is the unbreakable core of everything we ship.
+This is not marketing. It is the non-negotiable operating principle.
 
 ### 2. Core Philosophy
 
-- **Math first, heuristics second.**  
-  We model the hashrate surface with stabilized Recursive Least Squares (RLS) + quadratic response surface methodology. No black-box ML. No magic. Every coefficient has meaning.
-
-- **Safety is not a feature — it is the foundation.**  
-  Thermal protection, NER back-off, voltage clamping, sample quality gates, and fail-closed design run on *every* update, even on rejected samples.
-
-- **Modularity above all.**  
-  The brain must remain a clean, swappable component. No tight coupling to any specific miner firmware. Public API is sacred.
-
-- **Transparency and honesty.**  
-  We document limitations in public (safe hashrate maximizer today, true J/TH efficiency in Phase 1). We never oversell.
-
-- **Aerospace-grade discipline on hobby hardware.**  
-  Defensive programming, numerical stability, versioned NVS persistence, self-tests, extensive logging, and CI that actually matters.
+- **Math first.** We model the system using stabilized Recursive Least Squares and response surface methods. No black boxes. Every parameter has meaning and can be inspected.
+- **Modularity is sacred.** The brain is a self-contained, swappable module with a clean public API. It must be easy to integrate into existing firmware with minimal glue. This is how we serve both educational use and real production deployments.
+- **Highest stable hashrate with zero hardware risk.** This is the primary objective. We will not chase marginal hashrate gains that introduce any meaningful risk to the ASIC or power delivery.
+- **Safety is engineered, not added later.** Multiple independent safety layers run on every decision. Predictive techniques are welcome when they increase safety without adding complexity or coupling.
+- **Educational + Production ready.** The brain should be something a solo miner can flash and trust, while also being clean enough for others to study and extend.
+- **Simplicity and elegance over cleverness.** We prefer clear, maintainable code with excellent QA over complex architectures. We lay our reputation on testing, review, and defensive design.
+- **Transparency.** We document limitations honestly. We do not oversell current capabilities.
 
 ### 3. Non-Negotiable Technical Principles
 
-- **Single-threaded only.** No mutexes. Caller must serialize all calls to `update()`, `get_optimal()`, `reset()`, etc.
-- **Backward compatibility is law.** Public API changes only with major version bump.
-- **Kconfig is the source of truth.** All tunables must be exposed there.
-- **NVS warm-start must survive struct evolution** (schema versioning is mandatory).
-- **Every safety layer runs even on invalid samples** (`goto safety_layer` pattern).
-- **Tests are not optional.** New code must not break existing Unity tests.
-- **Documentation is part of the code.** README, API.md, MONITORING.md, AGENTS.md, and this manifesto must stay current.
+- The brain remains a **modular component**. It does not take ownership of hardware control, fan PWM, or mining loops. It recommends. The integrator applies.
+- **Single-threaded** by design. Caller serializes all calls.
+- Backward compatibility on the public API is taken seriously.
+- All tunables go through Kconfig.
+- NVS schema versioning is mandatory. Warm-start must survive struct evolution.
+- Every safety check executes even on invalid or rejected samples.
+- Tests (especially safety paths and edge cases) are required.
+- Documentation is part of the deliverable (README, API.md, MONITORING.md, AGENTS.md, this manifesto).
 
-### 4. How to Contribute (The Rules)
+### 4. Scope & Roadmap Intent
 
-1. **Read AGENTS.md first.** It contains the living safety invariants.
-2. **Respect the math.** Do not replace RLS with a PID or simple hill-climber unless you can mathematically prove superiority *and* maintain stability guarantees.
-3. **Fail safe by default.** Any new feature must default to the safest possible behavior.
-4. **Keep it modular.** The brain should work in any ESP-IDF project with minimal glue.
-5. **Write tests.** Especially for safety paths and edge cases.
-6. **Update documentation.** If you change behavior, update the relevant .md files.
-7. **Be honest.** If something is still experimental, say so in comments and changelog.
-8. **Run the full test suite locally** before opening a PR.
+- **v1 goal**: A production-ready, modular brain focused on highest stable hashrate with zero hardware risk. Strong math, strong safety, clean integration, excellent diagnostics.
+- Thermal awareness, predictive elements, and model health monitoring are in scope for v1 **if** they serve the primary goal without breaking modularity or elegance.
+- **v1.5+**: Puzzle solver features, on-device stochastic exploration, and more advanced active learning techniques.
+- Full firmware-level improvements and deeper integration are explicitly **out of scope** for the initial brain releases. We can address the broader firmware later.
 
-Pull requests that violate these principles will be closed with love and a link back to this manifesto.
+We finish the brain module to a high standard before expanding scope.
 
-### 5. Development Phases (We move deliberately)
+### 5. How to Contribute
 
-- **Phase 0 / 0.1** → Stable, safe hashrate maximizer with warm-start and full safety layer (where we are now).
-- **Phase 1** → True J/TH efficiency optimization + power surface modeling.
-- **Phase 2** → Active thermal slope (ΔT/dt), PID fan control, advanced P-VUS, controlled exploration.
-- **Phase 3+** → Multi-ASIC coordination, predictive maintenance, etc.
+1. Read AGENTS.md first. The safety invariants live there.
+2. Respect math and modularity. Changes that increase coupling or replace sound estimation with heuristics will be rejected.
+3. Default to the safest behavior.
+4. Keep the brain swappable and easy to integrate.
+5. Write tests. Especially for safety and numerical edge cases.
+6. Update documentation when behavior changes.
+7. Be honest about experimental vs. production-ready code.
+8. Run the full test suite before opening a PR.
 
-We finish one phase cleanly before rushing into the next.
+PRs that violate these principles will be closed with a link back to this document.
 
 ### 6. Final Words
 
-This project is open-source but not “move fast and break things.”  
-We move **deliberately, rigorously, and with extreme care for the hardware** that miners trust with their money and time.
+This project exists to raise the quality bar for Bitaxe tooling.
 
-If you share this engineering mindset — welcome.  
-If you want to ship the next flashy “AI optimizer” without safety or math — this is not the repo for you.
+We are not trying to build the most aggressive optimizer.  
+We are trying to build the **most trustworthy and usable modular brain** that solo miners and learners can actually depend on.
 
-We are building the gold standard brain for the Bitaxe ecosystem.  
-Let’s make it something future generations of miners will still respect.
+If you value rigorous math, clean modularity, real safety, and shipping something solid over flashy claims — welcome.
 
-**Made with ❤️ and rigorous engineering for the Bitaxe community**  
-— 6ummy-Dev + Grok (xAI) + every contributor who respects the manifesto
+We move deliberately. We test heavily. We optimize only after safety is engineered.
+
+**Made with care for the people who actually run this hardware**  
+— 6ummy + contributors who respect the mission
