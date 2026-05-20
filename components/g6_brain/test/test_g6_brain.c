@@ -146,15 +146,12 @@ TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain]") {
 /* ====================== NEW BETA3 COVERAGE ====================== */
 
 TEST_CASE("Statistical Outlier Gating rejects severe sensor anomalies", "[g6_brain]") {
-    // 1. Prime the estimator with standard values
     g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, 0.5f, 50);
     uint32_t prev_count = test_brain.update_count;
 
-    // 2. Inject an impossible hashrate reading (glitch anomaly)
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 9999.0f, 15.0f, 55.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
-    // 3. Ensure update was rejected and model coefficients remain uncorrupted
     TEST_ASSERT_EQUAL_UINT32(prev_count, test_brain.update_count);
 }
 
@@ -162,15 +159,12 @@ TEST_CASE("Internal Slew-Rate Limiting enforces step boundaries", "[g6_brain]") 
     test_brain.control_mode = G6_MODE_AUTO;
     test_brain.dfs_step_mhz = 25.0f;
     
-    // Simulate a target change suggestion that is far away
     test_brain.best_f = 650.0f;
-    test_brain.theta[0] = -1.0f; // Mock a surface with a valid optimal point far out
+    test_brain.theta[0] = -1.0f; 
     test_brain.theta[3] = 1600.0f;
 
-    // Run update from a current state of 650MHz
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
-    // Step must match the fixed step size threshold exactly
     TEST_ASSERT_EQUAL_FLOAT(650.0f + test_brain.dfs_step_mhz, test_brain.best_f);
 }
