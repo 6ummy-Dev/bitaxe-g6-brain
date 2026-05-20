@@ -26,7 +26,6 @@ static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
-static const uint32_t NVS_SCHEMA_VERSION = 3u; // B3-LATENT-1: Bumped to 3 to reject stale truncated blobs
 
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE  1024
 
@@ -190,7 +189,7 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
         memcpy(&stored_version, buffer, sizeof(uint32_t));
         memcpy(&stored_size, buffer + sizeof(uint32_t), sizeof(uint32_t));
 
-        if (stored_version == NVS_SCHEMA_VERSION) {
+        if (stored_version == G6_NVS_SCHEMA_VERSION) {
             size_t offset = sizeof(uint32_t)*2;
             memcpy(brain->theta, buffer + offset, sizeof(brain->theta));
             offset += sizeof(brain->theta);
@@ -225,7 +224,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
                        sizeof(brain->power_theta) + sizeof(brain->power_P);
 
     uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
-    uint32_t version = NVS_SCHEMA_VERSION;
+    uint32_t version = G6_NVS_SCHEMA_VERSION;
     uint32_t size_field = (uint32_t)data_size;
 
     memcpy(buffer, &version, sizeof(uint32_t));
@@ -567,13 +566,20 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float y_pred = evaluate_quadratic(brain->theta, fn, vn);
     float err = hr_ths - y_pred;
 
-    bool hr_outlier = (!has_significant_innovation(brain->P, x) || (err * err > 9.0f * (xPx + 0.5f)));
+    /* Innovation dead-zone: P has converged so tightly that an update would be
+     * numerically meaningless. Skip silently — this is NOT an outlier. */
+    if (!has_significant_innovation(brain->P, x)) goto safety_layer;
+    if (brain->use_efficiency_mode && !has_significant_innovation(brain->power_P, x)) goto safety_layer;
+
+    /* 3-Sigma statistical outlier gate: large error relative to predicted variance.
+     * These are genuine sensor anomalies — log and reject. */
+    bool hr_outlier = (err * err > 9.0f * (xPx + 0.5f));
     bool pw_outlier = false;
 
     if (brain->use_efficiency_mode) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
-        pw_outlier = (!has_significant_innovation(brain->power_P, x) || (power_err * power_err > 9.0f * (power_xPx + 0.5f)));
+        pw_outlier = (power_err * power_err > 9.0f * (power_xPx + 0.5f));
     }
 
     if (hr_outlier || pw_outlier) {
@@ -664,12 +670,21 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     /* Fall-through cleanly into safety execution logic block */
 
 safety_layer:
-    // B3-BUG-6 Fix: g6_safety_proactive_thermal_scale and check_voltage_ripple moved BELOW slew and clamp logic
+
+    /* Evaluate whether any safety condition is currently active.
+     * When active, the slew step toward the mathematical optimum is suppressed —
+     * preventing the optimizer from fighting the safety derating on the same tick. */
+    bool vr_safety_active = (vr_temp_c >= 0.0f && isfinite(vr_temp_c) &&
+                              brain->vr_temp_ceiling > 0.0f &&
+                              vr_temp_c > (brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT));
+    bool safety_active = (temp_c > (brain->temp_ceiling - 5.0f)) ||
+                         (err_pct > brain->ner_threshold) ||
+                         vr_safety_active;
 
     float candidate_f, candidate_v;
     g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
 
-    if (brain->control_mode == G6_MODE_AUTO) {
+    if (brain->control_mode == G6_MODE_AUTO && !safety_active) {
         float df = candidate_f - brain->best_f;
         if (fabsf(df) > brain->dfs_step_mhz)
             df = copysignf(brain->dfs_step_mhz, df);
