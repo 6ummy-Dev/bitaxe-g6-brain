@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0.0-beta3
+# G6 Brain Public API — v1.0.0-beta4
 
 **Adaptive RLS optimizer with real-time quadratic modeling and analytical J/TH solver for BM1370.**
 
@@ -26,6 +26,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                           float    hr_ths,
                           float    power_w,
                           float    temp_c,
+                          float    vr_temp_c,
                           float    err_pct,
                           uint32_t share_count);
 ```
@@ -39,7 +40,8 @@ esp_err_t g6_brain_update(G6BrainState *brain,
   | `v_mv` | mV | Current core voltage |
   | `hr_ths` | TH/s | Measured hashrate |
   | `power_w` | W | Measured power draw (must be `0..100`) |
-  | `temp_c` | °C | Current chip temperature |
+  | `temp_c` | °C | Current ASIC die temperature |
+  | `vr_temp_c` | °C | Voltage regulator temperature. Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) if no VR sensor is available — all VR thermal checks are silently skipped. |
   | `err_pct` | % | Nonce error rate (0..100) |
   | `share_count` | count | Shares observed during the measurement window. Pass `0` if unknown. |
 
