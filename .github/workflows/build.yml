@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,37 +25,47 @@ jobs:
 
           cat > test_app/main/CMakeLists.txt << 'EOF'
           idf_component_register(
-              SRCS "main.c"
-              REQUIRES g6_brain unity nvs_flash
+              SRCS 
+                  "main.c"
+                  "../../components/g6_brain/test/test_g6_brain.c"
+              INCLUDE_DIRS 
+                  "../../components/g6_brain"
+              REQUIRES 
+                  g6_brain 
+                  unity 
+                  nvs_flash
           )
           EOF
 
-          # Copy the brain component
+          # Copy the brain component (without its own test folder to avoid duplication)
           cp -r components/g6_brain test_app/components/
+          rm -rf test_app/components/g6_brain/test
 
-          # Create a proper test runner
           cat > test_app/main/main.c << 'EOF'
           #include "unity.h"
           #include "esp_log.h"
 
-          static const char *TAG = "TEST_RUNNER";
+          static const char *TAG = "G6_TEST";
 
-          // Unity will automatically find TEST_CASE functions when using
-          // unity_run_all_tests() if they are properly linked.
           void app_main(void)
           {
-              ESP_LOGI(TAG, "Starting G6 Brain test suite...");
+              ESP_LOGI(TAG, "=== G6 Brain Test Suite ===");
 
               UNITY_BEGIN();
 
-              // Run all registered Unity tests
+              // This will run all TEST_CASE functions compiled into the binary
               unity_run_all_tests();
 
-              UNITY_END();
+              int failures = UNITY_END();
+              if (failures > 0) {
+                  ESP_LOGE(TAG, "%d test(s) failed", failures);
+              } else {
+                  ESP_LOGI(TAG, "All tests passed");
+              }
           }
           EOF
 
-      - name: Build with tests (ESP32-S3)
+      - name: Build test application (ESP32-S3)
         run: |
           docker run --rm \
             -v "$PWD:/project" \
@@ -66,5 +76,5 @@ jobs:
               idf.py build
             "
 
-      - name: Success
-        run: echo "✅ Build + Test compilation successful"
+      - name: Verify
+        run: echo "✅ Build + Unity tests compiled and linked successfully"
