@@ -1,16 +1,14 @@
-# G6 Brain Testing Guide (beta3)
+# G6 Brain Testing Guide (beta4)
 
-This guide is intended for community members testing the **v1.0.0-beta3** release.
+This guide is intended for community members testing the **v1.0.0-beta4** release.
 
-## What's New in beta3
+## What's New in beta4
 
-- **Dinkelbach-based J/TH optimizer** — replaces the previous brute-force grid search for efficiency mode.
-- **`power_model_quality` monitoring** — gates J/TH optimization until the power surface model is reliable.
-- **Joseph Form Covariance Update** — structural math implementation to prevent tracking matrix divergence.
-- **3-Sigma Statistical Outlier Gating** — filtering layer designed to automatically block corrupted sensor frames.
-- **Internal Slew-Rate Limiting** — embedded loop constraints designed to regulate voltage and frequency steps relative to the live tracking state.
-
-Efficiency changes are **opt-in** via `G6_ENABLE_EFFICIENCY_MODE`.
+- **Two-tier Thermal Safety** — Separate handling for ASIC die temperature and voltage regulator (VR) temperature.
+- **Improved Safety Telemetry** — `safety_status` now meaningfully reports triggered safety conditions.
+- **Power Validation & Outlier Logging** — Fail-closed power handling and symmetric power outlier logging.
+- **Timing Fix** — Corrected tick-to-millisecond conversion in sample windows.
+- Continued hardening of the safety layer and CI reliability.
 
 ## Recommended Starting Point
 
@@ -18,28 +16,39 @@ Efficiency changes are **opt-in** via `G6_ENABLE_EFFICIENCY_MODE`.
 - Do **not** switch to `AUTO` mode until you have monitored tracking logs for several hours.
 - Use `G6_MODE_OBSERVE_ONLY` if you only want background metrics without tuning suggestions.
 
+If your hardware provides VR temperature (`vrTemp`), pass it to `g6_brain_update()` so the new two-tier thermal protection can activate. Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) otherwise.
+
 ## What to Monitor
 
 When testing, pay attention to:
 - Frequency and voltage targets suggested by the brain.
-- Temperature behavior and post-optimization thermal scaling actions.
+- Temperature behavior (both ASIC and VR when available) and post-optimization thermal scaling actions.
 - `model_quality` and `power_model_quality` values.
-- Operational logs via serial terminal (specifically look for any `Outlier Rejected` logs if telemetry bus noise occurs).
+- `safety_status` in telemetry.
+- Operational logs via serial terminal (look for thermal, VR thermal, power sanity, and outlier messages).
 
 ## Grounded Testing Scenarios
 
-### 1. Verification of Internal Slew Limiting
-- Toggle the controller to `G6_MODE_AUTO` once metrics stabilize.
-- Observe step changes when the optimization target adjusts. Frequency should step incrementally based on the `G6_DFS_STEP_MHZ` boundary rather than jumping instantly to the global maximum coordinate.
+### 1. VR Thermal Protection
+- If your board reports VR temperature, test both the **proactive zone** and **hard ceiling** behavior.
+- Verify that only voltage is reduced in the proactive zone, and both voltage + frequency are reduced at the hard ceiling.
 
-### 2. Verification of Outlier Gate Resilience
-- Simulate or observe telemetry sensor anomalies (e.g., brief hardware read drops or bus interference glitches).
-- Check that severe tracking anomalies trigger an `HR Outlier Rejected` or `Power Outlier Rejected` serial log instead of distorting the tracking surface or collapsing `model_quality`.
+### 2. Safety Status Telemetry
+- Trigger various safety conditions (high temperature, high NER, invalid power) and verify that `safety_status` in `g6_brain_get_telemetry()` reflects the last triggered condition.
+
+### 3. Outlier Gating Resilience
+- Observe or simulate telemetry anomalies.
+- Confirm that severe anomalies trigger `HR Outlier Rejected` or `Power Outlier Rejected` logs instead of corrupting the model.
 
 ## Reporting Issues
 
 When reporting logs or anomalies, please include:
 - ESP32 target variant and runtime version.
 - Mode parameters (`RECOMMEND`, `AUTO`, efficiency status).
-- Raw log output snippets around the event or unexpected step changes.
+- Whether VR temperature is being passed or `G6_VR_TEMP_NO_SENSOR` is used.
+- Raw log output snippets around the event.
 - Clear description of physical behavior vs expected state output.
+
+---
+
+**Version:** v1.0.0-beta4 (May 2026)
