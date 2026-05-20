@@ -171,7 +171,7 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             memcpy(brain->theta, buffer + offset, sizeof(brain->theta));
             offset += sizeof(brain->theta);
             memcpy(brain->P, buffer + offset, sizeof(brain->P));
-            offset += sizeof(brain->theta);
+            offset += sizeof(brain->P);
             memcpy(brain->power_theta, buffer + offset, sizeof(brain->power_theta));
             offset += sizeof(brain->power_theta);
             memcpy(brain->power_P, buffer + offset, sizeof(brain->power_P));
@@ -673,8 +673,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             if (brain->power_update_count > 25) brain->power_cold_start = false;
         }
     }
-
-    return ESP_OK;
 
 safety_layer:
 
