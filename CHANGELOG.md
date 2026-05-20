@@ -4,6 +4,27 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Final QA Polish & Pre-Release Hardening
+
+**Bug Fixes**
+- Fixed **outlier gating asymmetry** in efficiency mode: Hashes and power model outlier checks now run together *before* either model is updated. This prevents the hashrate model from advancing while the power model is rejected on the same sample (which could cause gradual drift in J/TH optimization).
+
+**Improvements**
+- Added clear Phase 2 comments in `g6_brain.h` for three vestigial fields (`nonce_offset`, `enable_low_latency_jobs`, `valid_sample_count`) and the unused PID coefficients (`Kp`/`Ki`/`Kd`).
+- Improved `const` correctness in `g6_brain_get_optimal()` (removed unnecessary cast when calling the Dinkelbach solver).
+- Added recommended minimum task stack size documentation in `INSTALL.md`.
+
+**Impact**
+- Stronger numerical consistency between hashrate and power models when efficiency mode is active.
+- Cleaner public API surface and better long-term maintainability.
+- Final minor issues from deep QA resolved.
+- Codebase is now in a clean, production-ready state for field testing.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/g6_brain.h`
+- `docs/INSTALL.md`
+  
 ### 2026-05-19 — Critical Bug Fixes (beta3 v4)
 
 **Bug Fixes (from independent QA review — beta3 v3)**
