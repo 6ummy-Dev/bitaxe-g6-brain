@@ -2,7 +2,20 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta4] - 2026-05-20 _In Progress_.
+## [1.0.0-beta4] - 2026-05-20 _In Progress_
+
+### 2026-05-20 — Integration Layer Data Quality (beta4 v3)
+
+`docs/INTEGRATION_EXAMPLE.c` only — zero brain component changes.
+
+- **P2**: Pass `sharesAccepted` delta (window count), not cumulative total. Cumulative inflated the value 85× at T+2h, destroying `MIN_SHARE_COUNT` gate resolution.
+- **P3**: Feed `hashRate_10m` while `model_quality < 0.5` or `cold_start` is active; switch to live `hashRate` once settled. Baseline showed 10m avg tracks expected to 0.31% vs 0.48% for live during the ~2.5h thermal equilibration window.
+- **P4**: Compute NER from `Δerrors / (window_hr × Δt)` using raw `errorCount`, not the rolling `errorPercentage` field which lags over full session uptime. Falls back to `errorPercentage` if elapsed time is insufficient.
+- **P5**: Log VRM droop coefficient (`droop_mv / power_w`) on first valid telemetry frame. Placeholder comment for `brain.droop_mv_per_watt` seeding when Phase 2 P-VUS field lands.
+- **P6**: Scale window share count by `poolDifficulty / G6_REF_POOL_DIFFICULTY` before passing to brain. Caps at 3.0×. Makes `MIN_SHARE_COUNT` gate consistent regardless of pool difficulty assignment.
+
+**Files changed**
+- `docs/INTEGRATION_EXAMPLE.c`
 
 ### 2026-05-20 — QA Audit Fixes (beta4 v2)
 
