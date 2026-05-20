@@ -12,14 +12,13 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 
 | | |
 |---|---|
-| **Latest Release** | `v1.0.0-beta3` |
-| **Current Version** | `v1.0.0-beta4` (in progress) |
+| **Latest Release** | `v1.0.0-beta4` |
 | **Target** | ESP32-S3 / Bitaxe Gamma (BM1370) |
 | **License** | MIT |
-| **QA Status** | Code verified · Documentation updates in progress |
+| **QA Status** | Fully verified and released for field testing |
 | **Default Mode** | `G6_MODE_RECOMMEND` |
 
-**beta3** remains the latest stable release. This branch contains work toward **beta4**, which introduces two-tier thermal safety and several robustness improvements.
+**beta4** is the current release and is suitable for community field testing. This version introduces two-tier thermal safety (protecting the voltage regulator independently of the ASIC die) and several robustness improvements.
 
 ---
 
@@ -28,11 +27,11 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 - **Two-tier Thermal Safety** — Added dedicated monitoring and protection for the voltage regulator (`vr_temp_c`). The brain now distinguishes between ASIC die temperature and VR regulator temperature:
   - ASIC temperature gates learning (prevents training on thermally stressed samples).
   - VR temperature runs only in the safety layer as a proactive and hard constraint on voltage (and frequency at ceiling).
-- **Improved Safety Telemetry** — `safety_status` in telemetry is now meaningful and reports the last triggered safety condition.
-- **Power Validation Hardening** — Invalid power readings no longer bypass the safety layer.
-- **Power Outlier Logging** — Added symmetric logging for power model outliers.
+- **Improved Safety Telemetry** — `safety_status` in telemetry is now fully wired and meaningfully reports the last triggered safety condition.
+- **Power Validation Hardening** — Invalid power readings correctly fail-closed and route through the safety layer.
+- **Power Outlier Logging** — Added symmetric logging for power model outliers (`Power Outlier Rejected`).
 - **Timing Fix** — Corrected tick-to-millisecond conversion in the sample state machine.
-- General QA hardening and CI improvements.
+- General QA hardening, integration layer data quality fixes, and CI improvements.
 
 ---
 
