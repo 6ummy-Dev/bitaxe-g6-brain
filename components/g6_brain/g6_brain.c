@@ -1,10 +1,12 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta3 (QA Production-Hardened v5)
+ * Bitaxe G6 Brain — v1.0.0-beta4 (VR Thermal Safety)
  *
- * Enforces unified outlier checks, stable Joseph Form updates, 
+ * Enforces unified outlier checks, stable Joseph Form updates,
  * internal state slew-rate regulation, and guaranteed safety fall-through.
  * Safety overrides strictly execute LAST to prevent setpoint inversion.
+ * Two-tier thermal safety: ASIC die temp gates RLS updates; VR regulator
+ * temp constrains setpoints independently via the safety layer.
  */
 
 #include "g6_brain.h"
@@ -124,6 +126,32 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv)
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
         brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
         ESP_LOGW(TAG, "VOLTAGE OUT OF RANGE: %.1f mV → clamped", v_mv);
+    }
+}
+
+static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_temp_c)
+{
+    if (!brain) return;
+    /* Negative sentinel means no VR sensor available — skip silently. */
+    if (vr_temp_c < 0.0f || !isfinite(vr_temp_c)) return;
+    if (!isfinite(brain->vr_temp_ceiling) || brain->vr_temp_ceiling <= 0.0f) return;
+
+    float proactive_threshold = brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT;
+
+    if (vr_temp_c >= brain->vr_temp_ceiling) {
+        /* Hard ceiling: VR is at its limit — pull both voltage AND frequency to reduce
+         * total power dissipated through the regulator immediately. */
+        brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.985f);
+        brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
+        ESP_LOGE(TAG, "VR OVERHEAT: %.1f°C (ceil=%.1f) — hard throttle: best_f=%.1f best_v=%.1f",
+                 vr_temp_c, brain->vr_temp_ceiling, brain->best_f, brain->best_v);
+    } else if (vr_temp_c > proactive_threshold) {
+        /* Proactive zone: voltage drives VR heat (I²R), so step back voltage only.
+         * Frequency is not reduced here — that would change the optimal hashrate surface
+         * without a clear thermal benefit to the VR. */
+        brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
+        ESP_LOGW(TAG, "VR PROACTIVE THERMAL: %.1f°C (thresh=%.1f) → best_v=%.1f",
+                 vr_temp_c, proactive_threshold, brain->best_v);
     }
 }
 
@@ -266,6 +294,7 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 #else
     brain->temp_ceiling = 70.0f;
 #endif
+    brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
 #if defined(CONFIG_G6_NER_THRESHOLD)
     brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
 #else
@@ -456,6 +485,7 @@ esp_err_t g6_brain_init(G6BrainState *brain)
 #else
     brain->temp_ceiling = 70.0f;
 #endif
+    brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
 #if defined(CONFIG_G6_NER_THRESHOLD)
     brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
 #else
@@ -479,8 +509,8 @@ esp_err_t g6_brain_init(G6BrainState *brain)
 
 esp_err_t g6_brain_update(G6BrainState *brain,
                           float f_mhz, float v_mv, float hr_ths,
-                          float power_w, float temp_c, float err_pct,
-                          uint32_t share_count)
+                          float power_w, float temp_c, float vr_temp_c,
+                          float err_pct, uint32_t share_count)
 {
     if (!brain) return ESP_ERR_INVALID_ARG;
 
@@ -659,6 +689,8 @@ safety_layer:
     /* Safety Overrides MUST Execute Last to Prevent Slew Setpoint Inversion */
     g6_safety_proactive_thermal_scale((G6BrainState *)brain, temp_c);
     g6_safety_check_voltage_ripple((G6BrainState *)brain, v_mv);
+    /* VR thermal: runs after ASIC thermal. vr_temp_c < 0 = no sensor, silently skipped. */
+    g6_safety_proactive_vr_thermal_scale((G6BrainState *)brain, vr_temp_c);
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 

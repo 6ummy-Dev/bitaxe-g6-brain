@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta3 (QA Hardened)
+ * Bitaxe G6 Brain — v1.0.0-beta4 (VR Thermal Safety)
  *
  * Public interface for the RLS-based self-optimizing control brain.
  */
@@ -87,6 +87,22 @@ typedef enum {
 
 #define G6_NVS_SCHEMA_VERSION   3u
 
+/* VR thermal defaults (overridden by Kconfig) */
+#if defined(CONFIG_G6_VR_TEMP_CEILING)
+#define G6_VR_TEMP_CEILING_DEFAULT  ((float)CONFIG_G6_VR_TEMP_CEILING)
+#else
+#define G6_VR_TEMP_CEILING_DEFAULT  85.0f
+#endif
+
+#if defined(CONFIG_G6_VR_TEMP_PROACTIVE_MARGIN)
+#define G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT  ((float)CONFIG_G6_VR_TEMP_PROACTIVE_MARGIN)
+#else
+#define G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT  5.0f
+#endif
+
+/* Sentinel: pass as vr_temp_c when no VR sensor is available — disables all VR checks */
+#define G6_VR_TEMP_NO_SENSOR  (-1.0f)
+
 /* ============================================================================
  * STATE MACHINE
  * ========================================================================== */
@@ -108,6 +124,7 @@ typedef enum {
 typedef enum {
     G6_SAFETY_OK = 0,
     G6_SAFETY_THERMAL,
+    G6_SAFETY_VR_THERMAL,
     G6_SAFETY_VOLTAGE,
     G6_SAFETY_POWER_SANITY,
     G6_SAFETY_NER_BACKOFF,
@@ -136,6 +153,7 @@ typedef struct {
     /* Safety & Configuration */
     float ner_threshold;
     float temp_ceiling;
+    float vr_temp_ceiling;      /* VR regulator thermal ceiling (°C). Set to G6_VR_TEMP_NO_SENSOR to disable. */
     float dfs_step_mhz;
 
     G6ControlMode control_mode;
@@ -197,8 +215,8 @@ esp_err_t g6_brain_init(G6BrainState *brain);
 
 esp_err_t g6_brain_update(G6BrainState *brain,
                           float f_mhz, float v_mv, float hr_ths,
-                          float power_w, float temp_c, float err_pct,
-                          uint32_t share_count);
+                          float power_w, float temp_c, float vr_temp_c,
+                          float err_pct, uint32_t share_count);
 
 void g6_brain_get_optimal(const G6BrainState *brain,
                           float *opt_f, float *opt_v, float *pred_hr);
