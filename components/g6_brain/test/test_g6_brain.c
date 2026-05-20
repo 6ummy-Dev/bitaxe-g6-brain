@@ -161,7 +161,8 @@ TEST_CASE("Internal Slew-Rate Limiting enforces step boundaries", "[g6_brain]") 
     
     test_brain.best_f = 650.0f;
     test_brain.theta[0] = -1.0f; 
-    test_brain.theta[3] = 1600.0f;
+    test_brain.theta[1] = -0.5f; // B3-TEST-1 Fix: Include negative voltage coeff to form a mathematically valid convex surface
+    test_brain.theta[3] = 200.0f; // B3-TEST-1 Fix: Bound the gradient push vector appropriately to test step execution 
 
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
