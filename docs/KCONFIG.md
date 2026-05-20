@@ -33,13 +33,24 @@ All options live under: **Component config → G6 Brain Configuration**
 ### `G6_TEMP_CEILING`
 - **Type:** int (50–85)
 - **Default:** `70` (°C)
-- **Description:** Absolute thermal limit for the ASIC. Proactive scaling steps activate 5 °C below this threshold.
+- **Description:** Absolute thermal limit for the ASIC die. Proactive scaling steps activate 5 °C below this threshold.
+
+### `G6_VR_TEMP_CEILING`
+- **Type:** int (70–105)
+- **Default:** `85` (°C)
+- **Description:** Hard thermal ceiling for the voltage regulator (VR). When the VR temperature reaches or exceeds this value, both voltage and frequency are stepped back to reduce power through the regulator.  
+  Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) when no VR temperature sensor is available.
+
+### `G6_VR_TEMP_PROACTIVE_MARGIN`
+- **Type:** int (2–15)
+- **Default:** `5` (°C)
+- **Description:** Degrees below `G6_VR_TEMP_CEILING` where proactive voltage reduction begins. Only voltage is reduced in this zone. Frequency reduction only occurs at the hard ceiling.
 
 ### `G6_NER_THRESHOLD`
 - **Type:** int (50–2000)
 - **Default:** `250` (= 2.50%)
-- **Description:** Nonce Error Rate limit in 0.01% units. Exceeding this value forces conservative fallback targets.
-
+- **Description:** Nonce Error Rate threshold in 0.01% units. Exceeding this value forces conservative fallback behavior.
+  
 ---
 
 ## Optimization Behavior
