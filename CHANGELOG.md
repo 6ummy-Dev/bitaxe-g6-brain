@@ -2,6 +2,52 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta4] - 2026-05-20
+
+### 2026-05-20 — VR Thermal Safety (beta4 v1)
+
+**New Feature: Two-tier thermal safety — voltage regulator monitoring**
+
+The brain previously tracked ASIC die temperature (`temp_c`) only. On hardware where the voltage regulator runs a separate thermal sensor (`vrTemp` in the Bitaxe telemetry API), the brain had no visibility into VR heat. Because VR power dissipation scales with voltage squared, brain-driven voltage exploration could push the VR into thermal distress while the ASIC remained comfortably within its own ceiling.
+
+**Architecture**
+
+ASIC temperature and VR temperature are deliberately treated differently:
+
+- **ASIC temp (`temp_c`)** gates the RLS update entirely: if the ASIC is above ceiling, the sample is discarded and only the safety layer runs. This prevents learning from a thermally-stressed operating point.
+- **VR temp (`vr_temp_c`)** never gates learning. It runs exclusively in the safety layer as a final setpoint constraint. The rationale: VR heat does not corrupt the hashrate or power surface measurements — it only means the resulting setpoints must be reined in. The brain continues to learn the surface accurately while the VR check holds the recommended voltage back.
+
+**Changes**
+
+- `g6_brain_update()` gains a new `vr_temp_c` parameter (position 6, between `temp_c` and `err_pct`). Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) when no VR sensor is available — all VR checks are silently skipped. **This is a breaking API change; callers must be updated.**
+- `g6_safety_proactive_vr_thermal_scale()` added as a static safety function. Runs last in `safety_layer:`, after ASIC thermal and voltage ripple checks.
+  - **Proactive zone** (`vr_temp_c > ceiling − margin`): steps `best_v` back by ×0.992 per cycle. Frequency is left untouched — voltage drives VR dissipation, not clock speed.
+  - **Hard ceiling** (`vr_temp_c ≥ ceiling`): steps back both `best_v` (×0.985) and `best_f` (×0.96) to reduce total power through the VR immediately.
+- `G6BrainState.vr_temp_ceiling` added to the struct (initialized from Kconfig, default 85°C). Lives in the Phase 2 reserved block — no NVS schema change required.
+- `G6_SAFETY_VR_THERMAL` added to the `G6SafetyStatus` enum.
+- `G6_VR_TEMP_NO_SENSOR` sentinel constant (`-1.0f`) exported from header.
+- `G6_NVS_SCHEMA_VERSION` in `g6_brain.h` corrected from stale `2u` to `3u` to match the runtime constant in `g6_brain.c` (housekeeping noted in beta3 v5 QA sign-off).
+
+**Kconfig additions (Safety & Thermal menu)**
+
+| Option | Default | Range | Description |
+|---|---|---|---|
+| `G6_VR_TEMP_CEILING` | 85°C | 70–105 | Hard VR thermal ceiling. Hard throttle above this. |
+| `G6_VR_TEMP_PROACTIVE_MARGIN` | 5°C | 2–15 | Degrees below ceiling where proactive voltage step-back begins. |
+
+**New tests (3)**
+- `VR thermal sentinel (-1) is a no-op` — verifies `G6_VR_TEMP_NO_SENSOR` disables all VR checks.
+- `VR proactive zone steps back best_v only` — verifies voltage reduction and frequency stability in the proactive zone.
+- `VR hard ceiling steps back both best_v and best_f` — verifies both setpoints are reduced at the hard ceiling.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/Kconfig`
+- `components/g6_brain/test/test_g6_brain.c`
+
+---
+
 ## [1.0.0-beta3] - 2026-05-20 *Completed*
 
 **Status**: Signed-off and deployed for community soak testing. This release officially introduces the O(1) analytical J/TH solver, Joseph-form covariance stabilization, and 3-Sigma outlier gating.
