@@ -2,7 +2,7 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta4] - 2026-05-20 _In Progress_
+## [1.0.0-beta4] - 2026-05-20 _Completed_
 
 ### 2026-05-20 — QA Fixes, CI Hardening & Documentation Alignment (beta4)
 
