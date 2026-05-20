@@ -36,8 +36,9 @@ void g6_brain_example_task(void *arg)
         float error_pct = 0.7f;
         uint32_t share_count = 50;
 
-        ret = g6_brain_update(&brain, freq_mhz, volt_mv, hashrate,
-                              power_w, temp_c, error_pct, share_count);
+float vr_temp_c = 74.0f;  // read from your vrTemp sensor, or G6_VR_TEMP_NO_SENSOR if unavailable
+ret = g6_brain_update(&brain, freq_mhz, volt_mv, hashrate,
+                      power_w, temp_c, vr_temp_c, error_pct, share_count);
 
         float opt_f = 0.0f, opt_v = 0.0f;
         g6_brain_get_optimal(&brain, &opt_f, &opt_v, NULL);
