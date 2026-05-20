@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0.0-beta3
+# G6 Brain Installation & Integration Guide — v1.0.0-beta4
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370)
 
@@ -40,8 +40,6 @@ list(APPEND EXTRA_COMPONENT_DIRS
 )
 ```
 
-(Use `list(APPEND …)` rather than `set(…)` so you don't overwrite any existing `EXTRA_COMPONENT_DIRS` entries from your project.)
-
 ---
 
 ## Step 3: menuconfig (Fully Functional)
@@ -56,10 +54,9 @@ Navigate to:
 Component config → G6 Brain Configuration
 ```
 
-All options are live, including:
-- `G6_ENABLE_EFFICIENCY_MODE` (opt-in J/TH optimization)
-- `G6_JTH_MAX_OUTER_ITERS`
-- Safety and RLS tuning parameters
+All options are live, including the new VR thermal safety settings:
+- `G6_VR_TEMP_CEILING`
+- `G6_VR_TEMP_PROACTIVE_MARGIN`
 
 ---
 
@@ -74,6 +71,7 @@ Use the main integration example:
 2. Call it from `app_main()` after WiFi and ASIC initialization.
 3. **Set `brain.control_mode = G6_MODE_RECOMMEND`** (safest starting point).
 4. Replace placeholder telemetry with real values from your miner.
+5. If your hardware provides VR temperature, pass it to `g6_brain_update()`. Otherwise use `G6_VR_TEMP_NO_SENSOR`.
 
 ---
 
@@ -91,12 +89,12 @@ Watch for:
 
 ---
 
-## Phase Recommendations (beta3)
+## Phase Recommendations (beta4)
 
 - **Start in `G6_MODE_RECOMMEND`** (computes optimal but never mutates `best_f`/`best_v`).
 - Only switch to `G6_MODE_AUTO` after monitoring for 24–48 hours.
 - Use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation.
-- **Efficiency mode** (`G6_ENABLE_EFFICIENCY_MODE`) is opt-in. It now uses a fast analytical Dinkelbach solver. Enable it only after the brain has collected enough data (`model_quality` and `power_model_quality` reasonably high).
+- When hardware provides VR temperature, pass the value to enable two-tier thermal protection.
 
 ---
 
@@ -106,12 +104,10 @@ Watch for:
 - Full API reference → [`docs/API.md`](API.md)
 - Kconfig options → [`docs/KCONFIG.md`](KCONFIG.md)
 - Safety principles → [`AGENTS.md`](AGENTS.md)
-- Testing guide → [`docs/TESTING.md`](TESTING.md)
 
 ---
 
-**Version:** v1.0.0-beta3 (May 2026)  
-**Note:** The J/TH efficiency path now uses an analytical O(1) Dinkelbach solver with dual model quality gates.
+**Version:** v1.0.0-beta4 (May 2026)
 
 ---
 
