@@ -42,6 +42,29 @@ menu "G6 Brain Configuration"
             help
                 Hard ASIC temperature limit.
         
+        config G6_VR_TEMP_CEILING
+            int "VR regulator thermal ceiling (°C)"
+            default 85
+            range 70 105
+            help
+                Hard thermal ceiling for the voltage regulator (vrTemp).
+                When vrTemp reaches this value, both best_v and best_f are stepped
+                back immediately to reduce total power through the VR.
+                When vrTemp exceeds (ceiling - G6_VR_TEMP_PROACTIVE_MARGIN), only
+                best_v is stepped back as an early warning response.
+                Pass G6_VR_TEMP_NO_SENSOR (-1.0f) as vr_temp_c to g6_brain_update()
+                to disable VR thermal monitoring entirely (no sensor available).
+
+        config G6_VR_TEMP_PROACTIVE_MARGIN
+            int "VR proactive thermal margin below ceiling (°C)"
+            default 5
+            range 2 15
+            help
+                Degrees below G6_VR_TEMP_CEILING at which proactive VR voltage
+                step-back begins. A margin of 5°C means proactive action starts
+                at (ceiling - 5). Only voltage is reduced in the proactive zone;
+                frequency is only reduced at the hard ceiling.
+
         config G6_NER_THRESHOLD
             int "NER (nonce error rate) threshold (x100)"
             default 250
