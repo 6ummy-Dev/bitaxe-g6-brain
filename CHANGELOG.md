@@ -4,6 +4,21 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta3] - 2026-05-19 *In Progress*
 
+### 2026-05-19 — Critical Bug Fixes (beta3 v4)
+
+**Bug Fixes (from independent QA review — beta3 v3)**
+
+- **Critical (B3-BUG-4)**: Fixed safety layer completely bypassed on all successful RLS updates. A bare `return ESP_OK` had been inserted at the end of the normal update path, immediately before the `safety_layer:` label, inverting the intended control flow: the slew-rate limiter, thermal clamping, and voltage ripple check were only reachable when a sample was *rejected* (bad thermal, high NER, invalid, or outlier). On every *successful* update — the majority of calls — the function returned before any safety logic ran. Fixed by removing the early return and letting the normal path fall through to `safety_layer:`, which already carries its own `return ESP_OK` at the end.
+- **Critical (B3-BUG-5)**: Fixed NVS warm-start silently corrupting `power_theta` and `power_P`. In `g6_brain_load_nvs_fingerprint()`, the buffer offset was advanced by `sizeof(brain->theta)` (24 bytes) after copying `brain->P`, instead of `sizeof(brain->P)` (144 bytes). This caused `power_theta` and `power_P` to be read from the middle of the P-matrix data on every warm-start. The J/TH solver would then compute efficiency gradients against a completely wrong power surface, producing incorrect and potentially aggressive setpoint changes with no visible error. The save path was unaffected. Fixed by correcting the single `sizeof` argument at line 174.
+
+**Impact**
+- Safety layer (slew-rate limiting, proactive thermal scaling, voltage ripple clamping) now correctly executes on every call path, including the normal successful-update path it was designed for.
+- Power model state is correctly restored on reboot. J/TH solver operates on a valid surface from the first post-warm-start cycle.
+- The "Internal Slew-Rate Limiting" test added in beta3 v3, which was structurally correct but failing due to B3-BUG-4, now passes as intended.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+
 ### 2026-05-19 — CI Pipeline Repair, Slogan Unification & Warning Cleanup
 
 **CI Pipeline & Compilation Fixes**
@@ -52,7 +67,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 **Bug Fixes (from independent QA review)**
 - **Critical (B3-BUG-1)**: Added missing `power_model_quality` check in `optimize_jth_dinkelbach()`. The J/TH solver now gates on **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. This prevents the optimizer from following noisy gradients from an underfit power model on cold boots or early in learning.
 - **Medium (B3-BUG-2)**: Fixed broken convergence detection in the Dinkelbach outer loop. The previous check compared `new_lambda` to `lambda` *after* assignment, making it always true after any improvement. Now correctly uses `prev_lambda` to detect actual convergence.
-- **Minor (B3-BUG-3)**: Removed dead `hr_i`/`pw_i` variables inside the inner gradient loop and replaced them with a **sufficient-descent guard**. If a step increases J/TH, the inner loop now exits early instead of continuing with a diverging update.
+- **Minor (B3-BUG-3)**: Removed dead `hr_i`/`pw_i` variables inside the inner gradient loop. Note: this fix was subsequently superseded — the entire inner gradient loop was eliminated in the same build by the O(1) analytical solver (see "O(1) Analytical J/TH Solver" entry above).
 
 **Robustness & Housekeeping**
 - Restored the `"Proactive thermal derating triggers correctly"` Unity test (had been removed). Explicit coverage for the proactive thermal scaling safety path is now back.
