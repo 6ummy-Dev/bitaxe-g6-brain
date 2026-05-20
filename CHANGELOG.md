@@ -2,7 +2,20 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta4] - 2026-05-20 _In Progress_
+## [1.0.0-beta4] - 2026-05-20 _In Progress_.
+
+### 2026-05-20 — QA Audit Fixes (beta4 v2)
+
+**Bug Fixes (from independent deep QA audit)**
+
+- **Critical (B4-BUG-1)**: Fixed slew-rate limiter fighting safety derating (sawtooth oscillation). When a safety condition was active (ASIC thermal, NER, or VR thermal), the safety override functions correctly pulled `best_f`/`best_v` down each tick, but `g6_brain_get_optimal()` still produced a high undeflated candidate, causing the slew limiter to pull them back up on the next tick. This created a continuous oscillation at the thermal edge, diluting the intended safety margin. Fixed by evaluating a `safety_active` flag before the slew block — upward slew is suspended whenever any safety condition is in its active zone. Hardware limits and safety derating still apply unconditionally on every tick.
+- **Medium (B4-BUG-2)**: Fixed innovation dead-zone silently mislabelled as outlier rejections. When the covariance matrix `P` converges tightly (`xᵀPx < 1e-4`), the previous code combined the dead-zone check with the 3-sigma gate, causing valid high-confidence samples to be logged as `HR Outlier Rejected` and counted against operators. Separated the two checks: dead-zone (`!has_significant_innovation`) now silently skips the RLS update with a `goto safety_layer` and no log. The 3-sigma gate remains as the only path that logs an outlier warning.
+- **Low (B4-BUG-3)**: Fixed `docs/API.md` out of sync with beta4 signature. Added `vr_temp_c` parameter to the code block and parameter table. Updated version header from beta3 to beta4.
+- **Low (B4-BUG-4)**: Eliminated redundant NVS schema version dual-definition. Removed `static const uint32_t NVS_SCHEMA_VERSION = 3u` from `g6_brain.c` and replaced all internal references with the single canonical `G6_NVS_SCHEMA_VERSION` macro from `g6_brain.h`.
+
+**Files changed**
+- `components/g6_brain/g6_brain.c`
+- `docs/API.md`
 
 ### 2026-05-20 — VR Thermal Safety (beta4 v1)
 
