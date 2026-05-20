@@ -1,4 +1,4 @@
-# G6 Brain Kconfig Options — v1.0.0-beta3
+# G6 Brain Configuration — v1.0.0-beta4 (VR Thermal Safety)
 
 All options live under: **Component config → G6 Brain Configuration**
 
