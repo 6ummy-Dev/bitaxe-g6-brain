@@ -4,6 +4,22 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta4] - 2026-05-20 _In Progress_
 
+### 2026-05-20 — Core QA Fixes (Correctness & Robustness)
+
+**Bug Fixes**
+
+- **Tick vs Millisecond Unit Confusion**: Fixed `SETTLE_MS` and `MIN_WINDOW_MS` comparisons in the sample state machine. Raw tick deltas were being compared directly against millisecond constants, causing settle and measurement windows to be ~10× longer than intended on default ESP-IDF configuration (`CONFIG_FREERTOS_HZ=100`). Now correctly converts using `portTICK_PERIOD_MS`.
+- **Safety Status Telemetry Dead Code**: `G6BrainTelemetry.safety_status` was unconditionally set to `G6_SAFETY_OK`. Added `last_safety_status` tracking in `G6BrainState` and wired it through all safety paths (thermal, VR thermal, voltage, NER, power sanity, and outliers). Telemetry now correctly reports the last triggered safety condition.
+- **Power Validation Fail-Open**: Invalid `power_w` values caused an early return before the safety layer could run. Changed to `goto safety_layer;` so safety handlers always execute (consistent with AGENTS.md fail-closed principle).
+- **Missing Power Outlier Logging**: Added symmetric logging for power model outliers (`Power Outlier Rejected`), matching the existing hashrate outlier behavior and documentation in `MONITORING.md`.
+- **Dead Code Removal**: Removed unused `stored_size` read in `g6_brain_load_nvs_fingerprint()`. The value was parsed from NVS but never used.
+
+**Improvements**
+- Updated `README.md` to accurately reflect that **beta3 is the latest release**, while noting ongoing beta4 development work.
+- Improved CI workflow for better test compilation reliability.
+
+These changes focus on correctness, safety layer integrity, and telemetry accuracy. No behavior changes for normal operation paths.
+
 ### 2026-05-20 — Integration Layer Data Quality (beta4 v3)
 
 `docs/INTEGRATION_EXAMPLE.c` only — zero brain component changes.
