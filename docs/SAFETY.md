@@ -22,16 +22,18 @@ The following safety behaviors are **fully active**:
 
 3. **Sample Quality State Machine** Settle time + measurement window + minimum share count validation + thermal gate before any RLS update.
 
-4. **Joseph Stabilized Covariance** Avionics-standard covariance updates guarantee that the P-matrix remains positive semi-definite and symmetric under floating-point round-off, preventing model collapse.
+4. **Joseph Stabilized Covariance** Joseph-form covariance updates (`P_new = (I − k·xᵀ)·P·(I − k·xᵀ)ᵀ / λ`) guarantee that the P-matrix remains positive semi-definite and symmetric under floating-point round-off, preventing model collapse.
 
 5. **Statistical Outlier Gating** 3-Sigma innovation variance validation. Telemetry samples presenting errors outside expected statistical bounds are flagged as hardware noise and rejected before updating estimators.
 
 6. **Power Sanity Check** Rejects impossible power values.
 
-7. **Control Mode Enforcement** - `G6_MODE_ONLY`: Safety only — no best_f/v mutation  
-   - `G6_MODE_RECOMMEND` (default): Computes optimal but never mutates setpoints  
-   - `G6_MODE_AUTO`: Full optimizer  
-   All modes run the complete safety layer.
+7. **Control Mode Enforcement**
+   - `G6_MODE_OBSERVE_ONLY`: Safety only — no `best_f` / `best_v` mutation
+   - `G6_MODE_RECOMMEND` (default): Computes optimal but never mutates setpoints
+   - `G6_MODE_AUTO`: Full optimizer with internal slew-rate limiting
+
+   All modes run the complete safety layer on every call path.
 
 8. **NVS Warm-Start** Full theta + P-matrix + power model auto-saved. Survives power cycles.
 

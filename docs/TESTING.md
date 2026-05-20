@@ -34,7 +34,7 @@ When testing, pay attention to:
 
 ### 2. Verification of Outlier Gate Resilience
 - Simulate or observe telemetry sensor anomalies (e.g., brief hardware read drops or bus interference glitches).
-- Check that severe tracking anomalies trigger an `HR Outlier Rejected` or `Power Outlier Rejected` serial log log instead of twisting the tracking surface or collapsing `model_quality`.
+- Check that severe tracking anomalies trigger an `HR Outlier Rejected` or `Power Outlier Rejected` serial log instead of distorting the tracking surface or collapsing `model_quality`.
 
 ## Reporting Issues
 

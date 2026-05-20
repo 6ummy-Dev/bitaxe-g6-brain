@@ -11,16 +11,19 @@ grep -E "G6_BRAIN|PROACTIVE THERMAL|HIGH ERROR RATE|Outlier Rejected|NVS fingerp
 
 ### Key Log Strings
 
-| Log Message | Meaning | Action if frequent |
-| --- | --- | --- |
-| `G6 Brain initialized` | Normal startup | None |
-| `NVS fingerprint auto-saved` | Model persisted | None |
-| `PROACTIVE THERMAL` | Approaching thermal ceiling | Improve cooling |
-| `HIGH ERROR RATE` | NER back-off triggered | Check PSU / cooling / ASIC |
-| `HR Outlier Rejected` | 3-Sigma gating blocked a hashrate sensor glitch | Inspect I2C bus/driver noise |
-| `Power Outlier Rejected` | 3-Sigma gating blocked a power sensor glitch | Inspect INA/sensor telemetry stability |
-| `Quality=0.XX` | Model quality | See thresholds below |
-| `G6_TELEMETRY` lines | Telemetry snapshot | Use for dashboards |
+| Log Message | Source | Meaning | Action if frequent |
+| --- | --- | --- | --- |
+| `G6 Brain initialized` | brain | Normal startup | None |
+| `NVS fingerprint auto-saved` | brain | Model persisted | None |
+| `PROACTIVE THERMAL` | brain | Approaching thermal ceiling | Improve cooling |
+| `HIGH ERROR RATE` | brain | NER back-off triggered | Check PSU / cooling / ASIC |
+| `HR Outlier Rejected` | brain | 3-sigma gating blocked a hashrate sensor glitch | Inspect I²C bus / driver noise |
+| `Power Outlier Rejected` | brain | 3-sigma gating blocked a power sensor glitch | Inspect INA / sensor telemetry stability |
+| `Self-test: ...` | brain | One-shot diagnostic output | Investigate if `DEGRADED` |
+| `Quality=0.XX` | your integration code | Model quality (from `g6_brain_get_model_quality()`) | See thresholds below |
+| `G6_TELEMETRY` lines | your integration code | Telemetry snapshot from `g6_brain_get_telemetry()` | Use for dashboards |
+
+(The `Quality=` and `G6_TELEMETRY` lines come from your own logging — see `docs/INTEGRATION_EXAMPLE.c`.)
 
 ### Model Quality Thresholds
 

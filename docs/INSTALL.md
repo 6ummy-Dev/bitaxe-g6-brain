@@ -35,10 +35,12 @@ Copy the `components/g6_brain/` folder into your project’s `components/` direc
 Add the component path in your top-level `CMakeLists.txt`:
 
 ```cmake
-set(EXTRA_COMPONENT_DIRS 
+list(APPEND EXTRA_COMPONENT_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/components/g6_brain
 )
 ```
+
+(Use `list(APPEND …)` rather than `set(…)` so you don't overwrite any existing `EXTRA_COMPONENT_DIRS` entries from your project.)
 
 ---
 
@@ -103,7 +105,7 @@ Watch for:
 - Recommended example → [`docs/INTEGRATION_EXAMPLE.c`](INTEGRATION_EXAMPLE.c)
 - Full API reference → [`docs/API.md`](API.md)
 - Kconfig options → [`docs/KCONFIG.md`](KCONFIG.md)
-- Safety principles → [`AGENTS.md`](../AGENTS.md)
+- Safety principles → [`AGENTS.md`](AGENTS.md)
 - Testing guide → [`docs/TESTING.md`](TESTING.md)
 
 ---

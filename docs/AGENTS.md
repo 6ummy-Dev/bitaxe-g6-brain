@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta3 (Phase 1)**
+**G6 Brain v1.0.0-beta3 (Phase 1 complete + Phase 2 early)**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 
@@ -39,7 +39,7 @@ The following safety behaviors are **now implemented and enforced**:
    - `G6_MODE_RECOMMEND` (safe default): Computes targets but does not apply mutations.
    - `G6_MODE_AUTO`: Active state machine optimization + safety.
 
-9. **NVS Fingerprint Checkpointing**: Automatic background saving of model parameters every 5 minutes after initialization thresholds are satisfied.
+9. **NVS Fingerprint Checkpointing**: Background saving of model parameters after `update_count > 10` and on a tick-based throttle (`NVS_SAVE_INTERVAL_TICKS = 300000`). At a 1 kHz FreeRTOS tick rate that is ~5 minutes; at the ESP-IDF default of 100 Hz it is ~50 minutes. Tune your `CONFIG_FREERTOS_HZ` accordingly.
 
 10. **Fail-Closed Execution**: Safety handlers always run, even on samples rejected by data quality or outlier gates.
 

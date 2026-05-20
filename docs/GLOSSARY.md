@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta3 (Phase 1)**
+**G6 Brain v1.0.0-beta3 (Phase 1 complete + Phase 2 early)**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -22,7 +22,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Cold Start** The initial phase after power-on or reset when the brain has insufficient data and operates conservatively while collecting samples.
 
-**Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) stored per physical chip in NVS. Enables warm-start after reboot (auto-saved every ~5 min after 10+ updates).
+**Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) + power model state, stored per physical chip in NVS. Enables warm-start after reboot. Auto-saved after 10+ successful updates and once `NVS_SAVE_INTERVAL_TICKS = 300000` ticks have elapsed since the last save (at default 100 Hz tick rate that is ~50 minutes; at 1 kHz it is ~5 minutes).
 
 **Joseph Form Update** A mathematically stabilized formulation of the covariance update equation. Guarantees matrix symmetry and positive semi-definiteness under floating-point precision limits, preventing numerical divergence.
 

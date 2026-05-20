@@ -2,9 +2,9 @@
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
-Welcome to the official documentation for the **G6 Brain** — the flagship module of the Bitaxe Brains Project.
+Welcome to the official documentation for the **G6 Brain** — an adaptive RLS-based optimizer for the Bitaxe Brains Project.
 
-This is a fully modular, production-hardened control brain that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict aerospace-grade safety constraints.
+This is a clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints.
 
 In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelbach J/TH solver** (exact closed-form 2×2 minimization) instead of grid search.
 
@@ -42,19 +42,21 @@ In **beta3**, the optional efficiency mode uses a new fast **analytical Dinkelba
 ## What Makes G6 Brain Different
 
 - Pure RLS quadratic modeling (fully explainable)
-- Strong predictive safety layers
+- Joseph-form covariance stabilization (numerically robust)
+- 3-sigma statistical outlier gating
 - Per-chip NVS fingerprinting (warm start)
 - Clean telemetry export API
 - **Analytical J/TH optimization** (beta3) — exact O(1) solver instead of heuristics
 - Modular and auditable design
-- Aerospace-style QA hardening
+- Hardened through 6 independent QA review cycles
 
 ---
 
 ## Status
 
 - **Version:** v1.0.0-beta3 (May 2026)
-- **Maturity:** Beta — actively hardening the new analytical J/TH solver
+- **Maturity:** Beta — ready for community field testing
+- **QA:** 6 review cycles · 15+ findings resolved
 - **License:** MIT
 
 ---
