@@ -313,7 +313,7 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
 
     float hr = evaluate_quadratic(brain->theta, fn, vn);
     float pw = evaluate_quadratic(brain->power_theta, fn, vn);
-    if (hr < 8.0f) return;
+    if (hr < G6_EFFICIENCY_MIN_HR_THS) return;
 
     float lambda = pw / hr;
 
@@ -348,7 +348,7 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
         float hr_new = evaluate_quadratic(brain->theta, fn_inner, vn_inner);
         float pw_new = evaluate_quadratic(brain->power_theta, fn_inner, vn_inner);
 
-        if (hr_new < 8.0f) break;
+        if (hr_new < G6_EFFICIENCY_MIN_HR_THS) break;
 
         float new_lambda = pw_new / hr_new;
         if (new_lambda < lambda) {
@@ -720,6 +720,11 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
     memcpy(out->theta_power, brain->power_theta, sizeof(brain->power_theta));
     out->trace_P_power = trace_P(brain->power_P);
     out->last_innovation = brain->last_innovation;
+    out->best_f = brain->best_f;
+    out->best_v = brain->best_v;
+    out->model_quality = brain->model_quality;
+    out->last_efficiency = brain->last_efficiency;
+    out->update_count = brain->update_count;
     out->safety_status = brain->last_safety_status;
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;
