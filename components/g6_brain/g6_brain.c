@@ -93,7 +93,7 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv)
 {
     if (!brain || !isfinite(v_mv)) return;
     if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
-        brain->best_v = fmaxf(BM1370_V_MIN, fminf(BM1370_V_MAX, brain->best_v));
+        // Redundant fmaxf/fminf clamping removed. Pure boundary check status change.
         brain->last_safety_status = G6_SAFETY_VOLTAGE;
     }
 }
@@ -404,12 +404,18 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float entry_best_f = brain->best_f;
     float entry_best_v = brain->best_v;
 
+    /* NaN, non-finite, and strict impossible checks fail completely */
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
-        hr_ths <= 0.0f ||
-        f_mhz < BM1370_F_MIN || f_mhz > BM1370_F_MAX ||
-        v_mv  < BM1370_V_MIN || v_mv  > BM1370_V_MAX) {
+        hr_ths <= 0.0f) {
         return ESP_ERR_INVALID_ARG;
+    }
+    
+    /* Hardware limit violations fail-closed by routing directly to the safety layer */
+    if (f_mhz < BM1370_F_MIN || f_mhz > BM1370_F_MAX ||
+        v_mv  < BM1370_V_MIN || v_mv  > BM1370_V_MAX) {
+        brain->last_safety_status = G6_SAFETY_VOLTAGE;
+        goto safety_layer;
     }
 
     /* vr_temp_c: NaN is rejected. Any value <= G6_VR_TEMP_NO_SENSOR (-1.0f)
