@@ -89,15 +89,6 @@ static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
     }
 }
 
-static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv)
-{
-    if (!brain || !isfinite(v_mv)) return;
-    if (v_mv < BM1370_V_MIN || v_mv > BM1370_V_MAX) {
-        // Redundant fmaxf/fminf clamping removed. Pure boundary check status change.
-        brain->last_safety_status = G6_SAFETY_VOLTAGE;
-    }
-}
-
 static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_temp_c)
 {
     if (!brain) return;
@@ -581,7 +572,8 @@ safety_layer:
 
     bool safety_active = (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) ||
                          (err_pct > brain->ner_threshold) ||
-                         vr_safety_active;
+                         vr_safety_active ||
+                         (brain->last_safety_status != G6_SAFETY_OK); // Ensures any caught anomaly suspends upward slew
 
     float candidate_f, candidate_v;
     g6_brain_get_optimal(brain, &candidate_f, &candidate_v, NULL);
@@ -605,7 +597,6 @@ safety_layer:
      * each helper overwrites the status only when its condition triggers.
      * VR thermal runs first so ASIC thermal (the higher-priority condition) wins
      * on any tick where both fire simultaneously. */
-    g6_safety_check_voltage_ripple(brain, v_mv);
     g6_safety_proactive_vr_thermal_scale(brain, vr_temp_c);
     g6_safety_proactive_thermal_scale(brain, temp_c);
 
