@@ -99,7 +99,12 @@ typedef enum {
     G6_SAFETY_POWER_SANITY,
     G6_SAFETY_NER_BACKOFF,
     G6_SAFETY_SAMPLE_QUALITY,
-    G6_SAFETY_P_MATRIX_SINGULAR
+    G6_SAFETY_P_MATRIX_SINGULAR,
+    /* Input telemetry failed validation (non-finite, hr_ths<=0, or out of
+     * hardware bounds for f_mhz/v_mv). Routed fail-closed to the safety
+     * layer per manifesto non-negotiable 3.7. Appended at end of enum to
+     * preserve integer mappings for callers compiled against beta4. */
+    G6_SAFETY_INPUT_RANGE
 } G6SafetyStatus;
 
 /* Main State Struct */
