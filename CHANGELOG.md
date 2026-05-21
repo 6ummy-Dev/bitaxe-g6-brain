@@ -4,7 +4,17 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-20 _In Progress_
 
-### Safety Layer Hardening & Code Quality (beta5)
+### [1.0.0-beta5] — 2026-05-20  QA Round 3 (Final)
+
+- **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
+
+- **Low (B5v3-NIT-1)**: Extended NVS round-trip test to verify `power_theta` and `power_P` survive save/load. Previous test only checked `theta` and `P`, leaving the B5v2-BUG-1 fix (power_P offset increment) without direct test coverage.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/test/test_g6_brain.c`
+
+### [1.0.0-beta5] — 2026-05-20  Safety Layer Hardening & Code Quality (beta5)
 
 **Bug Fixes (from independent deep QA audit)**
 
