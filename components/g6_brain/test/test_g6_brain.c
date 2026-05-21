@@ -3,7 +3,8 @@
  *
  * Validates tracking model updates, safety thresholds,
  * outlier gating, input validation (fail-closed routing),
- * NVS round-trip and corruption recovery, and internal slew rate limits.
+ * NVS round-trip and corruption recovery, internal slew rate limits,
+ * Dinkelbach J/TH efficiency optimization end-to-end, and telemetry snapshot.
  */
 
 #include "unity.h"
@@ -383,4 +384,117 @@ TEST_CASE("P-matrix recovery preserves operator-configured use_efficiency_mode",
     TEST_ASSERT_TRUE(test_brain.use_efficiency_mode);
     TEST_ASSERT_EQUAL(G6_MODE_AUTO, test_brain.control_mode);
     TEST_ASSERT_EQUAL_FLOAT(3.0f, test_brain.ner_threshold);
+}
+
+/* ====================== DINKELBACH J/TH OPTIMIZER ====================== */
+
+TEST_CASE("Dinkelbach optimizer improves J/TH over naive hashrate-only point", "[g6_brain]") {
+    /* Synthetic surfaces designed so the hashrate-only optimum (high MHz) is
+     * less efficient than a lower-MHz operating point:
+     *
+     *   HR  surface: theta = [-2, -1, 0, 2, 0, 80]
+     *     Peak at fn=0.5 (775 MHz), ~80.5 TH/s. Concave-down in f and v.
+     *
+     *   PWR surface: power_theta = [0.5, 0.2, 0, 3, 0, 20]
+     *     Convex (opens up): more frequency = more watts.
+     *     At fn=0 (650 MHz): ~20W.  At fn=0.5 (775 MHz): ~21.6W.
+     *
+     * Starting J/TH at 650 MHz: 20/80 = 0.250 W/TH.
+     * Dinkelbach should find a lower-MHz point with better W/TH. */
+    test_brain.use_efficiency_mode = true;
+    /* Bypass the quality gate — we're testing the optimizer math, not
+     * the convergence of the RLS models. */
+    test_brain.model_quality = 0.8f;
+    test_brain.power_model_quality = 0.8f;
+
+    test_brain.theta[0] = -2.0f;
+    test_brain.theta[1] = -1.0f;
+    test_brain.theta[2] =  0.0f;
+    test_brain.theta[3] =  2.0f;
+    test_brain.theta[4] =  0.0f;
+    test_brain.theta[5] = 80.0f;
+
+    test_brain.power_theta[0] =  0.5f;
+    test_brain.power_theta[1] =  0.2f;
+    test_brain.power_theta[2] =  0.0f;
+    test_brain.power_theta[3] =  3.0f;
+    test_brain.power_theta[4] =  0.0f;
+    test_brain.power_theta[5] = 20.0f;
+
+    /* Set starting point to the hashrate-only optimum (775 MHz) */
+    test_brain.best_f = 775.0f;
+    test_brain.best_v = 1220.0f;
+
+    float opt_f, opt_v, pred_hr;
+    g6_brain_get_optimal(&test_brain, &opt_f, &opt_v, &pred_hr);
+
+    /* Dinkelbach must have moved to a lower-MHz, more efficient point. */
+    TEST_ASSERT_LESS_THAN(775.0f, opt_f);
+    TEST_ASSERT_GREATER_OR_EQUAL(BM1370_F_MIN, opt_f);
+
+    /* Compute J/TH at starting point and at the optimizer's result. */
+    float fn_start = (775.0f - BM1370_F_CENTER) / BM1370_F_SCALE;
+    float fn_opt   = (opt_f  - BM1370_F_CENTER) / BM1370_F_SCALE;
+    float vn       = (1220.0f - BM1370_V_CENTER) / BM1370_V_SCALE;
+
+    float hr_start = test_brain.theta[0]*fn_start*fn_start + test_brain.theta[3]*fn_start + test_brain.theta[5];
+    float pw_start = test_brain.power_theta[0]*fn_start*fn_start + test_brain.power_theta[3]*fn_start + test_brain.power_theta[5];
+    float jth_start = pw_start / hr_start;
+
+    float hr_opt = test_brain.theta[0]*fn_opt*fn_opt + test_brain.theta[3]*fn_opt + test_brain.theta[5];
+    float pw_opt = test_brain.power_theta[0]*fn_opt*fn_opt + test_brain.power_theta[3]*fn_opt + test_brain.power_theta[5];
+    float jth_opt = pw_opt / hr_opt;
+
+    /* The optimizer's point must be meaningfully more efficient (>1% better). */
+    TEST_ASSERT_LESS_THAN(jth_start * 0.99f, jth_opt);
+    /* And the predicted HR must be above the minimum viable threshold. */
+    TEST_ASSERT_GREATER_OR_EQUAL(G6_EFFICIENCY_MIN_HR_THS, pred_hr);
+}
+
+TEST_CASE("Dinkelbach does not fire below model quality threshold", "[g6_brain]") {
+    /* With quality below 0.6 on either model, get_optimal must return the
+     * hashrate-only optimum unchanged — Dinkelbach must be a no-op. */
+    test_brain.use_efficiency_mode = true;
+    test_brain.model_quality = 0.8f;
+    test_brain.power_model_quality = 0.4f;  /* below gate */
+
+    test_brain.theta[0] = -2.0f; test_brain.theta[1] = -1.0f;
+    test_brain.theta[3] =  2.0f; test_brain.theta[5] = 80.0f;
+    test_brain.power_theta[0] = 0.5f; test_brain.power_theta[3] = 3.0f;
+    test_brain.power_theta[5] = 20.0f;
+
+    test_brain.best_f = 775.0f;
+    test_brain.best_v = 1220.0f;
+
+    float opt_f, opt_v, pred_hr;
+    g6_brain_get_optimal(&test_brain, &opt_f, &opt_v, &pred_hr);
+
+    /* Hashrate-only optimum for these theta values: fn_opt = -d/(2a) = -2/(2*-2) = 0.5
+     * → f_cand = 0.5*250 + 650 = 775 MHz — within bounds, so optimizer stays there. */
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 775.0f, opt_f);
+}
+
+/* ====================== TELEMETRY SNAPSHOT ====================== */
+
+TEST_CASE("g6_brain_get_telemetry snapshot captures all operator fields", "[g6_brain]") {
+    /* Run a few updates to get non-trivial state, then verify the telemetry
+     * snapshot is consistent with the struct at the moment of capture. */
+    test_brain.control_mode = G6_MODE_RECOMMEND;
+    for (int i = 0; i < 5; i++) {
+        g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                        55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    }
+
+    G6BrainTelemetry t;
+    g6_brain_get_telemetry(&test_brain, &t);
+
+    TEST_ASSERT_EQUAL_FLOAT(test_brain.best_f,        t.best_f);
+    TEST_ASSERT_EQUAL_FLOAT(test_brain.best_v,        t.best_v);
+    TEST_ASSERT_EQUAL_FLOAT(test_brain.model_quality, t.model_quality);
+    TEST_ASSERT_EQUAL_FLOAT(test_brain.last_efficiency, t.last_efficiency);
+    TEST_ASSERT_EQUAL_UINT32(test_brain.update_count,  t.update_count);
+    TEST_ASSERT_EQUAL(test_brain.last_safety_status,   t.safety_status);
+    /* Backward-compat alias must mirror best_v. */
+    TEST_ASSERT_EQUAL_FLOAT(t.best_v, t.last_recommended_voltage);
+    TEST_ASSERT_GREATER_THAN(0u, t.update_count);
 }
