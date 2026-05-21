@@ -19,7 +19,7 @@ All options live under: **Component config → G6 Brain Configuration**
 ### `G6_RLS_TRACE_MAX`
 - **Type:** int (100000–100000000)
 - **Default:** `10000000`
-- **Description:** Maximum allowed trace value for the covariance matrix before dropping into cold-start recovery.
+- **Description:** Maximum allowed trace value for the covariance matrix. Exceeding this limit mathematically zero-fills the active polynomial surfaces and resets matrix confidence to safely arrest runaway divergence and prevent recursive gain explosions.
 
 ### `G6_RLS_VFF_SIGMA_SQ`
 - **Type:** int (10–200)
