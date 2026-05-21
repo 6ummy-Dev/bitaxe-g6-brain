@@ -61,9 +61,8 @@ typedef enum {
 #define BM1370_V_MIN 1050.0f
 #define BM1370_V_MAX 1350.0f
 
-#define SETTLE_MS 8000
-#define MIN_WINDOW_MS 5000
 #define MIN_SHARE_COUNT 20
+
 #if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
 #define G6_JTH_MAX_OUTER_ITERS CONFIG_G6_JTH_MAX_OUTER_ITERS
 #else
@@ -90,17 +89,6 @@ typedef enum {
 #endif
 
 #define G6_VR_TEMP_NO_SENSOR (-1.0f)
-
-/* State Machine */
-typedef enum {
-    BRAIN_STATE_IDLE,
-    BRAIN_STATE_APPLY_CANDIDATE,
-    BRAIN_STATE_SETTLE_WAIT,
-    BRAIN_STATE_MEASURE_WINDOW,
-    BRAIN_STATE_VALIDATE_SAMPLE,
-    BRAIN_STATE_RLS_UPDATE,
-    BRAIN_STATE_DECIDE_NEXT
-} BrainSampleState;
 
 /* Safety Status */
 typedef enum {
@@ -143,9 +131,6 @@ typedef struct {
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
     uint32_t last_setting_change_tick;
-    BrainSampleState sample_state;
-    uint32_t settle_start_tick;
-    uint32_t measure_start_tick;
 
     /* Telemetry */
     float last_efficiency;
