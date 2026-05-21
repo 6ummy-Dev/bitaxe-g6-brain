@@ -472,6 +472,9 @@ TEST_CASE("Dinkelbach does not fire below model quality threshold", "[g6_brain]"
     /* Hashrate-only optimum for these theta values: fn_opt = -d/(2a) = -2/(2*-2) = 0.5
      * → f_cand = 0.5*250 + 650 = 775 MHz — within bounds, so optimizer stays there. */
     TEST_ASSERT_FLOAT_WITHIN(1.0f, 775.0f, opt_f);
+    /* Predicted HR at the hashrate-only optimum: theta[0]*0.5² + theta[3]*0.5 + theta[5]
+     *   = -2*0.25 + 2*0.5 + 80 = 80.5 TH/s */
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 80.5f, pred_hr);
 }
 
 /* ====================== TELEMETRY SNAPSHOT ====================== */
