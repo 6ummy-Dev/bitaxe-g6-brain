@@ -2,13 +2,17 @@
  * Unity test suite for G6 Brain v1.0.0-beta5
  *
  * Validates tracking model updates, safety thresholds,
- * outlier gating, and internal slew rate limits.
+ * outlier gating, input validation, NVS round-trip,
+ * post-setpoint learning suppression, and internal slew rate limits.
  */
 
 #include "unity.h"
 #include "g6_brain.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "nvs.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 #include <math.h>
 
@@ -257,4 +261,59 @@ TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick"
                                     62.0f, 82.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
+}
+
+/* ====================== INPUT VALIDATION (beta5 hardening) ====================== */
+
+TEST_CASE("g6_brain_update rejects f_mhz above BM1370_F_MAX", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_MAX + 50.0f, 1220.0f,
+                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+}
+
+TEST_CASE("g6_brain_update rejects v_mv above BM1370_V_MAX", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, BM1370_V_MAX + 50.0f,
+                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+}
+
+TEST_CASE("g6_brain_update rejects NaN vr_temp_c", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, NAN, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+}
+
+TEST_CASE("g6_brain_update accepts G6_VR_TEMP_NO_SENSOR sentinel", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+}
+
+/* ====================== NVS HARDENING ====================== */
+
+TEST_CASE("NVS bad-size blob is erased on load (B5-NIT-2 actually fires)", "[g6_brain]") {
+    /* Write a deliberately wrong-sized blob to the NVS key, then call load
+     * and verify it gets erased (not silently retained across reboots). */
+    nvs_handle_t nvs;
+    esp_err_t ret = nvs_open("g6_brain", NVS_READWRITE, &nvs);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    uint8_t bad_blob[16] = {0xDE, 0xAD, 0xBE, 0xEF};  /* nowhere near expected_blob_size */
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_set_blob(nvs, "theta_fingerprint", bad_blob, sizeof(bad_blob)));
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_commit(nvs));
+    nvs_close(nvs);
+
+    /* Load should detect the size mismatch, log, and erase. */
+    ret = g6_brain_load_nvs_fingerprint(&test_brain);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    /* Re-open and confirm the bad blob is actually gone. */
+    ret = nvs_open("g6_brain", NVS_READONLY, &nvs);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    size_t blob_size = 0;
+    esp_err_t get_err = nvs_get_blob(nvs, "theta_fingerprint", NULL, &blob_size);
+    nvs_close(nvs);
+    TEST_ASSERT_EQUAL(ESP_ERR_NVS_NOT_FOUND, get_err);
 }
