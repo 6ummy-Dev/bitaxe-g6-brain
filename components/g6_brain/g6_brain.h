@@ -174,8 +174,10 @@ typedef struct {
     float best_f;
     float best_v;
     float model_quality;
+    float power_model_quality;
     float last_efficiency;
     uint32_t update_count;
+    uint32_t power_update_count;
     /* Status */
     G6SafetyStatus safety_status;
     bool efficiency_mode_active;
@@ -192,7 +194,7 @@ void g6_brain_get_optimal(const G6BrainState *brain,
                           float *opt_f, float *opt_v, float *pred_hr);
 float g6_brain_get_model_quality(const G6BrainState *brain);
 float g6_brain_get_cov_condition(const G6BrainState *brain);
-esp_err_t g6_brain_self_test(G6BrainState *brain);
+esp_err_t g6_brain_self_test(const G6BrainState *brain);
 esp_err_t g6_brain_reset(G6BrainState *brain);
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain);
 esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain);
