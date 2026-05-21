@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0.0-beta4
+# G6 Brain Installation & Integration Guide — v1.0.0-beta5
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370)
 
@@ -54,7 +54,8 @@ Navigate to:
 Component config → G6 Brain Configuration
 ```
 
-All options are live, including the new VR thermal safety settings:
+All options are live, including the thermal safety settings:
+- `G6_TEMP_PROACTIVE_MARGIN` *(new in beta5)*
 - `G6_VR_TEMP_CEILING`
 - `G6_VR_TEMP_PROACTIVE_MARGIN`
 
@@ -89,7 +90,7 @@ Watch for:
 
 ---
 
-## Phase Recommendations (beta4)
+## Phase Recommendations (beta5)
 
 - **Start in `G6_MODE_RECOMMEND`** (computes optimal but never mutates `best_f`/`best_v`).
 - Only switch to `G6_MODE_AUTO` after monitoring for 24–48 hours.
@@ -107,7 +108,7 @@ Watch for:
 
 ---
 
-**Version:** v1.0.0-beta4 (May 2026)
+**Version:** v1.0.0-beta5 (May 2026)
 
 ---
 

@@ -1,14 +1,16 @@
-# G6 Brain Testing Guide (beta4)
+# G6 Brain Testing Guide (beta5)
 
-This guide is intended for community members testing the **v1.0.0-beta4** release.
+This guide is intended for community members testing the **v1.0.0-beta5** release.
 
-## What's New in beta4
+## What's New in beta5
 
-- **Two-tier Thermal Safety** — Separate handling for ASIC die temperature and voltage regulator (VR) temperature.
-- **Improved Safety Telemetry** — `safety_status` now meaningfully reports triggered safety conditions.
-- **Power Validation & Outlier Logging** — Fail-closed power handling and symmetric power outlier logging.
-- **Timing Fix** — Corrected tick-to-millisecond conversion in sample windows.
-- Continued hardening of the safety layer and CI reliability.
+- **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option and lives in the state struct (`brain->temp_proactive_margin`), matching the VR margin design.
+- **VR Proactive Margin Properly Honored at Runtime** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at all call sites. Runtime mutation of the field now correctly affects the proactive zone.
+- **Safety Status Priority** — Safety helpers are reordered so ASIC thermal wins on collision when both ASIC and VR conditions fire on the same tick.
+- **NER Defense-in-Depth** — `is_sample_valid()` now gates on NER as a redundant safety check.
+- **NER Backoff Floor Clamps** — `g6_asic_error_handle_non_blocking` uses `fmaxf` floor clamping, consistent with the other safety helpers.
+- **NVS Blob-Size Mismatch Logging** — Corrupt or mismatched NVS blobs are now logged and erased rather than silently dropped.
+- **Code Quality** — `g6_brain_set_defaults()` extracted; `g6_brain_init` and `g6_brain_reset` no longer duplicate 50 lines of default-setting logic.
 
 ## Recommended Starting Point
 
@@ -51,4 +53,4 @@ When reporting logs or anomalies, please include:
 
 ---
 
-**Version:** v1.0.0-beta4 (May 2026)
+**Version:** v1.0.0-beta5 (May 2026)

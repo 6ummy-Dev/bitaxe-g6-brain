@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta4**
+**G6 Brain v1.0.0-beta5**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -34,10 +34,10 @@ A data validation layer that calculates expected innovation variance and rejects
 
 ---
 
-## Safety & Thermal (beta4)
+## Safety & Thermal (beta5)
 
 **Two-tier Thermal Safety**  
-The beta4 architecture that treats ASIC die temperature and VR regulator temperature differently:
+The beta5 architecture that treats ASIC die temperature and VR regulator temperature differently:
 - ASIC temperature gates learning.
 - VR temperature only constrains setpoints in the safety layer.
 
@@ -87,4 +87,4 @@ The internally controlled rate of change for frequency and voltage.
 
 ---
 
-**Last updated:** May 2026 (v1.0.0-beta4)
+**Last updated:** May 2026 (v1.0.0-beta5)

@@ -1,4 +1,4 @@
-# G6 Brain Configuration — v1.0.0-beta4 (VR Thermal Safety)
+# G6 Brain Configuration — v1.0.0-beta5
 
 All options live under: **Component config → G6 Brain Configuration**
 
@@ -33,7 +33,12 @@ All options live under: **Component config → G6 Brain Configuration**
 ### `G6_TEMP_CEILING`
 - **Type:** int (50–85)
 - **Default:** `70` (°C)
-- **Description:** Absolute thermal limit for the ASIC die. Proactive scaling steps activate 5 °C below this threshold.
+- **Description:** Absolute thermal limit for the ASIC die. Proactive scaling steps activate at `G6_TEMP_PROACTIVE_MARGIN` °C below this threshold.
+
+### `G6_TEMP_PROACTIVE_MARGIN`
+- **Type:** int (2–15)
+- **Default:** `5` (°C)
+- **Description:** Degrees below `G6_TEMP_CEILING` where proactive ASIC frequency and voltage step-back begins. Also controls the threshold at which upward slew-rate is suspended to prevent oscillation at the thermal edge. Mirrors `G6_VR_TEMP_PROACTIVE_MARGIN` for the ASIC die.
 
 ### `G6_VR_TEMP_CEILING`
 - **Type:** int (70–105)
