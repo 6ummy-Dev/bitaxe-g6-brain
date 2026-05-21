@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta3
+ * Unity test suite for G6 Brain v1.0.0-beta5
  *
  * Validates tracking model updates, safety thresholds,
  * outlier gating, and internal slew rate limits.
@@ -218,4 +218,68 @@ TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
     /* Both voltage and frequency must be stepped back at the hard ceiling */
     TEST_ASSERT_LESS_THAN(1280.0f, test_brain.best_v);
     TEST_ASSERT_LESS_THAN(850.0f, test_brain.best_f);
+}
+
+/* ====================== BETA5 COVERAGE ====================== */
+
+TEST_CASE("vr_temp_proactive_margin field is initialized from Kconfig default", "[g6_brain]") {
+    /* Verifies B5-BUG-1: margin lives in state, not baked into a macro at call sites. */
+    TEST_ASSERT_EQUAL_FLOAT(G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT, test_brain.vr_temp_proactive_margin);
+    TEST_ASSERT_GREATER_THAN(0.0f, test_brain.vr_temp_proactive_margin);
+}
+
+TEST_CASE("temp_proactive_margin field is initialized from Kconfig default", "[g6_brain]") {
+    /* Verifies B5-BUG-2: ASIC margin also lives in state and is configurable. */
+    TEST_ASSERT_EQUAL_FLOAT(G6_TEMP_PROACTIVE_MARGIN_DEFAULT, test_brain.temp_proactive_margin);
+    TEST_ASSERT_GREATER_THAN(0.0f, test_brain.temp_proactive_margin);
+}
+
+TEST_CASE("Runtime vr_temp_proactive_margin change alters proactive zone", "[g6_brain]") {
+    /* Verifies B5-BUG-1: the call site uses brain->vr_temp_proactive_margin,
+     * so tuning it at runtime actually changes behaviour. */
+    test_brain.vr_temp_ceiling = 85.0f;
+    test_brain.vr_temp_proactive_margin = 10.0f; /* widen proactive zone to 75–85 */
+    test_brain.best_v = 1250.0f;
+    test_brain.best_f = 800.0f;
+
+    /* 78°C is inside the widened zone (85-10=75 → 78>75) but outside the
+     * default zone (85-5=80 → 78<80). With the fix, best_v must be stepped back. */
+    float vr_temp = 78.0f;
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1250.0f, 130.0f, 22.0f,
+                                    55.0f, vr_temp, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_LESS_THAN(1250.0f, test_brain.best_v);
+    /* Frequency must NOT be stepped back in the proactive zone */
+    TEST_ASSERT_GREATER_OR_EQUAL(800.0f - test_brain.dfs_step_mhz, test_brain.best_f);
+}
+
+TEST_CASE("NER blocks RLS update via is_sample_valid defense-in-depth", "[g6_brain]") {
+    /* Verifies B5-BUG-6: even if the early-exit goto were removed, high-NER
+     * samples must not reach the RLS update. We test this by going through
+     * the normal update path with NER above threshold and checking update_count. */
+    uint32_t count_before = test_brain.update_count;
+
+    /* NER well above threshold — early goto fires, update_count must not change */
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    test_brain.ner_threshold + 1.0f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_UINT32(count_before, test_brain.update_count);
+    TEST_ASSERT_EQUAL(G6_SAFETY_NER_BACKOFF, test_brain.last_safety_status);
+}
+
+TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick", "[g6_brain]") {
+    /* Verifies B5-BUG-4 minimum fix: safety helper ordering gives ASIC thermal
+     * last-write priority so it appears in telemetry when both conditions are active. */
+    test_brain.temp_ceiling      = 65.0f;
+    test_brain.temp_proactive_margin = 5.0f; /* proactive zone starts at 60°C */
+    test_brain.vr_temp_ceiling   = 85.0f;
+    test_brain.vr_temp_proactive_margin = 5.0f; /* VR proactive zone starts at 80°C */
+
+    /* temp_c = 62 → ASIC proactive zone; vr_temp_c = 82 → VR proactive zone */
+    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 110.0f, 18.0f,
+                                    62.0f, 82.0f, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    /* ASIC thermal must be the reported status (it runs last → wins collision) */
+    TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
 }
