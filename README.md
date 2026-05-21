@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0.0-beta4** — Modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370
+**v1.0.0-beta5** — Safety layer hardening, configurable thermal margins, and code quality improvements
 
 The G6 Brain is a self-contained ESP-IDF component that models the quadratic relationship between frequency, voltage, hashrate, and power using stabilized Recursive Least Squares. It learns each individual ASIC’s response surface in real time while enforcing strict hardware safety constraints on every update.
 
@@ -12,26 +12,25 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 
 | | |
 |---|---|
-| **Latest Release** | `v1.0.0-beta4` |
+| **Latest Release** | `v1.0.0-beta5` |
 | **Target** | ESP32-S3 / Bitaxe Gamma (BM1370) |
 | **License** | MIT |
 | **QA Status** | Fully verified and released for field testing |
 | **Default Mode** | `G6_MODE_RECOMMEND` |
 
-**beta4** is the current release and is suitable for community field testing. This version introduces two-tier thermal safety (protecting the voltage regulator independently of the ASIC die) and several robustness improvements.
+**beta5** is the current release and is suitable for community field testing. This version hardens the safety layer with configurable thermal margins, improved safety status priority, NER defense-in-depth, and several code quality improvements.
 
 ---
 
-## What’s New in beta4
+## What’s New in beta5
 
-- **Two-tier Thermal Safety** — Added dedicated monitoring and protection for the voltage regulator (`vr_temp_c`). The brain now distinguishes between ASIC die temperature and VR regulator temperature:
-  - ASIC temperature gates learning (prevents training on thermally stressed samples).
-  - VR temperature runs only in the safety layer as a proactive and hard constraint on voltage (and frequency at ceiling).
-- **Improved Safety Telemetry** — `safety_status` in telemetry is now fully wired and meaningfully reports the last triggered safety condition.
-- **Power Validation Hardening** — Invalid power readings correctly fail-closed and route through the safety layer.
-- **Power Outlier Logging** — Added symmetric logging for power model outliers (`Power Outlier Rejected`).
-- **Timing Fix** — Corrected tick-to-millisecond conversion in the sample state machine.
-- General QA hardening, integration layer data quality fixes, and CI improvements.
+- **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option (default 5°C) stored in the state struct, matching the VR margin design. The hard-coded `5.0f` literal has been eliminated from all call sites.
+- **VR Proactive Margin Properly Runtime-Configurable** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at both the safety helper and the slew-suspend gate. Mutating the field at runtime now correctly changes the proactive zone.
+- **Safety Status Priority on Collision** — Safety helpers reordered so ASIC thermal wins in `last_safety_status` when both ASIC and VR thermal conditions fire on the same tick.
+- **NER Defense-in-Depth** — `is_sample_valid()` now independently gates on NER. Dead pre-checks already enforced by upstream validation removed.
+- **NER Backoff Floor Clamps** — `g6_asic_error_handle_non_blocking` now uses `fmaxf(BM1370_X_MIN, ...)` consistent with all other safety helpers.
+- **NVS Blob-Size Mismatch Handling** — Corrupt or schema-mismatched NVS blobs are logged with a warning and erased rather than silently falling through.
+- **`g6_brain_set_defaults()` Helper** — Extracted from the duplicated init/reset bodies. `g6_brain_init` and `g6_brain_reset` share a single defaults path with no risk of future drift.
 
 ---
 
