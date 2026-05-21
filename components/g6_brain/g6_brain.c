@@ -398,6 +398,13 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                           float power_w, float temp_c, float vr_temp_c,
                           float err_pct, uint32_t share_count)
 {
+    /* Only structurally-broken calls (NULL brain) return INVALID_ARG. All
+     * bad numeric inputs fail closed to the safety layer with INPUT_RANGE,
+     * per manifesto non-negotiable 3.7: "Every safety check executes even
+     * on invalid or rejected samples." A NaN telemetry channel must not
+     * cause the brain to skip a safety tick. Downstream helpers in the
+     * safety layer all guard against non-finite values, so routing NaN
+     * inputs through that path is safe. */
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     uint32_t now = xTaskGetTickCount();
@@ -405,19 +412,13 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float entry_best_v = brain->best_v;
 
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
-        !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
-        hr_ths <= 0.0f) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    if (f_mhz < BM1370_F_MIN || f_mhz > BM1370_F_MAX ||
+        !isfinite(power_w) || !isfinite(temp_c) || !isfinite(vr_temp_c) ||
+        !isfinite(err_pct) ||
+        hr_ths <= 0.0f ||
+        f_mhz < BM1370_F_MIN || f_mhz > BM1370_F_MAX ||
         v_mv  < BM1370_V_MIN || v_mv  > BM1370_V_MAX) {
-        brain->last_safety_status = G6_SAFETY_VOLTAGE;
+        brain->last_safety_status = G6_SAFETY_INPUT_RANGE;
         goto safety_layer;
-    }
-
-    if (!isfinite(vr_temp_c)) {
-        return ESP_ERR_INVALID_ARG;
     }
 
     if (power_w < 0.0f || power_w > 100.0f) {
@@ -573,6 +574,18 @@ safety_layer:
                               brain->vr_temp_ceiling > 0.0f &&
                               vr_temp_c > (brain->vr_temp_ceiling - brain->vr_temp_proactive_margin));
 
+    /* Slew-suspend conditions. These four terms are intentionally explicit
+     * rather than collapsed to the status check alone:
+     *   1. ASIC proactive zone — NEEDED. Hard thermal goto's set the status,
+     *      but the proactive-but-not-hard zone reaches safety_layer with
+     *      status=OK. Without this term, slew would race against the
+     *      proactive derate helper (B4-BUG-1 sawtooth regression).
+     *   2. NER threshold — REDUNDANT with term 4 (NER path sets
+     *      G6_SAFETY_NER_BACKOFF in g6_asic_error_handle_non_blocking) but
+     *      kept for readability and as defense-in-depth.
+     *   3. VR proactive zone — NEEDED for the same reason as term 1.
+     *   4. Any prior fail-closed status — catches input-range, power-sanity,
+     *      sample-quality, outlier, and recovery paths. */
     bool safety_active = (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) ||
                          (err_pct > brain->ner_threshold) ||
                          vr_safety_active ||
