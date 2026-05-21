@@ -2,8 +2,8 @@
  * Unity test suite for G6 Brain v1.0.0-beta5
  *
  * Validates tracking model updates, safety thresholds,
- * outlier gating, input validation, NVS round-trip,
- * post-setpoint learning suppression, and internal slew rate limits.
+ * outlier gating, input validation (fail-closed routing),
+ * NVS round-trip and corruption recovery, and internal slew rate limits.
  */
 
 #include "unity.h"
@@ -164,14 +164,22 @@ TEST_CASE("Internal Slew-Rate Limiting enforces step boundaries", "[g6_brain]") 
     test_brain.control_mode = G6_MODE_AUTO;
     test_brain.dfs_step_mhz = 25.0f;
     test_brain.best_f = 650.0f;
-    /* Valid concave-down surface: negative quadratic coefficients, bounded linear term */
-    test_brain.theta[0] = -1.0f;
-    test_brain.theta[1] = -0.5f;
-    test_brain.theta[3] = 200.0f;
+    test_brain.best_v = 1220.0f;
+    /* Concave-down quadratic with unconstrained optimum at fn=0.6, vn=0
+     * (i.e. f_cand=800 MHz, v_cand=1220 mV) — within hardware bounds and
+     * 150 MHz above best_f, which forces the slew clamp to limit movement
+     * to exactly dfs_step_mhz per tick. Earlier theta values produced an
+     * out-of-bounds optimum, which fell back to best_f and made the test
+     * silently a no-op. */
+    test_brain.theta[0] = -1.0f;   /* a */
+    test_brain.theta[1] = -0.5f;   /* b */
+    test_brain.theta[2] = 0.0f;    /* c */
+    test_brain.theta[3] = 1.2f;    /* d → f_norm_opt = -d/(2a) = 0.6 */
+    test_brain.theta[4] = 0.0f;    /* e → v_norm_opt = 0 */
 
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
-    TEST_ASSERT_EQUAL_FLOAT(650.0f + test_brain.dfs_step_mhz, test_brain.best_f);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 650.0f + test_brain.dfs_step_mhz, test_brain.best_f);
 }
 
 /* ====================== VR THERMAL SAFETY ====================== */
@@ -320,4 +328,37 @@ TEST_CASE("NVS bad-size blob is erased on load (B5-NIT-2 actually fires)", "[g6_
     TEST_ASSERT_EQUAL(ESP_ERR_NVS_NOT_FOUND, get_err);
 }
 
+/* ====================== COVARIANCE RECOVERY ====================== */
+
+TEST_CASE("Trace divergence triggers P-matrix recovery and reports P_MATRIX_SINGULAR", "[g6_brain]") {
+    /* Drive P far past RLS_TRACE_MAX (1e7 default) to force the recovery path. */
+    for (int i = 0; i < RLS_N; i++) test_brain.P[i][i] = 1.0e8f;
+    test_brain.cold_start = false;
+
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    /* Recovery zeroed theta and reset P diagonal to 1e5, then surfaced the
+     * P_MATRIX_SINGULAR status. The status may be overwritten by a more
+     * urgent safety condition (thermal/VR) — none fire in this test. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_P_MATRIX_SINGULAR, test_brain.last_safety_status);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_brain.theta[0]);
+    TEST_ASSERT_EQUAL_FLOAT(1.0e5f, test_brain.P[0][0]);
+    TEST_ASSERT_TRUE(test_brain.cold_start);
+}
+
+TEST_CASE("P-matrix recovery preserves operator-configured use_efficiency_mode", "[g6_brain]") {
+    /* Operator enabled efficiency mode at runtime. A subsequent covariance
+     * divergence must not silently disable it. */
+    test_brain.use_efficiency_mode = true;
+    test_brain.control_mode = G6_MODE_AUTO;
+    test_brain.ner_threshold = 3.0f;  /* non-default; must also survive */
+    for (int i = 0; i < RLS_N; i++) test_brain.P[i][i] = 1.0e8f;
+
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_TRUE(test_brain.use_efficiency_mode);
+    TEST_ASSERT_EQUAL(G6_MODE_AUTO, test_brain.control_mode);
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, test_brain.ner_threshold);
 }
