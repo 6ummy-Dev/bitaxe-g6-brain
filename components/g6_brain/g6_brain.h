@@ -148,7 +148,6 @@ typedef struct {
     /* State Flags (Packed to eliminate padding) */
     bool cold_start;
     bool nvs_valid;
-    bool power_cold_start;
     bool use_efficiency_mode;
     bool enable_low_latency_jobs;
 } G6BrainState;
