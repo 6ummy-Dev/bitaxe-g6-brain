@@ -61,6 +61,11 @@ typedef enum {
 #define BM1370_V_MIN 1050.0f
 #define BM1370_V_MAX 1350.0f
 
+/* Minimum predicted hashrate (TH/s) below which J/TH efficiency calculations
+ * are skipped. Prevents division by near-zero and guards against operating in
+ * regions where the power model has no physical meaning. */
+#define G6_EFFICIENCY_MIN_HR_THS 8.0f
+
 #define MIN_SHARE_COUNT 20
 
 #if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
@@ -159,14 +164,22 @@ typedef struct {
 
 /* Telemetry Snapshot */
 typedef struct {
+    /* Model internals */
     float theta_hashrate[RLS_N];
     float theta_power[RLS_N];
     float trace_P_hashrate;
     float trace_P_power;
     float last_innovation;
+    /* Operating point & quality */
+    float best_f;
+    float best_v;
+    float model_quality;
+    float last_efficiency;
+    uint32_t update_count;
+    /* Status */
     G6SafetyStatus safety_status;
     bool efficiency_mode_active;
-    float last_recommended_voltage;
+    float last_recommended_voltage; /* kept for backward compat — mirrors best_v */
 } G6BrainTelemetry;
 
 /* Public API */
