@@ -1,6 +1,6 @@
 # Bitaxe G6 Brain ⚡
 
-**v1.0.0-beta4** — Modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370
+**v1.0.0-beta5** — Modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370
 
 The G6 Brain is a self-contained ESP-IDF component that models the quadratic relationship between frequency, voltage, hashrate, and power using stabilized Recursive Least Squares. It learns each individual ASIC’s response surface in real time while enforcing strict hardware safety constraints on every update.
 
@@ -12,38 +12,26 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 
 | | |
 |---|---|
-| **Latest Release** | `v1.0.0-beta4` |
+| **Latest Release** | `v1.0.0-beta5` (In Development) |
 | **Target** | ESP32-S3 / Bitaxe Gamma (BM1370) |
 | **License** | MIT |
-| **QA Status** | Fully verified and released for field testing |
+| **QA Status** | Deep QA verified, preparing for field testing |
 | **Default Mode** | `G6_MODE_RECOMMEND` |
 
-**beta4** is the current release and is suitable for community field testing. This version introduces two-tier thermal safety (protecting the voltage regulator independently of the ASIC die) and several robustness improvements.
-
 ---
 
-## What’s New in beta4
+## What's New in beta5
 
-- **Two-tier Thermal Safety** — Added dedicated monitoring and protection for the voltage regulator (`vr_temp_c`). The brain now distinguishes between ASIC die temperature and VR regulator temperature:
-  - ASIC temperature gates learning (prevents training on thermally stressed samples).
-  - VR temperature runs only in the safety layer as a proactive and hard constraint on voltage (and frequency at ceiling).
-- **Improved Safety Telemetry** — `safety_status` in telemetry is now fully wired and meaningfully reports the last triggered safety condition.
-- **Power Validation Hardening** — Invalid power readings correctly fail-closed and route through the safety layer.
-- **Power Outlier Logging** — Added symmetric logging for power model outliers (`Power Outlier Rejected`).
-- **Timing Fix** — Corrected tick-to-millisecond conversion in the sample state machine.
-- General QA hardening, integration layer data quality fixes, and CI improvements.
-
----
-
-## What's Coming in beta5 *(in development)*
-
+- **Fail-Closed Validation Routing** — Out-of-bounds sensor readings trigger the safety layer rather than bypassing it via early returns, ensuring hardware clamps are unconditionally enforced.
+- **Trace Accumulation Recovery** — Automatically arrests covariance matrix divergence during unbounded learning loops by safely wiping polynomial surfaces and resetting matrix confidence, preventing recursive gain explosions.
+- **Slew-Rate Amnesia Protection** — Upward setpoint slew is now strictly frozen during *any* active sensor anomaly, power sanity violation, or thermal event.
+- **Dinkelbach Solver Bounding** — The exact $O(1)$ efficiency solver mathematically clamps normalized fractional coordinates to prevent overshoot on degraded power surfaces.
 - **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` Kconfig option (default 5°C) stored in state struct, matching the VR margin design.
 - **VR Proactive Margin Runtime-Configurable** — `brain->vr_temp_proactive_margin` replaces the baked-in macro at all call sites.
 - **Safety Status Priority on Collision** — Safety helpers reordered so ASIC thermal wins in `last_safety_status` when both ASIC and VR thermal conditions fire on the same tick.
 - **NER Defense-in-Depth** — `is_sample_valid()` now independently gates on NER as a redundant safety check.
 - **NER Backoff Floor Clamps** — `g6_asic_error_handle_non_blocking` uses `fmaxf(BM1370_X_MIN, ...)` consistent with all other safety helpers.
-- **NVS Blob-Size Mismatch Handling** — Corrupt or schema-mismatched blobs logged and erased rather than silently dropped.
-- **`g6_brain_set_defaults()` Helper** — Extracted from duplicated init/reset bodies to eliminate future drift risk.
+- **Unified State Flags** — Streamlined boolean state flags (`cold_start` unifies both estimators) and optimized struct packing for enhanced cache-line utilization.
 
 ---
 
