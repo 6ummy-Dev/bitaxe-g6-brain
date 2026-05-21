@@ -8,82 +8,66 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ## Core Concepts
 
-**G6 Brain**  
-The self-optimizing control module for Bitaxe Gamma (BM1370) that uses Recursive Least Squares (RLS) quadratic modeling to dynamically tune frequency and voltage while enforcing safety constraints.
+**G6 Brain** The self-optimizing control module for Bitaxe Gamma (BM1370) that uses Recursive Least Squares (RLS) quadratic modeling to dynamically tune frequency and voltage while enforcing safety constraints.
 
-**RLS (Recursive Least Squares)**  
-An adaptive filtering algorithm that continuously updates a model of hashrate as a quadratic function of frequency and voltage.
+**RLS (Recursive Least Squares)** An adaptive filtering algorithm that continuously updates a model of hashrate as a quadratic function of frequency and voltage.
 
-**Quadratic Response Surface**  
-The 6-coefficient mathematical model used by the brain to predict optimal operating points.
+**Quadratic Response Surface** The 6-coefficient mathematical model used by the brain to predict optimal operating points.
 
-**Model Quality**  
-A metric (0.0–1.0) indicating how well the current RLS model fits observed data.
+**Model Quality** A metric (0.0–1.0) indicating how well the current RLS model fits observed data.
 
-**Cold Start**  
-The initial phase after power-on or reset when the brain has insufficient data and operates conservatively.
+**Cold Start** The initial phase after power-on or reset when the brain has insufficient data and operates conservatively. *This state is also dynamically triggered by Trace Accumulation Recovery if the estimator diverges, safely wiping the polynomial surface and resetting matrix confidence.*
 
-**Warm Start / NVS Fingerprint**  
-The learned RLS coefficients (`theta`) + full covariance matrix (`P`) + power model state, stored per physical chip in NVS.
+**Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) + power model state, stored per physical chip in NVS.
 
-**Joseph Form Update**  
-A mathematically stabilized formulation of the covariance update equation that guarantees symmetry and positive semi-definiteness.
+**Joseph Form Update** A mathematically stabilized formulation of the covariance update equation that guarantees symmetry and positive semi-definiteness.
 
-**Statistical Outlier Gating**  
-A data validation layer that calculates expected innovation variance and rejects samples exceeding a 3-sigma statistical bound.
+**Trace Accumulation Recovery** A safety mechanism that automatically arrests covariance matrix divergence during unbounded learning loops. It zeroes the active polynomial surface and resets matrix confidence to prevent recursive gain explosions, forcing a safe cold-start.
+
+**Statistical Outlier Gating** A data validation layer that calculates expected innovation variance and rejects samples exceeding a 3-sigma statistical bound.
 
 ---
 
 ## Safety & Thermal (beta5)
 
-**Two-tier Thermal Safety**  
-The beta5 architecture that treats ASIC die temperature and VR regulator temperature differently:
+**Two-tier Thermal Safety** The beta5 architecture that treats ASIC die temperature and VR regulator temperature differently:
 - ASIC temperature gates learning.
 - VR temperature only constrains setpoints in the safety layer.
 
-**VR Temperature (`vr_temp_c`)**  
-Voltage regulator temperature passed to `g6_brain_update()`. Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) when no VR sensor is available.
+**VR Temperature (`vr_temp_c`)** Voltage regulator temperature passed to `g6_brain_update()`. Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) when no VR sensor is available.
 
-**Proactive Zone**  
-The temperature range below the hard ceiling where the brain begins gentle voltage reduction as an early warning.
+**Proactive Zone** The temperature range below the hard ceiling where the brain begins gentle voltage reduction as an early warning.
 
-**Hard Ceiling**  
-The temperature at which aggressive setpoint reduction is applied (both voltage and frequency for VR).
+**Hard Ceiling** The temperature at which aggressive setpoint reduction is applied (both voltage and frequency for VR).
 
 ---
 
 ## Safety & State Machine
 
-**BrainSampleState**  
-Internal state machine that controls when samples are trusted.
+**BrainSampleState** Internal state machine that controls when samples are trusted.
 
-**NER (Nonce Error Rate)**  
-Hardware error rate reported by the BM1370. Used as a key input to the safety logic.
+**NER (Nonce Error Rate)** Hardware error rate reported by the BM1370. Used as a key input to the safety logic.
 
-**G6ControlMode**  
-Runtime control modes:
+**G6ControlMode** Runtime control modes:
 - `G6_MODE_OBSERVE_ONLY`
 - `G6_MODE_RECOMMEND` (safe default)
 - `G6_MODE_AUTO`
 
-**last_safety_status**  
-Internal tracking of the most recent safety condition triggered (thermal, VR thermal, voltage, power sanity, outlier, etc.). Exposed via telemetry.
+**Fail-Closed Execution** The architectural principle where out-of-bounds telemetry (e.g., impossible frequencies or power readings) does not result in an ignored sample, but rather forces a jump directly into the safety layer to guarantee hardware clamps are enforced and upward tracking is suspended.
+
+**last_safety_status** Internal tracking of the most recent safety condition triggered (thermal, VR thermal, voltage, power sanity, outlier, etc.). Exposed via telemetry.
 
 ---
 
 ## Configuration & Limits
 
-**G6_TEMP_CEILING**  
-Hard thermal ceiling for the ASIC (°C).
+**G6_TEMP_CEILING** Hard thermal ceiling for the ASIC (°C).
 
-**G6_VR_TEMP_CEILING**  
-Hard thermal ceiling for the voltage regulator (°C).
+**G6_VR_TEMP_CEILING** Hard thermal ceiling for the voltage regulator (°C).
 
-**G6_VR_TEMP_PROACTIVE_MARGIN**  
-Temperature margin below the VR ceiling where proactive voltage reduction begins.
+**G6_VR_TEMP_PROACTIVE_MARGIN** Temperature margin below the VR ceiling where proactive voltage reduction begins.
 
-**Slew Rate**  
-The internally controlled rate of change for frequency and voltage.
+**Slew Rate** The internally controlled rate of change for frequency and voltage. Upward slew is frozen during safety anomalies.
 
 ---
 
