@@ -59,6 +59,61 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - `components/g6_brain/g6_brain.h`
 - `components/g6_brain/test/test_g6_brain.c`
 
+### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
+
+* **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
+* **API & Safety**: Documented the shift to **Fail-Closed Validation Routing**, explaining how out-of-bounds telemetry now actively triggers hardware clamps rather than bypassing them via early returns.
+* **Mechanisms**: Added detailed technical explanations for **Trace Accumulation Recovery** (matrix reset and zero-fill rules), **Slew-Rate Amnesia** protection, and exact solver bounding.
+* **Guides & Definitions**: Updated `TESTING.md` with specific scenarios for testing fail-closed boundary enforcement. Added new formal definitions to `GLOSSARY.md`.
+* **General**: Refreshed `README.md`, `KCONFIG.md`, and `AGENTS.md` (updated forbidden patterns) to accurately reflect the unified state flags and the complete Beta 5 feature set.
+
+**Files changed**
+
+* `README.md`
+* `docs/API.md`
+* `docs/SAFETY.md`
+* `docs/AGENTS.md`
+* `docs/TESTING.md`
+* `docs/KCONFIG.md`
+* `docs/GLOSSARY.md`
+
+### [1.0.0-beta5] — 2026-05-21  QA Round 6 (Compilation & Math Stability)
+
+* **Critical (B5-BUG-12)**: Fixed fatal compilation error caused by orphaned struct members. Removed all residual references to the deleted `power_cold_start` flag inside `g6_brain.c`. Both hashrate and power estimators now correctly share the unified `cold_start` boolean.
+* **High (B5-BUG-13)**: Fixed latent divergence in RLS Cold-Start Recovery. The `g6_brain_recover_cold_start()` function now explicitly zero-fills the `theta` and `power_theta` coefficient arrays when resetting the `P` matrices to `1.0e5f`. This prevents a violent mathematical explosion in the Kalman gain vector that would otherwise occur if estimator confidence was reset while preserving an already-evolved polynomial surface.
+
+**Files changed**
+
+* `components/g6_brain/g6_brain.c`
+
+### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
+
+- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green.
+- **High (B5-BUG-11)**: Fixed slew-rate controller "amnesia". Added `(brain->last_safety_status != G6_SAFETY_OK)` to the `safety_active` guard boolean. Now, statistical outlier rejections and power sanity anomalies properly freeze the upward slew controller rather than allowing it to aggressively march targets upward based on stale prior optimums.
+- **Minor (B5-NIT-7)**: Purged the redundant `g6_safety_check_voltage_ripple` helper function entirely. Its condition is now strictly handled at the top of the update loop, preventing unnecessary re-evaluation in the safety layer.
+
+### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
+
+- **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise.
+
+- **Medium (B5-BUG-9)**: Fixed `G6BrainState` struct padding regression. Reordered the struct to group all 1-byte `bool` flags (`cold_start`, `nvs_valid`, `power_cold_start`, `use_efficiency_mode`, `enable_low_latency_jobs`) at the bottom. This eliminates invisible compiler padding and restores cache-line packing optimizations.
+
+- **Low (B5-NIT-6)**: Removed redundant `fmaxf`/`fminf` re-clamping from the `g6_safety_check_voltage_ripple` helper. The variables are already securely hard-clamped immediately prior to the safety layer helpers executing, making the inner math unnecessary.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/g6_brain.c`
+
+### [1.0.0-beta5] — 2026-05-20  QA Round 3
+
+- **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
+
+- **Low (B5v3-NIT-1)**: Extended NVS round-trip test to verify `power_theta` and `power_P` survive save/load. Previous test only checked `theta` and `P`, leaving the B5v2-BUG-1 fix (power_P offset increment) without direct test coverage.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/test/test_g6_brain.c`
+
 ### [1.0.0-beta5] — 2026-05-20  Safety Layer Hardening & Code Quality (beta5)
 
 **Bug Fixes (from independent deep QA audit)**
