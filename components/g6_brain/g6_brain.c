@@ -134,13 +134,17 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
 {
     nvs_handle_t nvs;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
+    /* Opened READWRITE: schema-mismatch and blob-size-mismatch branches below
+     * need to erase the stale blob, which is a no-op on a read-only handle.
+     * First-boot ESP_ERR_NVS_NOT_FOUND on the namespace is normal and treated
+     * as "cold start" by the caller. */
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) return err;
 
     size_t expected_blob_size = sizeof(uint32_t)*2 + sizeof(brain->theta) + sizeof(brain->P) +
                                 sizeof(brain->power_theta) + sizeof(brain->power_P);
     uint8_t buffer[G6_NVS_FINGERPRINT_BUFFER_SIZE];
-    size_t blob_size = expected_blob_size;
+    size_t blob_size = sizeof(buffer);
 
     err = nvs_get_blob(nvs, NVS_FINGERPRINT_KEY, buffer, &blob_size);
     if (err == ESP_OK && blob_size == expected_blob_size) {
@@ -160,10 +164,13 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             brain->cold_start = false;
             brain->power_cold_start = false;
         } else {
+            ESP_LOGW(TAG, "NVS schema mismatch (got v%" PRIu32 ", expected v%u) — erasing",
+                     stored_version, (unsigned)G6_NVS_SCHEMA_VERSION);
             brain->cold_start = true;
             brain->power_cold_start = true;
-            nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
-            nvs_commit(nvs);
+            esp_err_t erase_err = nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+            if (erase_err == ESP_OK) nvs_commit(nvs);
+            else ESP_LOGE(TAG, "NVS erase failed: %s", esp_err_to_name(erase_err));
         }
     } else if (err == ESP_OK && blob_size != expected_blob_size) {
         /* Blob exists but is the wrong size — schema corruption or partial write.
@@ -172,8 +179,9 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
                  (unsigned)blob_size, (unsigned)expected_blob_size);
         brain->cold_start = true;
         brain->power_cold_start = true;
-        nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
-        nvs_commit(nvs);
+        esp_err_t erase_err = nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+        if (erase_err == ESP_OK) nvs_commit(nvs);
+        else ESP_LOGE(TAG, "NVS erase failed: %s", esp_err_to_name(erase_err));
     }
     nvs_close(nvs);
     return ESP_OK;
@@ -217,7 +225,6 @@ static void g6_brain_set_defaults(G6BrainState *brain)
     brain->update_count = 0;
     brain->model_quality = 0.0f;
     brain->nvs_valid = false;
-    brain->sample_state = BRAIN_STATE_IDLE;
     brain->control_mode = G6_MODE_RECOMMEND;
     brain->last_safety_status = G6_SAFETY_OK;
 
@@ -361,46 +368,14 @@ static bool is_sample_valid(const G6BrainState *brain, float hr_ths,
     return true;
 }
 
-static void advance_sample_state(G6BrainState *brain, uint32_t now)
-{
-    switch (brain->sample_state) {
-        case BRAIN_STATE_IDLE:
-            brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
-            break;
-        case BRAIN_STATE_APPLY_CANDIDATE:
-            brain->settle_start_tick = now;
-            brain->sample_state = BRAIN_STATE_SETTLE_WAIT;
-            break;
-        case BRAIN_STATE_SETTLE_WAIT:
-            if ((now - brain->settle_start_tick) * portTICK_PERIOD_MS >= SETTLE_MS)
-                brain->sample_state = BRAIN_STATE_MEASURE_WINDOW;
-            break;
-        case BRAIN_STATE_MEASURE_WINDOW:
-            if (brain->measure_start_tick == 0) brain->measure_start_tick = now;
-            if ((now - brain->measure_start_tick) * portTICK_PERIOD_MS >= MIN_WINDOW_MS) {
-                brain->sample_state = BRAIN_STATE_VALIDATE_SAMPLE;
-                brain->measure_start_tick = 0;
-            }
-            break;
-        case BRAIN_STATE_VALIDATE_SAMPLE:
-            brain->sample_state = BRAIN_STATE_RLS_UPDATE;
-            break;
-        case BRAIN_STATE_RLS_UPDATE:
-            brain->sample_state = BRAIN_STATE_DECIDE_NEXT;
-            break;
-        case BRAIN_STATE_DECIDE_NEXT:
-            brain->sample_state = BRAIN_STATE_IDLE;
-            break;
-        default:
-            brain->sample_state = BRAIN_STATE_IDLE;
-            break;
-    }
-}
-
 esp_err_t g6_brain_init(G6BrainState *brain)
 {
     if (!brain) return ESP_ERR_INVALID_ARG;
 
+    /* Surface NVS-not-initialized to the caller as a hard error. Without this
+     * check, init would succeed but warm-start would silently never work
+     * (load_nvs_fingerprint swallows the error). Other nvs_open errors (e.g.
+     * NOT_FOUND on first boot) are normal cold-start conditions. */
     nvs_handle_t nvs_test;
     esp_err_t nvs_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_test);
     if (nvs_err == ESP_ERR_NVS_NOT_INITIALIZED) return ESP_ERR_NVS_NOT_INITIALIZED;
@@ -421,9 +396,29 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     uint32_t now = xTaskGetTickCount();
 
+    /* Snapshot entry values so we can later detect whether THIS tick actually
+     * changed best_f/best_v. Comparing |best - telemetry| (the prior approach)
+     * is wrong: telemetry naturally lags best by the slew step, so that
+     * comparison fires every tick during normal convergence and is useless as
+     * a "did we just issue a setpoint change" signal. */
+    float entry_best_f = brain->best_f;
+    float entry_best_v = brain->best_v;
+
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(err_pct) ||
-        hr_ths <= 0.0f || f_mhz < BM1370_F_MIN || v_mv < BM1370_V_MIN) {
+        hr_ths <= 0.0f ||
+        f_mhz < BM1370_F_MIN || f_mhz > BM1370_F_MAX ||
+        v_mv  < BM1370_V_MIN || v_mv  > BM1370_V_MAX) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* vr_temp_c: NaN is rejected. Any value <= G6_VR_TEMP_NO_SENSOR (-1.0f)
+     * disables VR monitoring; the safety helper applies the same sentinel
+     * semantics. A finite positive (or zero) value is a real reading. The
+     * "0 < vr_temp_c < threshold" range is a non-sentinel real reading
+     * implying a working sensor that's just very cold — left to the helper
+     * to interpret. */
+    if (!isfinite(vr_temp_c)) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -447,11 +442,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     brain->last_update_timestamp = now;
 
     bool valid = is_sample_valid(brain, hr_ths, temp_c, err_pct, share_count);
-    if (valid || brain->sample_state == BRAIN_STATE_SETTLE_WAIT ||
-        brain->sample_state == BRAIN_STATE_MEASURE_WINDOW) {
-        advance_sample_state(brain, now);
-    }
-
     if (!valid) goto safety_layer;
 
     float fn = (f_mhz - BM1370_F_CENTER) / BM1370_F_SCALE;
@@ -616,10 +606,9 @@ safety_layer:
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
     if (brain->control_mode == G6_MODE_AUTO &&
-        (fabsf(brain->best_f - f_mhz) > 8.0f || fabsf(brain->best_v - v_mv) > 8.0f)) {
+        (fabsf(brain->best_f - entry_best_f) > 1e-3f ||
+         fabsf(brain->best_v - entry_best_v) > 1e-3f)) {
         brain->last_setting_change_tick = now;
-        brain->sample_state = BRAIN_STATE_APPLY_CANDIDATE;
-        brain->measure_start_tick = 0;
     }
 
     if (brain->update_count > 10 &&
