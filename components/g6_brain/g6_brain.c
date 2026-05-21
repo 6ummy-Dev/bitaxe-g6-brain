@@ -198,7 +198,7 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
     memcpy(buffer + offset, brain->theta, sizeof(brain->theta)); offset += sizeof(brain->theta);
     memcpy(buffer + offset, brain->P, sizeof(brain->P)); offset += sizeof(brain->P);
     memcpy(buffer + offset, brain->power_theta, sizeof(brain->power_theta)); offset += sizeof(brain->power_theta);
-    memcpy(buffer + offset, brain->power_P, sizeof(brain->power_P));
+    memcpy(buffer + offset, brain->power_P, sizeof(brain->power_P)); offset += sizeof(brain->power_P);
 
     err = nvs_set_blob(nvs, NVS_FINGERPRINT_KEY, buffer, offset);
     if (err == ESP_OK) err = nvs_commit(nvs);
