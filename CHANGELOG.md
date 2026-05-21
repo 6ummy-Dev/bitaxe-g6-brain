@@ -2,6 +2,51 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
+## [1.0.0-beta5] - 2026-05-20 _In Progress_
+
+### Safety Layer Hardening & Code Quality (beta5)
+
+**Bug Fixes (from independent deep QA audit)**
+
+- **Critical (B5-BUG-1)**: Fixed VR proactive margin silently ignoring runtime state. `G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT` was used directly at both the safety helper and the `vr_safety_active` gate in the safety layer, instead of reading from a per-state field. This meant tuning `brain->vr_temp_proactive_margin` at runtime had no effect. Added `vr_temp_proactive_margin` to `G6BrainState`, initialized from `G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT` in `g6_brain_set_defaults()`, and replaced both macro references with `brain->vr_temp_proactive_margin`.
+
+- **High (B5-BUG-2)**: Fixed ASIC proactive thermal margin hard-coded and duplicated. The `5.0f` literal appeared at two independent call sites (the safety helper and the `safety_active` slew-suspend gate), creating a risk that future edits could un-sync them and reintroduce the B4-BUG-1 sawtooth oscillation. Added `G6_TEMP_PROACTIVE_MARGIN` to Kconfig (default 5, range 2–15), `temp_proactive_margin` field to `G6BrainState`, and replaced both literals.
+
+- **High (B5-BUG-3)**: Fixed stale `v1.0.0-beta3` version comment at top of `test_g6_brain.c`. Same class of issue as B4-BUG-3 (`docs/API.md` out of sync); the corresponding test file header was missed in the beta4 sweep.
+
+- **Medium (B5-BUG-4)**: Fixed safety status priority collision. When both ASIC thermal and VR thermal conditions fire on the same tick, the last safety helper to run wins `last_safety_status`. Previous ordering (ASIC → voltage → VR) meant VR thermal could mask the ASIC condition in telemetry. Reordered to (voltage → VR → ASIC) so ASIC thermal, the higher-priority condition, always wins on collision. Added a comment documenting the ordering contract.
+
+- **Medium (B5-BUG-5)**: Fixed asymmetric floor clamping in `g6_asic_error_handle_non_blocking`. The NER backoff multiplied `best_f` and `best_v` without floor clamps, relying on the safety layer's hard clamps downstream. Applied `fmaxf(BM1370_F_MIN, ...)` and `fmaxf(BM1370_V_MIN, ...)` consistent with all other safety helpers.
+
+- **Medium (B5-BUG-6/7)**: Fixed `is_sample_valid()` not gating on NER, and containing dead pre-checks. Added `err_pct` parameter and NER gate as defense-in-depth. Removed `isfinite(hr_ths)` and `hr_ths <= 0.0f` checks already enforced upstream by `g6_brain_update`'s input validation. Updated call site to pass `err_pct`.
+
+**Improvements**
+
+- **NVS Blob-Size Mismatch Handling (B5-NIT-2)**: When `nvs_get_blob` succeeds but returns a blob of the wrong size, the load function now logs a `LOGW` warning with expected vs actual sizes and erases the stale blob. Previously this case silently fell through, leaving a corrupt blob in NVS indefinitely.
+
+- **VR Sentinel Check Precision (B5-NIT-1)**: Replaced `vr_temp_c < 0.0f` no-sensor guard with `vr_temp_c <= G6_VR_TEMP_NO_SENSOR` in the safety helper and `vr_temp_c > G6_VR_TEMP_NO_SENSOR` in the `vr_safety_active` gate. A glitched sensor returning a small negative value (e.g. -0.5°C) now correctly still disables VR monitoring rather than passing the `< 0.0f` check and attempting to evaluate thermal conditions. Added explanatory comment.
+
+- **`g6_brain_set_defaults()` helper extracted (B5-NIT-3)**: ~50 lines of duplicated default-setting code shared between `g6_brain_init` and `g6_brain_reset` extracted into a private static helper. Both functions now call `memset` + `g6_brain_set_defaults`. Eliminates the class of bugs where a new field is added to one but not the other.
+
+- **Kconfig cleanup (B5-NIT-5)**: Removed stale `(Phase 1+)` parenthetical from `G6_ENABLE_EFFICIENCY_MODE` option label.
+
+**New Tests (5)**
+- `vr_temp_proactive_margin field is initialized from Kconfig default` — verifies B5-BUG-1 init path.
+- `temp_proactive_margin field is initialized from Kconfig default` — verifies B5-BUG-2 init path.
+- `Runtime vr_temp_proactive_margin change alters proactive zone` — verifies B5-BUG-1 runtime effect: widening the margin to 10°C brings 78°C into the proactive zone where the default 5°C margin would not.
+- `NER blocks RLS update via is_sample_valid defense-in-depth` — verifies B5-BUG-6: high-NER sample reports `NER_BACKOFF` and does not increment `update_count`.
+- `ASIC thermal status wins over VR thermal when both fire on same tick` — verifies B5-BUG-4: with both conditions active, `last_safety_status` reports `G6_SAFETY_THERMAL`, not `G6_SAFETY_VR_THERMAL`.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/Kconfig`
+- `components/g6_brain/test/test_g6_brain.c`
+- `docs/KCONFIG.md`, `docs/SAFETY.md`, `docs/TESTING.md`, `docs/INSTALL.md`, `docs/API.md`, `docs/AGENTS.md`, `docs/GLOSSARY.md`, `docs/MONITORING.md`
+- `README.md`
+
+---
+
 ## [1.0.0-beta4] - 2026-05-20 _Completed_
 
 ### 2026-05-20 — QA Fixes, CI Hardening & Documentation Alignment (beta4)
