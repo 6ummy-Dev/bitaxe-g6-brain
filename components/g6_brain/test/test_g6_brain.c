@@ -102,9 +102,12 @@ TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
     TEST_ASSERT_EQUAL_FLOAT(88888.0f, loaded.power_P[0][0]);
 }
 
-TEST_CASE("g6_brain_update rejects invalid inputs", "[g6_brain]") {
+TEST_CASE("g6_brain_update routes hr_ths=0 to safety layer (fail-closed)", "[g6_brain]") {
+    /* hr_ths<=0 is bad telemetry, not a structurally broken call — fail
+     * closed so the safety layer still runs (manifesto non-negotiable 3.7). */
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 0.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 30);
-    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
 }
 
 TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain]") {
@@ -278,7 +281,7 @@ TEST_CASE("g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail
                                     120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
-    TEST_ASSERT_EQUAL(G6_SAFETY_VOLTAGE, test_brain.last_safety_status);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-closed)", "[g6_brain]") {
@@ -286,12 +289,31 @@ TEST_CASE("g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-
                                     120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
-    TEST_ASSERT_EQUAL(G6_SAFETY_VOLTAGE, test_brain.last_safety_status);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
 }
 
-TEST_CASE("g6_brain_update rejects NaN vr_temp_c", "[g6_brain]") {
+TEST_CASE("g6_brain_update routes NaN vr_temp_c to safety layer (fail-closed)", "[g6_brain]") {
+    /* Under manifesto non-negotiable 3.7, NaN telemetry must not skip a
+     * safety tick. The brain reports INPUT_RANGE and runs the safety layer
+     * (where downstream helpers no-op on NaN). */
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
                                     55.0f, NAN, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
+}
+
+TEST_CASE("g6_brain_update routes NaN temp_c to safety layer (fail-closed)", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    NAN, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
+}
+
+TEST_CASE("g6_brain_update returns INVALID_ARG only for NULL brain pointer", "[g6_brain]") {
+    /* NULL brain is the one truly structurally-broken call — no brain
+     * exists to apply safety to, so INVALID_ARG is correct. */
+    esp_err_t ret = g6_brain_update(NULL, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
 }
 
