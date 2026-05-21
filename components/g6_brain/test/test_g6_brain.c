@@ -265,18 +265,20 @@ TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick"
 
 /* ====================== INPUT VALIDATION (beta5 hardening) ====================== */
 
-TEST_CASE("g6_brain_update rejects f_mhz above BM1370_F_MAX", "[g6_brain]") {
+TEST_CASE("g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail-closed)", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_MAX + 50.0f, 1220.0f,
                                     120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
-    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_VOLTAGE, test_brain.last_safety_status);
 }
 
-TEST_CASE("g6_brain_update rejects v_mv above BM1370_V_MAX", "[g6_brain]") {
+TEST_CASE("g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-closed)", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, BM1370_V_MAX + 50.0f,
                                     120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
-    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_VOLTAGE, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update rejects NaN vr_temp_c", "[g6_brain]") {
@@ -316,4 +318,6 @@ TEST_CASE("NVS bad-size blob is erased on load (B5-NIT-2 actually fires)", "[g6_
     esp_err_t get_err = nvs_get_blob(nvs, "theta_fingerprint", NULL, &blob_size);
     nvs_close(nvs);
     TEST_ASSERT_EQUAL(ESP_ERR_NVS_NOT_FOUND, get_err);
+}
+
 }
