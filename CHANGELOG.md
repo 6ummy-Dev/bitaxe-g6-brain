@@ -4,6 +4,15 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _In Progress_
 
+### [1.0.0-beta5] — 2026-05-21  QA Round 6 (Compilation & Math Stability)
+
+* **Critical (B5-BUG-12)**: Fixed fatal compilation error caused by orphaned struct members. Removed all residual references to the deleted `power_cold_start` flag inside `g6_brain.c`. Both hashrate and power estimators now correctly share the unified `cold_start` boolean.
+* **High (B5-BUG-13)**: Fixed latent divergence in RLS Cold-Start Recovery. The `g6_brain_recover_cold_start()` function now explicitly zero-fills the `theta` and `power_theta` coefficient arrays when resetting the `P` matrices to `1.0e5f`. This prevents a violent mathematical explosion in the Kalman gain vector that would otherwise occur if estimator confidence was reset while preserving an already-evolved polynomial surface.
+
+**Files changed**
+
+* `components/g6_brain/g6_brain.c`
+
 ### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
 
 - **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green.
