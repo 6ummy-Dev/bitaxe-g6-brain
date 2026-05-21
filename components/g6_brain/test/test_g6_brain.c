@@ -80,6 +80,8 @@ TEST_CASE("g6_brain_self_test detects good vs degraded state", "[g6_brain]") {
 TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
     test_brain.theta[0] = 42.0f;
     test_brain.P[0][0] = 12345.0f;
+    test_brain.power_theta[0] = 99.0f;
+    test_brain.power_P[0][0] = 88888.0f;
     test_brain.update_count = 15;
 
     esp_err_t ret = g6_brain_save_nvs_fingerprint(&test_brain);
@@ -92,6 +94,8 @@ TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_FLOAT(42.0f, loaded.theta[0]);
     TEST_ASSERT_EQUAL_FLOAT(12345.0f, loaded.P[0][0]);
+    TEST_ASSERT_EQUAL_FLOAT(99.0f, loaded.power_theta[0]);
+    TEST_ASSERT_EQUAL_FLOAT(88888.0f, loaded.power_P[0][0]);
 }
 
 TEST_CASE("g6_brain_update rejects invalid inputs", "[g6_brain]") {
