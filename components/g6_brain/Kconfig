@@ -1,4 +1,4 @@
-# G6 Brain Configuration — v1.0.0-beta4 (VR Thermal Safety)
+# G6 Brain Configuration — v1.0.0-beta5
 
 menu "G6 Brain Configuration"
 
@@ -41,6 +41,16 @@ menu "G6 Brain Configuration"
             range 50 85
             help
                 Hard ASIC temperature limit.
+
+        config G6_TEMP_PROACTIVE_MARGIN
+            int "ASIC proactive thermal margin below ceiling (°C)"
+            default 5
+            range 2 15
+            help
+                Degrees below G6_TEMP_CEILING at which proactive ASIC frequency and
+                voltage step-back begins. Also defines the threshold at which upward
+                slew is suspended to prevent oscillation at the thermal edge.
+                Mirrors G6_VR_TEMP_PROACTIVE_MARGIN for the ASIC die.
         
         config G6_VR_TEMP_CEILING
             int "VR regulator thermal ceiling (°C)"
@@ -83,7 +93,7 @@ menu "G6 Brain Configuration"
                 Step size used for optimization suggestions and slew limiting.
         
         config G6_ENABLE_EFFICIENCY_MODE
-            bool "Enable true J/TH efficiency optimization (Phase 1+)"
+            bool "Enable true J/TH efficiency optimization"
             default n
             help
                 When enabled, the brain uses a separate power RLS model + Dinkelbach-based

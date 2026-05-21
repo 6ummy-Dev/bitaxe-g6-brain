@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta4 (VR Thermal Safety)
+ * Bitaxe G6 Brain — v1.0.0-beta5
  */
 #pragma once
 
@@ -67,6 +67,12 @@ typedef enum {
 #define G6_JTH_MAX_OUTER_ITERS 7
 #define G6_NVS_SCHEMA_VERSION 3u
 
+#if defined(CONFIG_G6_TEMP_PROACTIVE_MARGIN)
+#define G6_TEMP_PROACTIVE_MARGIN_DEFAULT ((float)CONFIG_G6_TEMP_PROACTIVE_MARGIN)
+#else
+#define G6_TEMP_PROACTIVE_MARGIN_DEFAULT 5.0f
+#endif
+
 #if defined(CONFIG_G6_VR_TEMP_CEILING)
 #define G6_VR_TEMP_CEILING_DEFAULT ((float)CONFIG_G6_VR_TEMP_CEILING)
 #else
@@ -122,7 +128,9 @@ typedef struct {
     /* Safety & Configuration */
     float ner_threshold;
     float temp_ceiling;
+    float temp_proactive_margin;
     float vr_temp_ceiling;
+    float vr_temp_proactive_margin;
     float dfs_step_mhz;
     G6ControlMode control_mode;
     G6SafetyStatus last_safety_status;

@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — Latest (QA Fixes Applied)
+ * Bitaxe G6 Brain — v1.0.0-beta5
  */
 
 #include "g6_brain.h"
@@ -82,7 +82,7 @@ static bool is_thermal_safe(const G6BrainState *brain, float temp_c)
 static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
 {
     if (!brain || !isfinite(temp_c)) return;
-    if (temp_c > (brain->temp_ceiling - 5.0f)) {
+    if (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) {
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
         brain->last_safety_status = G6_SAFETY_THERMAL;
@@ -101,10 +101,13 @@ static void g6_safety_check_voltage_ripple(G6BrainState *brain, float v_mv)
 static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_temp_c)
 {
     if (!brain) return;
-    if (vr_temp_c < 0.0f || !isfinite(vr_temp_c)) return;
+    /* G6_VR_TEMP_NO_SENSOR (-1.0f) and any negative value disables VR monitoring.
+     * Use an explicit sentinel check rather than a bare < 0.0f to avoid silently
+     * disabling protection on a glitched sensor returning e.g. -0.5°C. */
+    if (vr_temp_c <= G6_VR_TEMP_NO_SENSOR || !isfinite(vr_temp_c)) return;
     if (!isfinite(brain->vr_temp_ceiling) || brain->vr_temp_ceiling <= 0.0f) return;
 
-    float proactive_threshold = brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT;
+    float proactive_threshold = brain->vr_temp_ceiling - brain->vr_temp_proactive_margin;
 
     if (vr_temp_c >= brain->vr_temp_ceiling) {
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.985f);
@@ -122,8 +125,8 @@ static void g6_asic_error_handle_non_blocking(G6BrainState *brain, float err_pct
     if (err_pct > brain->ner_threshold) {
         brain->model_quality = fminf(brain->model_quality, 0.25f);
         brain->cold_start = true;
-        brain->best_f *= 0.92f;
-        brain->best_v *= 0.985f;
+        brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.92f);
+        brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.985f);
         brain->last_safety_status = G6_SAFETY_NER_BACKOFF;
     }
 }
@@ -162,6 +165,15 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
             nvs_commit(nvs);
         }
+    } else if (err == ESP_OK && blob_size != expected_blob_size) {
+        /* Blob exists but is the wrong size — schema corruption or partial write.
+         * Erase it so we don't silently carry a bad blob across reboots. */
+        ESP_LOGW(TAG, "NVS blob size mismatch (got %u, expected %u) — erasing",
+                 (unsigned)blob_size, (unsigned)expected_blob_size);
+        brain->cold_start = true;
+        brain->power_cold_start = true;
+        nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+        nvs_commit(nvs);
     }
     nvs_close(nvs);
     return ESP_OK;
@@ -194,18 +206,10 @@ esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)
     return err;
 }
 
-esp_err_t g6_brain_reset(G6BrainState *brain)
+/* Shared default-state initialization. Called from both g6_brain_init and
+ * g6_brain_reset. Assumes the caller has already memset the struct to zero. */
+static void g6_brain_set_defaults(G6BrainState *brain)
 {
-    if (!brain) return ESP_ERR_INVALID_ARG;
-
-    nvs_handle_t nvs;
-    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
-        nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
-        nvs_commit(nvs);
-        nvs_close(nvs);
-    }
-
-    memset(brain, 0, sizeof(G6BrainState));
     brain->best_f = BM1370_F_CENTER;
     brain->best_v = BM1370_V_CENTER;
     brain->ridge_epsilon = RLS_RIDGE_EPSILON;
@@ -239,7 +243,9 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 #else
     brain->temp_ceiling = 70.0f;
 #endif
+    brain->temp_proactive_margin = G6_TEMP_PROACTIVE_MARGIN_DEFAULT;
     brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
+    brain->vr_temp_proactive_margin = G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT;
 
 #if defined(CONFIG_G6_NER_THRESHOLD)
     brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
@@ -254,6 +260,21 @@ esp_err_t g6_brain_reset(G6BrainState *brain)
 
     brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
     brain->nvs_last_write_tick = xTaskGetTickCount();
+}
+
+esp_err_t g6_brain_reset(G6BrainState *brain)
+{
+    if (!brain) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t nvs;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+
+    memset(brain, 0, sizeof(G6BrainState));
+    g6_brain_set_defaults(brain);
     return ESP_OK;
 }
 
@@ -325,11 +346,18 @@ static void optimize_jth_dinkelbach(const G6BrainState *brain, float *opt_f, flo
     *opt_v = v;
 }
 
-static bool is_sample_valid(const G6BrainState *brain, float hr_ths, float temp_c, uint32_t shares)
+/* Returns true if the sample is fit for an RLS update.
+ * Input finiteness and hr_ths > 0 are already enforced by g6_brain_update's
+ * early validation; those checks are intentionally omitted here to avoid
+ * dead code. NER is gated here as defense-in-depth even though the early
+ * goto in g6_brain_update handles the side-effects (backoff, cold_start). */
+static bool is_sample_valid(const G6BrainState *brain, float hr_ths,
+                            float temp_c, float err_pct, uint32_t shares)
 {
-    if (!isfinite(hr_ths) || hr_ths <= 0.0f) return false;
+    if (err_pct > brain->ner_threshold) return false;
     if (shares < MIN_SHARE_COUNT) return false;
     if (!is_thermal_safe(brain, temp_c)) return false;
+    (void)hr_ths; /* validated upstream; kept in signature for call-site clarity */
     return true;
 }
 
@@ -379,55 +407,8 @@ esp_err_t g6_brain_init(G6BrainState *brain)
     if (nvs_err == ESP_OK) nvs_close(nvs_test);
 
     memset(brain, 0, sizeof(G6BrainState));
-    brain->best_f = BM1370_F_CENTER;
-    brain->best_v = BM1370_V_CENTER;
-    brain->ridge_epsilon = RLS_RIDGE_EPSILON;
-    brain->cold_start = true;
-    brain->update_count = 0;
-    brain->model_quality = 0.0f;
-    brain->nvs_valid = false;
-    brain->sample_state = BRAIN_STATE_IDLE;
-    brain->control_mode = G6_MODE_RECOMMEND;
-    brain->last_safety_status = G6_SAFETY_OK;
-
-    for (int i = 0; i < RLS_N; i++)
-        for (int j = 0; j < RLS_N; j++)
-            brain->P[i][j] = (i == j) ? 1.0e5f : 0.0f;
-
-    for (int i = 0; i < RLS_N; i++)
-        for (int j = 0; j < RLS_N; j++)
-            brain->power_P[i][j] = (i == j) ? 1.0e5f : 0.0f;
-
-    brain->power_cold_start = true;
-    brain->power_update_count = 0;
-    brain->power_model_quality = 0.0f;
-    brain->last_innovation = 0.0f;
-    brain->use_efficiency_mode = false;
-
-#if defined(CONFIG_G6_ENABLE_EFFICIENCY_MODE)
-    brain->use_efficiency_mode = CONFIG_G6_ENABLE_EFFICIENCY_MODE;
-#endif
-#if defined(CONFIG_G6_TEMP_CEILING)
-    brain->temp_ceiling = (float)CONFIG_G6_TEMP_CEILING;
-#else
-    brain->temp_ceiling = 70.0f;
-#endif
-    brain->vr_temp_ceiling = G6_VR_TEMP_CEILING_DEFAULT;
-
-#if defined(CONFIG_G6_NER_THRESHOLD)
-    brain->ner_threshold = (float)CONFIG_G6_NER_THRESHOLD / 100.0f;
-#else
-    brain->ner_threshold = 2.5f;
-#endif
-#if defined(CONFIG_G6_DFS_STEP_MHZ)
-    brain->dfs_step_mhz = (float)CONFIG_G6_DFS_STEP_MHZ;
-#else
-    brain->dfs_step_mhz = 25.0f;
-#endif
-
-    brain->Kp = 0.8f; brain->Ki = 0.05f; brain->Kd = 0.2f;
+    g6_brain_set_defaults(brain);
     g6_brain_load_nvs_fingerprint(brain);
-    brain->nvs_last_write_tick = xTaskGetTickCount();
     return ESP_OK;
 }
 
@@ -465,7 +446,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     brain->last_update_timestamp = now;
 
-    bool valid = is_sample_valid(brain, hr_ths, temp_c, share_count);
+    bool valid = is_sample_valid(brain, hr_ths, temp_c, err_pct, share_count);
     if (valid || brain->sample_state == BRAIN_STATE_SETTLE_WAIT ||
         brain->sample_state == BRAIN_STATE_MEASURE_WINDOW) {
         advance_sample_state(brain, now);
@@ -598,11 +579,11 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     }
 
 safety_layer:
-    bool vr_safety_active = (vr_temp_c >= 0.0f && isfinite(vr_temp_c) &&
+    bool vr_safety_active = (vr_temp_c > G6_VR_TEMP_NO_SENSOR && isfinite(vr_temp_c) &&
                               brain->vr_temp_ceiling > 0.0f &&
-                              vr_temp_c > (brain->vr_temp_ceiling - G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT));
+                              vr_temp_c > (brain->vr_temp_ceiling - brain->vr_temp_proactive_margin));
 
-    bool safety_active = (temp_c > (brain->temp_ceiling - 5.0f)) ||
+    bool safety_active = (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) ||
                          (err_pct > brain->ner_threshold) ||
                          vr_safety_active;
 
@@ -624,9 +605,13 @@ safety_layer:
     if (brain->best_v < BM1370_V_MIN) brain->best_v = BM1370_V_MIN;
     if (brain->best_v > BM1370_V_MAX) brain->best_v = BM1370_V_MAX;
 
-    g6_safety_proactive_thermal_scale(brain, temp_c);
+    /* Safety helpers run after the hard clamps. Order matters for last_safety_status:
+     * each helper overwrites the status only when its condition triggers.
+     * VR thermal runs first so ASIC thermal (the higher-priority condition) wins
+     * on any tick where both fire simultaneously. */
     g6_safety_check_voltage_ripple(brain, v_mv);
     g6_safety_proactive_vr_thermal_scale(brain, vr_temp_c);
+    g6_safety_proactive_thermal_scale(brain, temp_c);
 
     brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
 
