@@ -22,7 +22,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 - `components/g6_brain/g6_brain.h`
 - `components/g6_brain/g6_brain.c`
 
-### [1.0.0-beta5] — 2026-05-20  QA Round 3 (Final)
+### [1.0.0-beta5] — 2026-05-20  QA Round 3
 
 - **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
 
