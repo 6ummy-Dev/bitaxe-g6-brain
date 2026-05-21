@@ -109,9 +109,7 @@ typedef struct {
     float P[RLS_N][RLS_N];
     float ridge_epsilon;
     float model_quality;
-    bool cold_start;
     uint32_t update_count;
-    bool nvs_valid;
 
     /* Recommended Operating Point */
     float best_f;
@@ -140,15 +138,19 @@ typedef struct {
     float power_theta[RLS_N];
     float power_P[RLS_N][RLS_N];
     float power_model_quality;
-    bool power_cold_start;
     uint32_t power_update_count;
-    bool use_efficiency_mode;
 
     /* Phase 2 Reserved */
     uint32_t nonce_offset;
-    bool enable_low_latency_jobs;
     uint32_t valid_sample_count;
     float Kp, Ki, Kd;
+
+    /* State Flags (Packed to eliminate padding) */
+    bool cold_start;
+    bool nvs_valid;
+    bool power_cold_start;
+    bool use_efficiency_mode;
+    bool enable_low_latency_jobs;
 } G6BrainState;
 
 /* Telemetry Snapshot */
