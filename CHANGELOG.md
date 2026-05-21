@@ -4,6 +4,43 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _In Progress_
 
+### [1.0.0-beta5] — 2026-05-21  QA Round 7 (Safety Model Integrity & Full Fail-Closed)
+
+- **Critical (B5-BUG-14)**: Fixed fatal compile error — stray `}` in `test_g6_brain.c`. An orphaned closing brace at end-of-file broke the build. CI was failing since Round 6.
+
+- **Critical (B5-BUG-15)**: Completed removal of dead `power_cold_start` struct field. Round 6 (B5-BUG-12) removed all `.c` references to unify the two estimators under the single `cold_start` flag, but the field remained in the public struct in `g6_brain.h` — zero readers, zero writers, consuming a byte and contradicting the changelog's own claim that unification was complete.
+
+- **High (B5-BUG-16)**: Fixed `g6_brain_recover_cold_start()` silently disabling efficiency mode. The function called `g6_brain_set_defaults()` to reset P and theta, which also reset `use_efficiency_mode` to its Kconfig default (typically `false`). An operator who had enabled efficiency mode at runtime would have it silently turned off on any covariance divergence event, with no diagnostic signal. `use_efficiency_mode` is now snapshotted and restored alongside the other operator-configured fields.
+
+- **High (B5-BUG-17)**: Fixed `G6_SAFETY_P_MATRIX_SINGULAR` defined but never set. The enum value existed since beta5 but no code path ever wrote it. The covariance recovery path in `g6_brain_recover_cold_start()` is the natural owner — it now sets `last_safety_status = G6_SAFETY_P_MATRIX_SINGULAR` and emits a `LOGW("P matrix diverged — cold-start recovery applied")` so operators and telemetry have a signal when a numerical recovery event fires. Note: a more urgent same-tick condition (thermal, VR) will still overwrite this per the established safety-status priority ordering.
+
+- **High (B5-BUG-18)**: Fixed NaN telemetry silently skipping safety ticks. Non-finite inputs (`NaN`, `Inf`) in any telemetry parameter caused an early `return ESP_ERR_INVALID_ARG`, bypassing the safety layer entirely. This directly violated manifesto non-negotiable 3.7: *"Every safety check executes even on invalid or rejected samples."* A NaN channel now routes fail-closed to the safety layer with `G6_SAFETY_INPUT_RANGE`, where all helpers are already NaN-tolerant. The only remaining `ESP_ERR_INVALID_ARG` return is `brain == NULL` — the one truly structurally-broken call where no brain exists to apply safety to.
+
+- **Medium (B5-BUG-19)**: Fixed `G6_SAFETY_VOLTAGE` misused as a catch-all for input range violations. Out-of-bounds `f_mhz` was setting `G6_SAFETY_VOLTAGE`, which would direct operators to inspect their VRM when the actual issue was upstream telemetry out of hardware bounds. Added `G6_SAFETY_INPUT_RANGE` (appended at end of enum — integer mappings for all existing values preserved). All input-range violations (non-finite, `hr_ths ≤ 0`, `f_mhz`/`v_mv` out of bounds) now use this status. `G6_SAFETY_VOLTAGE` is retained in the enum for a future real VRM-ripple check.
+
+- **Medium (B5-BUG-20)**: Fixed slew-limit test silently broken at runtime. The test provided `theta[3] = 200.0f`, which produces an unconstrained optimum at `f_cand ≈ 25,650 MHz` — outside `BM1370_F_MAX`. `get_optimal()` correctly rejected the out-of-bounds candidate and fell back to `best_f`, making `df = 0` and the slew clamp never activating. The test appeared to pass because CI only compiles tests, it does not run them. Fixed with `theta[3] = 1.2f`, producing an in-bounds optimum at `f_cand = 800 MHz` and a clean 150 MHz gap that forces the slew clamp to fire. Assertion relaxed from `EQUAL_FLOAT` to `FLOAT_WITHIN(0.5f)` to be honest about float arithmetic through the full RLS + slew path.
+
+- **Low (B5-NIT-8)**: Fixed `last_efficiency` computed from potentially out-of-range `power_w` on the input-range fail-closed path. When `f_mhz` or `v_mv` was bad, the update routed to `safety_layer` before the `power_w` sanity check. The efficiency calculation ran unconditionally with whatever value `power_w` held. Now gated on `power_w ∈ [0, 100]` — on any tick where power is unvalidated or out-of-range, the field retains its last known-good value rather than reporting a garbage ratio.
+
+- **Low (B5-NIT-9)**: Documented `safety_active` four-term structure. The Boolean's terms are partially redundant (term 2, NER threshold, is fully covered by term 4 via `G6_SAFETY_NER_BACKOFF`), but terms 1 and 3 (ASIC and VR proactive zones) are genuinely required — without them, the slew controller would race against the proactive derate helpers and re-introduce the B4-BUG-1 sawtooth oscillation on the success path. Added inline comment identifying which terms are load-bearing vs. kept for readability.
+
+- **Low (B5-NIT-10)**: Updated stale test suite header comment. Still referenced "post-setpoint learning suppression" — a feature that was designed, prototyped, and ultimately removed during the round-2/3 QA process. Replaced with accurate coverage description.
+
+**New tests (7)**
+- `g6_brain_update routes hr_ths=0 to safety layer (fail-closed)` — replaces the previous `INVALID_ARG` assertion; confirms safety layer runs on bad telemetry.
+- `g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail-closed)` — updated to assert `G6_SAFETY_INPUT_RANGE`.
+- `g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-closed)` — same.
+- `g6_brain_update routes NaN vr_temp_c to safety layer (fail-closed)` — replaces `INVALID_ARG` test; confirms the manifesto 3.7 invariant for sensor NaN.
+- `g6_brain_update routes NaN temp_c to safety layer (fail-closed)` — new NaN path coverage.
+- `g6_brain_update returns INVALID_ARG only for NULL brain pointer` — pins the new contract: NULL is the sole `INVALID_ARG` path.
+- `Trace divergence triggers P-matrix recovery and reports P_MATRIX_SINGULAR` — verifies B5-BUG-17: drives `P` to 1e8 diagonal, confirms `G6_SAFETY_P_MATRIX_SINGULAR` status, zeroed theta, and reset P.
+- `P-matrix recovery preserves operator-configured use_efficiency_mode` — verifies B5-BUG-16: efficiency mode and other runtime config survive a covariance blow-up event.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h`
+- `components/g6_brain/g6_brain.c`
+- `components/g6_brain/test/test_g6_brain.c`
+
 ### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
 
 * **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
