@@ -4,6 +4,23 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _In Progress_
 
+### [1.0.0-beta5] — 2026-05-21  QA Round 8 (Telemetry Symmetry & Const-Correctness Polish)
+
+- **Low (B5-NIT-11)**: Added `power_model_quality` and `power_update_count` to `G6BrainTelemetry`. The previous polish round (which added `model_quality`, `update_count`, etc.) covered the hashrate estimator but missed the symmetric fields on the power estimator. Operators running efficiency mode now have visibility into power-model convergence and update history via the telemetry snapshot, without having to read `brain->power_*` fields directly. Backward compatible — struct fields appended in-place; existing callers continue to compile and read the original fields.
+
+- **Low (B5-NIT-12)**: `g6_brain_self_test()` is now `const`-correct. Signature changed from `esp_err_t g6_brain_self_test(G6BrainState *brain)` to `esp_err_t g6_brain_self_test(const G6BrainState *brain)` in both header and implementation. The function only reads from `brain` (covariance diagonal range, symmetry, condition number) and now matches `g6_brain_get_telemetry()` in `const` posture. Callers holding a `const G6BrainState *` can now invoke self-test. Source-compatible — no caller has to change.
+
+- **Low (B5-NIT-13)**: Strengthened "Dinkelbach does not fire below model quality threshold" test. The test previously declared `float pred_hr` and passed it to `g6_brain_get_optimal()` but never asserted on it — set-but-unused. Now asserts `pred_hr ≈ 80.5 TH/s` (the predicted hashrate at the hashrate-only optimum fn=0.5 for the test's theta values), proving both that Dinkelbach was correctly bypassed *and* that `get_optimal()` returned a sensible prediction at the analytical maximum.
+
+**Deferred (B5-NIT-14)**: Asymmetric guard structure between `g6_safety_proactive_thermal_scale()` and `g6_safety_proactive_vr_thermal_scale()`. The VR helper has three independent guards (null brain, sensor sentinel/finiteness, ceiling validity); the ASIC helper has one combined guard. Reconciling them in either direction is a behavior change, not a polish edit — defensive guards would either be added to ASIC (potentially masking config errors) or removed from VR (weakening defensiveness against zeroed ceiling). Flagged for v1.0 design review.
+
+**Files changed**
+- `components/g6_brain/g6_brain.h` (telemetry struct +2 fields, self_test signature)
+- `components/g6_brain/g6_brain.c` (get_telemetry populates +2 fields, self_test signature)
+- `components/g6_brain/test/test_g6_brain.c` (one strengthened assertion)
+
+---
+
 ### [1.0.0-beta5] — 2026-05-21  QA Round 7 (Safety Model Integrity & Full Fail-Closed)
 
 - **Critical (B5-BUG-14)**: Fixed fatal compile error — stray `}` in `test_g6_brain.c`. An orphaned closing brace at end-of-file broke the build. CI was failing since Round 6.
