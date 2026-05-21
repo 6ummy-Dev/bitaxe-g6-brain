@@ -4,7 +4,20 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-20 _In Progress_
 
-### [1.0.0-beta5] — 2026-05-20  QA Round 3 (Final)
+[1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
+Critical (B5-BUG-8): Fixed fail-open validation trap in g6_brain_update(). Separated the boundary range checks (BM1370_F_MAX, BM1370_V_MAX, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger G6_SAFETY_VOLTAGE and safely route to the safety_layer rather than returning ESP_ERR_INVALID_ARG. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise.
+
+Medium (B5-BUG-9): Fixed G6BrainState struct padding regression. Reordered the struct to group all 1-byte bool flags (cold_start, nvs_valid, power_cold_start, use_efficiency_mode, enable_low_latency_jobs) at the bottom. This eliminates invisible compiler padding and restores cache-line packing optimizations.
+
+Low (B5-NIT-6): Removed redundant fmaxf/fminf re-clamping from the g6_safety_check_voltage_ripple helper. The variables are already securely hard-clamped immediately prior to the safety layer helpers executing, making the inner math unnecessary.
+
+Files changed
+
+components/g6_brain/g6_brain.h
+
+components/g6_brain/g6_brain.c
+
+### [1.0.0-beta5] — 2026-05-20  QA Round 3
 
 - **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
 
