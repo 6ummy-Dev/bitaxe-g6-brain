@@ -4,6 +4,24 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _In Progress_
 
+### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
+
+* **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
+* **API & Safety**: Documented the shift to **Fail-Closed Validation Routing**, explaining how out-of-bounds telemetry now actively triggers hardware clamps rather than bypassing them via early returns.
+* **Mechanisms**: Added detailed technical explanations for **Trace Accumulation Recovery** (matrix reset and zero-fill rules), **Slew-Rate Amnesia** protection, and exact solver bounding.
+* **Guides & Definitions**: Updated `TESTING.md` with specific scenarios for testing fail-closed boundary enforcement. Added new formal definitions to `GLOSSARY.md`.
+* **General**: Refreshed `README.md`, `KCONFIG.md`, and `AGENTS.md` (updated forbidden patterns) to accurately reflect the unified state flags and the complete Beta 5 feature set.
+
+**Files changed**
+
+* `README.md`
+* `docs/API.md`
+* `docs/SAFETY.md`
+* `docs/AGENTS.md`
+* `docs/TESTING.md`
+* `docs/KCONFIG.md`
+* `docs/GLOSSARY.md`
+
 ### [1.0.0-beta5] — 2026-05-21  QA Round 6 (Compilation & Math Stability)
 
 * **Critical (B5-BUG-12)**: Fixed fatal compilation error caused by orphaned struct members. Removed all residual references to the deleted `power_cold_start` flag inside `g6_brain.c`. Both hashrate and power estimators now correctly share the unified `cold_start` boolean.
