@@ -4,7 +4,13 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _In Progress_
 
-### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Final Validation Fixes)
+### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
+
+- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green.
+- **High (B5-BUG-11)**: Fixed slew-rate controller "amnesia". Added `(brain->last_safety_status != G6_SAFETY_OK)` to the `safety_active` guard boolean. Now, statistical outlier rejections and power sanity anomalies properly freeze the upward slew controller rather than allowing it to aggressively march targets upward based on stale prior optimums.
+- **Minor (B5-NIT-7)**: Purged the redundant `g6_safety_check_voltage_ripple` helper function entirely. Its condition is now strictly handled at the top of the update loop, preventing unnecessary re-evaluation in the safety layer.
+
+### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
 
 - **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise.
 
