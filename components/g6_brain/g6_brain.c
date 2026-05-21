@@ -123,6 +123,9 @@ static void g6_brain_set_defaults(G6BrainState *brain);
 
 static void g6_brain_recover_cold_start(G6BrainState *brain)
 {
+    /* Snapshot operator-controlled state that set_defaults would otherwise
+     * reset. Anything the user can configure at runtime needs to survive a
+     * numerical recovery event. */
     G6ControlMode current_mode = brain->control_mode;
     float current_best_f = brain->best_f;
     float current_best_v = brain->best_v;
@@ -132,6 +135,7 @@ static void g6_brain_recover_cold_start(G6BrainState *brain)
     float current_vtc = brain->vr_temp_ceiling;
     float current_vtpm = brain->vr_temp_proactive_margin;
     float current_dfs = brain->dfs_step_mhz;
+    bool current_eff = brain->use_efficiency_mode;
 
     memset(brain->theta, 0, sizeof(brain->theta));
     memset(brain->power_theta, 0, sizeof(brain->power_theta));
@@ -147,6 +151,13 @@ static void g6_brain_recover_cold_start(G6BrainState *brain)
     brain->vr_temp_ceiling = current_vtc;
     brain->vr_temp_proactive_margin = current_vtpm;
     brain->dfs_step_mhz = current_dfs;
+    brain->use_efficiency_mode = current_eff;
+
+    /* Surface the recovery event to telemetry. Downstream safety helpers
+     * may overwrite this if a more urgent condition (thermal/VR) fires on
+     * the same tick — that priority is intentional. */
+    brain->last_safety_status = G6_SAFETY_P_MATRIX_SINGULAR;
+    ESP_LOGW(TAG, "P matrix diverged — cold-start recovery applied");
 }
 
 esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
@@ -588,7 +599,14 @@ safety_layer:
     g6_safety_proactive_vr_thermal_scale(brain, vr_temp_c);
     g6_safety_proactive_thermal_scale(brain, temp_c);
 
-    brain->last_efficiency = (hr_ths > 0.0f) ? (power_w / hr_ths) : 0.0f;
+    /* Only update efficiency telemetry when power_w is within sanity bounds.
+     * On fail-closed paths reached via bad voltage/frequency (line 405), the
+     * power_w sanity check at line 412 was bypassed and the value may be
+     * out-of-range. Skipping the update preserves the last known-good value
+     * in telemetry rather than reporting a garbage ratio. */
+    if (hr_ths > 0.0f && power_w >= 0.0f && power_w <= 100.0f) {
+        brain->last_efficiency = power_w / hr_ths;
+    }
 
     if (brain->control_mode == G6_MODE_AUTO &&
         (fabsf(brain->best_f - entry_best_f) > 1e-3f ||
