@@ -1,17 +1,15 @@
-# G6 Brain Documentation — v1.0.0-beta4
+# G6 Brain Documentation — v1.0.0-beta5
 
 **Advanced RLS-based self-optimizing module for Bitaxe ESP-Miner (Gamma 602+)**
 
 Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370.
-
 This is a clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints.
 
-In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing between ASIC die temperature and voltage regulator (VR) temperature for more robust protection.
+In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing between ASIC die temperature and voltage regulator (VR) temperature for more robust protection. **beta5** adds configurable thermal margins, safety status priority on collision, NER defense-in-depth, and code quality hardening.
 
 ---
 
 ## Quick Start
-
 1. Read **[INSTALL.md](INSTALL.md)** — add the component and enable it.
 2. Use the recommended integration example: `docs/INTEGRATION_EXAMPLE.c`.
 3. Start in `OBSERVE_ONLY` or `RECOMMEND` mode.
@@ -32,6 +30,7 @@ In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing b
 | [TESTING.md](TESTING.md)        | Community testing guide                           | Field testing guidance |
 
 **Additional project docs (root):**
+
 - `AGENTS.md` — Safety invariants & engineering principles
 - `GLOSSARY.md` — Terminology
 - `CHANGELOG.md` — Version history
@@ -40,23 +39,22 @@ In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing b
 ---
 
 ## What Makes G6 Brain Different
-
 - Pure RLS quadratic modeling (fully explainable)
 - Joseph-form covariance stabilization (numerically robust)
 - 3-sigma statistical outlier gating
 - Per-chip NVS fingerprinting (warm start)
 - Clean telemetry export API
 - **Two-tier thermal safety** (beta4) — Separate handling for ASIC and VR temperatures
+- **Configurable thermal margins** (beta5) — ASIC and VR proactive margins now Kconfig options stored in state
 - Modular and auditable design
 - Hardened through multiple QA review cycles
 
 ---
 
 ## Status
-
-- **Version:** v1.0.0-beta4 (May 2026)
-- **Maturity:** Beta — preparing for field testing
-- **QA:** Code verified, documentation updates in progress
+- **Version:** v1.0.0-beta5 (May 2026)
+- **Maturity:** Beta — field testing in progress
+- **QA:** Code verified, beta5 in development
 - **License:** MIT
 
 ---
