@@ -4,13 +4,14 @@ This guide is intended for community members testing the **v1.0.0-beta5** releas
 
 ## What's New in beta5
 
-- **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option and lives in the state struct (`brain->temp_proactive_margin`), matching the VR margin design.
-- **VR Proactive Margin Properly Honored at Runtime** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at all call sites. Runtime mutation of the field now correctly affects the proactive zone.
-- **Safety Status Priority** — Safety helpers are reordered so ASIC thermal wins on collision when both ASIC and VR conditions fire on the same tick.
-- **NER Defense-in-Depth** — `is_sample_valid()` now gates on NER as a redundant safety check.
-- **NER Backoff Floor Clamps** — `g6_asic_error_handle_non_blocking` uses `fmaxf` floor clamping, consistent with the other safety helpers.
-- **NVS Blob-Size Mismatch Logging** — Corrupt or mismatched NVS blobs are now logged and erased rather than silently dropped.
-- **Code Quality** — `g6_brain_set_defaults()` extracted; `g6_brain_init` and `g6_brain_reset` no longer duplicate 50 lines of default-setting logic.
+- **Fail-Closed Validation Routing** — Out-of-bounds sensor readings (e.g., impossible frequencies or voltages) no longer result in ignored telemetry. They actively trigger the safety layer to freeze the optimizer and enforce hardware clamps.
+- **Slew-Rate Amnesia Protection** — Upward setpoint slew is now strictly frozen during *any* safety anomaly (power sanity, statistical outliers, thermal events) rather than continuing to climb based on stale mathematical optimums.
+- **Trace Accumulation Recovery** — If the estimator's covariance matrix trace exceeds safe thresholds during long unbounded learning loops, the brain now safely zeroes the polynomial surface and resets matrix confidence to prevent recursive gain explosions.
+- **Dinkelbach Solver Bounding** — The exact analytical efficiency solver now explicitly clamps fractional coordinates, eliminating mathematical overshoot on degraded power surfaces.
+- **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option and lives in the state struct, matching the VR margin design.
+- **VR Proactive Margin Runtime** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at all call sites.
+- **Safety Status Priority** — Safety helpers are reordered so ASIC thermal, the higher-priority condition, wins on collision when both ASIC and VR conditions fire on the same tick.
+- **NER Defense-in-Depth** — `is_sample_valid()` now independently gates on NER as a redundant safety check.
 
 ## Recommended Starting Point
 
@@ -35,10 +36,14 @@ When testing, pay attention to:
 - If your board reports VR temperature, test both the **proactive zone** and **hard ceiling** behavior.
 - Verify that only voltage is reduced in the proactive zone, and both voltage + frequency are reduced at the hard ceiling.
 
-### 2. Safety Status Telemetry
-- Trigger various safety conditions (high temperature, high NER, invalid power) and verify that `safety_status` in `g6_brain_get_telemetry()` reflects the last triggered condition.
+### 2. Fail-Closed Validation & Slew Protection
+- Intentionally feed the brain an out-of-bounds parameter (e.g., `f_mhz = 1500`).
+- Verify that the internal tracking logic halts upward optimization, enforces strict hardware clamps (`best_f` clamped to 950), and reports a `G6_SAFETY_VOLTAGE` status via telemetry rather than simply ignoring the frame.
 
-### 3. Outlier Gating Resilience
+### 3. Safety Status Telemetry
+- Trigger various safety conditions (high temperature, high NER, invalid power) and verify that `safety_status` in `g6_brain_get_telemetry()` reflects the exact anomaly.
+
+### 4. Outlier Gating Resilience
 - Observe or simulate telemetry anomalies.
 - Confirm that severe anomalies trigger `HR Outlier Rejected` or `Power Outlier Rejected` logs instead of corrupting the model.
 
