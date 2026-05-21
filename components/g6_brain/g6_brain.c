@@ -690,7 +690,7 @@ float g6_brain_get_cov_condition(const G6BrainState *brain)
     return (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
 }
 
-esp_err_t g6_brain_self_test(G6BrainState *brain)
+esp_err_t g6_brain_self_test(const G6BrainState *brain)
 {
     if (!brain) return ESP_ERR_INVALID_ARG;
 
@@ -723,8 +723,10 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
     out->best_f = brain->best_f;
     out->best_v = brain->best_v;
     out->model_quality = brain->model_quality;
+    out->power_model_quality = brain->power_model_quality;
     out->last_efficiency = brain->last_efficiency;
     out->update_count = brain->update_count;
+    out->power_update_count = brain->power_update_count;
     out->safety_status = brain->last_safety_status;
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;
