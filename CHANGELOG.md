@@ -4,6 +4,52 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _Completed_
 
+### [1.0.0-beta5] — 2026-05-22  QA Round 10 (Documentation Reconciliation & Pre-Tag Cleanup)
+
+Final documentation pass before tagging beta5 as a release candidate. No code changes this round — pure documentation reconciliation across the repo to align operator-facing content with the actual code shipped in Rounds 5 through 9. Tagging blocker fixes plus a comprehensive landing-page refresh.
+
+- **Critical (B5-DOC-1)**: Restored `docs/API.md`. The file in the repo was a byte-for-byte duplicate of `docs/GLOSSARY.md` — the public API reference content drafted during the Batch 1 documentation pass had been lost in an upload pipeline mishap and replaced with the glossary body. Operators clicking "Full public API reference" from either the root README or `docs/README.md` were getting the glossary instead. Restored content covers the threading contract, full signatures for all 10 public functions (including the round-9 const-correct `g6_brain_self_test`), the complete 15-row `G6BrainTelemetry` field table, a 9-row Safety Status Reference table matching the current `G6SafetyStatus` enum, and the public constants table including `G6_EFFICIENCY_MIN_HR_THS`.
+
+- **Medium (B5-DOC-2)**: Refreshed root `README.md`. Three discrete fixes:
+  - Status table: "(In Development)" → "(Release Candidate)"; "Deep QA verified, preparing for field testing" → "Nine review cycles completed; full code + docs audit pass".
+  - "What's New in beta5" was Round 5-only — restructured into three labeled phase sub-sections (initial hardening, safety model integrity, pre-v1.0 polish) covering the operator-visible changes from Rounds 5, 7, and 8. Tail link directs readers to the changelog for granular per-bug history.
+  - Documentation table expanded from 6 to 12 entries, listing all 11 docs plus `MANIFESTO.md`. Now matches the documentation map in `docs/README.md` aligned during the Batch 3 documentation pass.
+
+**Batches summary (Rounds 1-3 of documentation, executed prior to this round)**
+
+This round closes out the systematic documentation reconciliation effort that ran in parallel with the code work. For audit completeness, the prior doc batches covered:
+
+- **Batch 1 (`docs/API.md`, `docs/SAFETY.md`, `docs/GLOSSARY.md`)**: Fixed critical doc-vs-code mismatches — the stale `ESP_ERR_INVALID_ARG` contract description, the misnamed `G6_SAFETY_VOLTAGE` references, the deleted `BrainSampleState` type still appearing in the glossary, missing `G6_SAFETY_P_MATRIX_SINGULAR` and `G6_SAFETY_INPUT_RANGE` documentation, and missing `G6BrainTelemetry` field coverage. Softened "Joseph Form" overclaim to "Joseph-style congruence + ridge" consistently across all three.
+
+- **Batch 2 (`docs/MONITORING.md`, `docs/TESTING.md`, `CHANGELOG.md`)**: Rewrote MONITORING — the previous version listed 7 log strings that don't exist in code. Replaced with the actual 5 brain-emitted strings, reframed the document around telemetry-as-primary-observability. TESTING expanded with Round 7 + Round 8 coverage and a frank note on the CI test-execution gap (tests compile but don't run on hardware or QEMU). CHANGELOG status flipped to `_Completed_`.
+
+- **Batch 3 (`docs/AGENTS.md`, `docs/INSTALL.md`, `docs/README.md`)**: Updated AGENTS with current safety taxonomy, added P-matrix singular recovery as item 12, added manifesto 3.7 cross-reference in item 11, expanded Forbidden Patterns with three new explicit rules. INSTALL restructured phase recommendations into three explicit phases with per-status guidance. `docs/README.md` documentation map fixed (AGENTS, GLOSSARY, REFERENCES correctly placed in `docs/` rather than root).
+
+**Files changed in this round**
+- `docs/API.md` (restored from Batch-1 draft — full content recovery)
+- `README.md` (status table, What's New, documentation table)
+
+**Files verified clean, no edits needed**
+- `docs/KCONFIG.md` — all options match Kconfig file, defaults and ranges accurate
+- `docs/REFERENCES.md` — academic citations, doesn't drift with code (Bucy & Joseph 1968 reference appropriately attributes the foundational paper for the technique we use a variant of)
+- `MANIFESTO.md` — clean, timeless; line 37 is the exact non-negotiable 3.7 that other docs now cross-reference correctly
+
+---
+
+## Pre-Release Status
+
+With this round, `[1.0.0-beta5]` is ready for tag as **Release Candidate**. Nine code QA rounds + four documentation batches completed. Code, tests, changelog, and docs are end-to-end consistent — every public symbol mentioned in documentation matches a symbol that actually exists in code with the documented semantics, and vice versa.
+
+**Path to v1.0.0:** Two further betas planned, focused on production hardening. Likely scope (subject to design discussion):
+- Resolution of the deferred B5-NIT-16 (proactive helper guard symmetry)
+- The third-party reviewer's deferred items: Dinkelbach HR-drop guardrail, optional theta soft-clamp, optional stochastic excitation when model quality stalls
+- Stress test with deliberately ill-conditioned P matrices over many updates
+- Monte-Carlo on noisy telemetry convergence
+- CI gap: running tests on QEMU or hardware in addition to compile-checking them
+- Field-test soak data review (48h+ on Gamma with VR sensor + without, per the third-party reviewer's recommendation)
+
+---
+
 ### [1.0.0-beta5] — 2026-05-21  QA Round 8 (Pre-v1.0 Polish: Telemetry, Constants, Const-Correctness)
 
 This round consolidates pre-v1.0 polish work flagged by a second independent QA reviewer. Three groups of changes, all non-blocking: a magic-number cleanup, a telemetry struct expansion (delivered in two passes for symmetry between the hashrate and power estimators), and const-correctness on the self-test entry point. No behavior changes; no safety-layer changes.
