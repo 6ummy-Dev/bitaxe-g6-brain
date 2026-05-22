@@ -83,19 +83,33 @@ idf.py fullclean && idf.py build
 idf.py flash monitor
 ```
 
-Watch for:
-- “G6 Brain initialized”
-- NVS fingerprint auto-saves
-- Control mode and model quality logs
+The brain is intentionally quiet on the console — it only logs the events you genuinely need to know about (see [MONITORING.md](MONITORING.md) for the full list). On a healthy first boot you should see **no warnings** from the `G6_BRAIN` tag. Telemetry from your integration code (`G6_TEL` tag in the example) is where the visibility lives — log the snapshot fields periodically.
+
+If you see any of these, investigate before continuing:
+- `NVS schema mismatch ... — erasing` — automatic, one-time per brain version upgrade. Safe to ignore on first boot of a new version; suspicious if it appears every reboot.
+- `NVS blob size mismatch ... — erasing` — same as above; struct evolution forced a fresh cold-start. One-time only.
+- `P matrix diverged — cold-start recovery applied` — should not appear on a fresh install. If it does, your integration is feeding the brain pathological telemetry. Check the values you pass to `g6_brain_update()`.
+- `Power Outlier Rejected` — sporadic single events are expected; chronic occurrences mean your power sensor (INA219/INA260) has noise or wiring issues.
 
 ---
 
 ## Phase Recommendations (beta5)
 
-- **Start in `G6_MODE_RECOMMEND`** (computes optimal but never mutates `best_f`/`best_v`).
-- Only switch to `G6_MODE_AUTO` after monitoring for 24–48 hours.
-- Use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation.
-- When hardware provides VR temperature, pass the value to enable two-tier thermal protection.
+**Phase 1 — Observation (first 24h):**
+- Start in `G6_MODE_RECOMMEND` (computes optimal but never mutates `best_f`/`best_v`).
+- Or use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation if you don't yet want recommendations.
+- Watch `model_quality` climb. Below 0.60 is normal during early learning.
+- If your hardware provides VR temperature, pass the value to enable two-tier thermal protection.
+
+**Phase 2 — Validation (next 24h):**
+- Confirm `safety_status` stays at `G6_SAFETY_OK` during normal operation.
+- Investigate any persistent non-OK status — see the [Safety Status Reference](SAFETY.md#safety-status-reference) in `SAFETY.md` for what each one means and what to check.
+- Expected transient statuses on a healthy system: `G6_SAFETY_SAMPLE_QUALITY` (occasional 3-sigma outliers) and `G6_SAFETY_THERMAL` (brushing the proactive zone briefly).
+- Unexpected statuses to investigate: `G6_SAFETY_INPUT_RANGE` (your integration is feeding bad telemetry), `G6_SAFETY_P_MATRIX_SINGULAR` (estimator divergence — should be rare).
+
+**Phase 3 — Activation (after 48h of clean operation):**
+- Switch to `G6_MODE_AUTO`. The brain will start applying internally-slew-rate-limited setpoints.
+- Continue monitoring telemetry. Roll back to `RECOMMEND` immediately if you observe instability or unexpected safety events.
 
 ---
 
@@ -104,7 +118,9 @@ Watch for:
 - Recommended example → [`docs/INTEGRATION_EXAMPLE.c`](INTEGRATION_EXAMPLE.c)
 - Full API reference → [`docs/API.md`](API.md)
 - Kconfig options → [`docs/KCONFIG.md`](KCONFIG.md)
-- Safety principles → [`AGENTS.md`](AGENTS.md)
+- Safety mechanisms & status reference → [`docs/SAFETY.md`](SAFETY.md)
+- Real-time monitoring & telemetry → [`docs/MONITORING.md`](MONITORING.md)
+- Engineering principles → [`AGENTS.md`](AGENTS.md)
 
 ---
 
