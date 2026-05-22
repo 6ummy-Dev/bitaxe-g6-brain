@@ -2,24 +2,33 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta5] - 2026-05-21 _In Progress_
+## [1.0.0-beta5] - 2026-05-21 _Completed_
 
-### [1.0.0-beta5] — 2026-05-21  QA Round 8 (Telemetry Symmetry & Const-Correctness Polish)
+### [1.0.0-beta5] — 2026-05-21  QA Round 8 (Pre-v1.0 Polish: Telemetry, Constants, Const-Correctness)
 
-- **Low (B5-NIT-11)**: Added `power_model_quality` and `power_update_count` to `G6BrainTelemetry`. The previous polish round (which added `model_quality`, `update_count`, etc.) covered the hashrate estimator but missed the symmetric fields on the power estimator. Operators running efficiency mode now have visibility into power-model convergence and update history via the telemetry snapshot, without having to read `brain->power_*` fields directly. Backward compatible — struct fields appended in-place; existing callers continue to compile and read the original fields.
+This round consolidates pre-v1.0 polish work flagged by a second independent QA reviewer. Three groups of changes, all non-blocking: a magic-number cleanup, a telemetry struct expansion (delivered in two passes for symmetry between the hashrate and power estimators), and const-correctness on the self-test entry point. No behavior changes; no safety-layer changes.
 
-- **Low (B5-NIT-12)**: `g6_brain_self_test()` is now `const`-correct. Signature changed from `esp_err_t g6_brain_self_test(G6BrainState *brain)` to `esp_err_t g6_brain_self_test(const G6BrainState *brain)` in both header and implementation. The function only reads from `brain` (covariance diagonal range, symmetry, condition number) and now matches `g6_brain_get_telemetry()` in `const` posture. Callers holding a `const G6BrainState *` can now invoke self-test. Source-compatible — no caller has to change.
+- **Low (B5-NIT-11)**: Replaced magic `8.0f` literals in the Dinkelbach J/TH solver with a named constant `G6_EFFICIENCY_MIN_HR_THS` (defined in `g6_brain.h`). This is the minimum predicted hashrate below which the solver skips a candidate point — prevents near-zero division and marks the boundary where the power model has no physical meaning. The literal appeared at two call sites in `optimize_jth_dinkelbach()`; both now reference the constant.
 
-- **Low (B5-NIT-13)**: Strengthened "Dinkelbach does not fire below model quality threshold" test. The test previously declared `float pred_hr` and passed it to `g6_brain_get_optimal()` but never asserted on it — set-but-unused. Now asserts `pred_hr ≈ 80.5 TH/s` (the predicted hashrate at the hashrate-only optimum fn=0.5 for the test's theta values), proving both that Dinkelbach was correctly bypassed *and* that `get_optimal()` returned a sensible prediction at the analytical maximum.
+- **Low (B5-NIT-12)**: Expanded `G6BrainTelemetry` snapshot to surface the operator-facing fields callers were previously reading directly off `G6BrainState`. Added `best_f`, `best_v`, `model_quality`, `last_efficiency`, `update_count`. `last_recommended_voltage` is retained as a backward-compat alias that mirrors `best_v` exactly. `g6_brain_get_telemetry()` now populates all new fields.
 
-**Deferred (B5-NIT-14)**: Asymmetric guard structure between `g6_safety_proactive_thermal_scale()` and `g6_safety_proactive_vr_thermal_scale()`. The VR helper has three independent guards (null brain, sensor sentinel/finiteness, ceiling validity); the ASIC helper has one combined guard. Reconciling them in either direction is a behavior change, not a polish edit — defensive guards would either be added to ASIC (potentially masking config errors) or removed from VR (weakening defensiveness against zeroed ceiling). Flagged for v1.0 design review.
+- **Low (B5-NIT-13)**: Completed the telemetry struct symmetry for the power estimator. The first telemetry expansion (B5-NIT-12) covered the hashrate estimator but missed the analogous fields for the power model. Added `power_model_quality` and `power_update_count`, populated by `g6_brain_get_telemetry()`. Operators running efficiency mode now have visibility into both estimators' convergence and update history via the snapshot.
+
+- **Low (B5-NIT-14)**: `g6_brain_self_test()` is now `const`-correct. Signature changed from `esp_err_t g6_brain_self_test(G6BrainState *brain)` to `esp_err_t g6_brain_self_test(const G6BrainState *brain)` in both header and implementation. The function only reads from `brain` (covariance diagonal range, symmetry, condition number) and now matches `g6_brain_get_telemetry()` in `const` posture. Callers holding a `const G6BrainState *` can now invoke self-test. Source-compatible — no caller has to change.
+
+- **Low (B5-NIT-15)**: Strengthened the "Dinkelbach does not fire below model quality threshold" test. The test previously declared `float pred_hr` and passed it to `g6_brain_get_optimal()` but never asserted on it — set-but-unused. Now asserts `pred_hr ≈ 80.5 TH/s` (the predicted hashrate at the hashrate-only optimum fn=0.5 for the test's theta values), proving both that Dinkelbach was correctly bypassed *and* that `get_optimal()` returned a sensible prediction at the analytical maximum.
+
+**New tests (3)**
+- `Dinkelbach optimizer improves J/TH over naive hashrate-only point` — synthesizes surfaces where lower MHz is more efficient (HR peak at 775 MHz, power monotone increasing), bypasses the quality gate, asserts the solver moves to a lower-MHz point AND that the new J/TH is ≥ 1% better than the starting point. Would catch regressions in the Dinkelbach math.
+- `Dinkelbach does not fire below model quality threshold` — confirms the `model_quality < 0.6` gate holds; optimizer is a no-op when power model is degraded.
+- `g6_brain_get_telemetry snapshot captures all operator fields` — runs 5 updates, captures snapshot, asserts all telemetry fields match the struct exactly at capture time including the `last_recommended_voltage` ↔ `best_v` alias invariant.
+
+**Deferred (B5-NIT-16)**: Asymmetric guard structure between `g6_safety_proactive_thermal_scale()` and `g6_safety_proactive_vr_thermal_scale()`. The VR helper has three independent guards (null brain, sensor sentinel/finiteness, ceiling validity); the ASIC helper has one combined guard. Reconciling them in either direction is a behavior change, not a polish edit — defensive guards would either be added to ASIC (potentially masking config errors) or removed from VR (weakening defensiveness against zeroed ceiling). Flagged for v1.0 design review.
 
 **Files changed**
-- `components/g6_brain/g6_brain.h` (telemetry struct +2 fields, self_test signature)
-- `components/g6_brain/g6_brain.c` (get_telemetry populates +2 fields, self_test signature)
-- `components/g6_brain/test/test_g6_brain.c` (one strengthened assertion)
-
----
+- `components/g6_brain/g6_brain.h` (constant, telemetry struct, self_test signature)
+- `components/g6_brain/g6_brain.c` (constant usage, get_telemetry populates new fields, self_test signature)
+- `components/g6_brain/test/test_g6_brain.c` (3 new tests, 1 strengthened assertion)
 
 ### [1.0.0-beta5] — 2026-05-21  QA Round 7 (Safety Model Integrity & Full Fail-Closed)
 
@@ -60,60 +69,7 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
 
-* **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
-* **API & Safety**: Documented the shift to **Fail-Closed Validation Routing**, explaining how out-of-bounds telemetry now actively triggers hardware clamps rather than bypassing them via early returns.
-* **Mechanisms**: Added detailed technical explanations for **Trace Accumulation Recovery** (matrix reset and zero-fill rules), **Slew-Rate Amnesia** protection, and exact solver bounding.
-* **Guides & Definitions**: Updated `TESTING.md` with specific scenarios for testing fail-closed boundary enforcement. Added new formal definitions to `GLOSSARY.md`.
-* **General**: Refreshed `README.md`, `KCONFIG.md`, and `AGENTS.md` (updated forbidden patterns) to accurately reflect the unified state flags and the complete Beta 5 feature set.
-
-**Files changed**
-
-* `README.md`
-* `docs/API.md`
-* `docs/SAFETY.md`
-* `docs/AGENTS.md`
-* `docs/TESTING.md`
-* `docs/KCONFIG.md`
-* `docs/GLOSSARY.md`
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 6 (Compilation & Math Stability)
-
-* **Critical (B5-BUG-12)**: Fixed fatal compilation error caused by orphaned struct members. Removed all residual references to the deleted `power_cold_start` flag inside `g6_brain.c`. Both hashrate and power estimators now correctly share the unified `cold_start` boolean.
-* **High (B5-BUG-13)**: Fixed latent divergence in RLS Cold-Start Recovery. The `g6_brain_recover_cold_start()` function now explicitly zero-fills the `theta` and `power_theta` coefficient arrays when resetting the `P` matrices to `1.0e5f`. This prevents a violent mathematical explosion in the Kalman gain vector that would otherwise occur if estimator confidence was reset while preserving an already-evolved polynomial surface.
-
-**Files changed**
-
-* `components/g6_brain/g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
-
-- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green.
-- **High (B5-BUG-11)**: Fixed slew-rate controller "amnesia". Added `(brain->last_safety_status != G6_SAFETY_OK)` to the `safety_active` guard boolean. Now, statistical outlier rejections and power sanity anomalies properly freeze the upward slew controller rather than allowing it to aggressively march targets upward based on stale prior optimums.
-- **Minor (B5-NIT-7)**: Purged the redundant `g6_safety_check_voltage_ripple` helper function entirely. Its condition is now strictly handled at the top of the update loop, preventing unnecessary re-evaluation in the safety layer.
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
-
-- **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise.
-
-- **Medium (B5-BUG-9)**: Fixed `G6BrainState` struct padding regression. Reordered the struct to group all 1-byte `bool` flags (`cold_start`, `nvs_valid`, `power_cold_start`, `use_efficiency_mode`, `enable_low_latency_jobs`) at the bottom. This eliminates invisible compiler padding and restores cache-line packing optimizations.
-
-- **Low (B5-NIT-6)**: Removed redundant `fmaxf`/`fminf` re-clamping from the `g6_safety_check_voltage_ripple` helper. The variables are already securely hard-clamped immediately prior to the safety layer helpers executing, making the inner math unnecessary.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-20  QA Round 3
-
-- **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
-
-- **Low (B5v3-NIT-1)**: Extended NVS round-trip test to verify `power_theta` and `power_P` survive save/load. Previous test only checked `theta` and `P`, leaving the B5v2-BUG-1 fix (power_P offset increment) without direct test coverage.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/test/test_g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
+> **Correction note (added in Round 8 cleanup):** This entry was filed as completed but the actual doc updates listed below did not land at that time — the documentation remained unchanged from before. The real doc alignment for beta5 (covering all the items below plus the round 7/8 changes) was completed as a separate effort and is described in the Round 8+ documentation work, not here. Kept in place for historical accuracy.
 
 * **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
 * **API & Safety**: Documented the shift to **Fail-Closed Validation Routing**, explaining how out-of-bounds telemetry now actively triggers hardware clamps rather than bypassing them via early returns.
@@ -142,13 +98,13 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
 
-- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green.
+- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green. *(Superseded by B5-BUG-19 in Round 7: the boundary validation tests were updated again to assert `G6_SAFETY_INPUT_RANGE` after the addition of the dedicated input-range status code.)*
 - **High (B5-BUG-11)**: Fixed slew-rate controller "amnesia". Added `(brain->last_safety_status != G6_SAFETY_OK)` to the `safety_active` guard boolean. Now, statistical outlier rejections and power sanity anomalies properly freeze the upward slew controller rather than allowing it to aggressively march targets upward based on stale prior optimums.
 - **Minor (B5-NIT-7)**: Purged the redundant `g6_safety_check_voltage_ripple` helper function entirely. Its condition is now strictly handled at the top of the update loop, preventing unnecessary re-evaluation in the safety layer.
 
 ### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
 
-- **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise.
+- **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise. *(Partially superseded by B5-BUG-19 in Round 7: the status code was changed from `G6_SAFETY_VOLTAGE` to the new dedicated `G6_SAFETY_INPUT_RANGE`, since `G6_SAFETY_VOLTAGE` was misleading operators into checking their VRM when the actual issue was upstream telemetry. The fail-closed routing itself remains in place.)*
 
 - **Medium (B5-BUG-9)**: Fixed `G6BrainState` struct padding regression. Reordered the struct to group all 1-byte `bool` flags (`cold_start`, `nvs_valid`, `power_cold_start`, `use_efficiency_mode`, `enable_low_latency_jobs`) at the bottom. This eliminates invisible compiler padding and restores cache-line packing optimizations.
 
