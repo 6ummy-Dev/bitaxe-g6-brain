@@ -1,9 +1,8 @@
 # G6 Brain ⚡ Documentation — v1.0.0-beta5
 
 Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370.
-This is a clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints.
 
-In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing between ASIC die temperature and voltage regulator (VR) temperature for more robust protection. **beta5** adds configurable thermal margins, safety status priority on collision, NER defense-in-depth, and code quality hardening.
+A clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints. Hardened across eight QA rounds for fail-closed safety, numerical stability, and educational clarity.
 
 ---
 
@@ -23,36 +22,41 @@ In **beta4**, the brain introduces **two-tier thermal safety**, distinguishing b
 | `INTEGRATION_EXAMPLE.c`         | Recommended integration example                   | Starting point for real integration |
 | [API.md](API.md)                | Full public API reference                         | Need function details |
 | [KCONFIG.md](KCONFIG.md)        | All configuration options explained               | Tuning safety limits or debugging |
-| [SAFETY.md](SAFETY.md)          | Safety mechanisms & unhappy-path engineering      | Understanding how the brain protects hardware |
+| [SAFETY.md](SAFETY.md)          | Safety mechanisms & full `G6SafetyStatus` reference | Understanding how the brain protects hardware |
 | [MONITORING.md](MONITORING.md)  | Real-time observability and telemetry             | Monitoring brain health |
 | [TESTING.md](TESTING.md)        | Community testing guide                           | Field testing guidance |
+| [AGENTS.md](AGENTS.md)          | Engineering principles & safety invariants        | Contributing code or reviewing PRs |
+| [GLOSSARY.md](GLOSSARY.md)      | Terminology used across code and docs             | Looking up a term you've seen |
+| [REFERENCES.md](REFERENCES.md)  | Scientific & mathematical foundations             | Understanding the RLS/Dinkelbach math |
 
-**Additional project docs (root):**
+**Project root:**
 
-- `AGENTS.md` — Safety invariants & engineering principles
-- `GLOSSARY.md` — Terminology
-- `CHANGELOG.md` — Version history
-- `MANIFESTO.md` — Project philosophy
+- [`CHANGELOG.md`](../CHANGELOG.md) — Version history
+- [`MANIFESTO.md`](../MANIFESTO.md) — Project philosophy and non-negotiables
 
 ---
 
 ## What Makes G6 Brain Different
-- Pure RLS quadratic modeling (fully explainable)
-- Joseph-form covariance stabilization (numerically robust)
-- 3-sigma statistical outlier gating
-- Per-chip NVS fingerprinting (warm start)
-- Clean telemetry export API
-- **Two-tier thermal safety** (beta4) — Separate handling for ASIC and VR temperatures
-- **Configurable thermal margins** (beta5) — ASIC and VR proactive margins now Kconfig options stored in state
-- Modular and auditable design
-- Hardened through multiple QA review cycles
+
+- Pure RLS quadratic modeling with separate hashrate and power surfaces — fully explainable.
+- Stabilized covariance updates (Joseph-style congruence + ridge + symmetrize + clamp) for numerical robustness.
+- 3-sigma statistical outlier gating on both estimators.
+- **Fail-closed safety contract** — every numeric input (including NaN, Inf, out-of-bounds) routes to the safety layer. `ESP_ERR_INVALID_ARG` returns only on `brain == NULL`.
+- **P-matrix divergence auto-recovery** — when the estimator goes singular, the brain re-cold-starts while preserving operator-configured state.
+- **Two-tier thermal safety** — independent ASIC and VR temperature protection with configurable proactive margins.
+- **Bounded Dinkelbach J/TH solver** — exact $O(1)$ fractional minimization, gated on both model qualities ≥ 0.6.
+- Per-chip NVS fingerprinting (warm start across power cycles, with schema versioning and bad-blob auto-erase).
+- Clean `G6BrainTelemetry` snapshot for monitoring and dashboards.
+- Modular, single-threaded, swappable component.
+- Hardened through nine QA review cycles with explicit changelog accountability.
 
 ---
 
 ## Status
+
 - **Version:** v1.0.0-beta5 (May 2026)
-- **Maturity:** Beta — field testing in progress
-- **QA:** Code verified, beta5 in development
+- **Maturity:** Beta — ready for field testing (48h+ soak recommended before v1.0 tag)
+- **QA:** Nine review cycles completed; full code+docs audit pass
 - **License:** MIT
 
 ---
