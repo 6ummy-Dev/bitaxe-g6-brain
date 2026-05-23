@@ -4,6 +4,51 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta5] - 2026-05-21 _Completed_
 
+### [1.0.0-beta6] — 2026-05-23  QA Round 11 (Pre-Field-Test Coverage Polish)
+
+First beta6 QA round. Pure test-and-doc coverage improvements identified during the beta6 level-set sweep. **No code changes** — the brain behavior is unchanged; previously-untested code paths now have explicit assertions, and the glossary is now symmetric with the enum.
+
+Manifesto alignment: this round is the "we test heavily" line in action. The level-set sweep found 5 of 9 `G6SafetyStatus` enum values had no `TEST_ASSERT_EQUAL` on `last_safety_status` — the code paths ran during existing tests but the resulting status was never verified. Closed that gap without changing any code.
+
+- **Low (B6-NIT-01)**: Added explicit `last_safety_status` assertions to 4 existing tests. Each test was already exercising the corresponding code path; now the resulting status is also asserted.
+  - "Safety layer still executes on invalid sample" → asserts `G6_SAFETY_THERMAL` (hard thermal at temp=75 vs ceiling=60).
+  - "Statistical Outlier Gating rejects severe sensor anomalies" → asserts `G6_SAFETY_SAMPLE_QUALITY` (3-sigma gate fires on `hr_ths=9999`).
+  - "VR proactive zone steps back best_v only" → asserts `G6_SAFETY_VR_THERMAL` (proactive zone, vr=82 in [80,85)).
+  - "VR hard ceiling steps back both best_v and best_f" → asserts `G6_SAFETY_VR_THERMAL` (hard ceiling, vr=86 ≥ 85).
+
+- **Low (B6-NIT-02)**: Added 2 new tests covering the `G6_SAFETY_POWER_SANITY` input-validation path:
+  - "g6_brain_update routes out-of-range power_w to safety layer with POWER_SANITY" — `power_w=500` (above 100 W sanity bound).
+  - "g6_brain_update routes negative power_w to safety layer with POWER_SANITY" — `power_w=-10`.
+  - Both verify the fail-closed routing per manifesto non-negotiable 3.7: `power_w` out of bounds reaches the safety layer with the correct status, `ESP_OK` returned, no early `INVALID_ARG`.
+
+- **Low (B6-NIT-03)**: Added `G6_SAFETY_OK` assertions to "valid synthetic data respects control_mode" test. The two successful update calls now confirm both `ESP_OK` return *and* `last_safety_status == G6_SAFETY_OK` — making it explicit that a clean tick produces a clean status, not just absence of error.
+
+- **Low (B6-NIT-04)**: Expanded `G6SafetyStatus` glossary entry to enumerate all 9 enum values with one-line semantics each. Previously only 3 "key values" were listed; the remaining 6 were defined only in `SAFETY.md`. Anyone using GLOSSARY as the entry point for terminology now sees the complete enum with explicit notation that `G6_SAFETY_VOLTAGE` is reserved.
+
+- **Low (B6-NIT-05)**: Updated test suite header comment to reflect the new enum-coverage scope.
+
+**Deferred (carried forward from beta5)**: B5-NIT-16 (proactive helper guard symmetry) remains open. Deliberate hold for field data — beta6's RECOMMEND-mode and AUTO-mode soaks will tell us whether the missing guards on the ASIC helper ever matter in practice. If no edge cases hit them during the soaks, simplify the VR helper down to match. If any do, harden the ASIC helper up.
+
+**Final test enum coverage**: every code-active `G6SafetyStatus` value now has at least one explicit `TEST_ASSERT_EQUAL`. The 8 active enum values are all asserted (some multiple times). `G6_SAFETY_VOLTAGE` is correctly not asserted — it's reserved and no code path sets it.
+
+| Status | Assertion count |
+|---|:---:|
+| `G6_SAFETY_OK` | 2 |
+| `G6_SAFETY_THERMAL` | 2 |
+| `G6_SAFETY_VR_THERMAL` | 2 |
+| `G6_SAFETY_VOLTAGE` | 0 *(reserved — never set)* |
+| `G6_SAFETY_POWER_SANITY` | 2 |
+| `G6_SAFETY_NER_BACKOFF` | 1 |
+| `G6_SAFETY_SAMPLE_QUALITY` | 1 |
+| `G6_SAFETY_P_MATRIX_SINGULAR` | 1 |
+| `G6_SAFETY_INPUT_RANGE` | 5 |
+
+**Files changed**
+- `components/g6_brain/test/test_g6_brain.c` (4 assertions added to existing tests, 2 new tests, header comment refreshed). Test count: 32 → 34.
+- `docs/GLOSSARY.md` (G6SafetyStatus entry expanded to full enum).
+
+---
+
 ### [1.0.0-beta5] — 2026-05-22  QA Round 10 (Documentation Reconciliation & Pre-Tag Cleanup)
 
 Final documentation pass before tagging beta5 as a release candidate. No code changes this round — pure documentation reconciliation across the repo to align operator-facing content with the actual code shipped in Rounds 5 through 9. Tagging blocker fixes plus a comprehensive landing-page refresh.
