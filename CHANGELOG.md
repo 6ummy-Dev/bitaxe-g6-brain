@@ -49,7 +49,7 @@ Manifesto alignment: this round is the "we test heavily" line in action. The lev
 
 ---
 
-## [1.0.0-beta5] - 2026-05-21 _Completed_
+## [1.0.0-beta5] - _Completed_
 
 ### [1.0.0-beta5] — 2026-05-22  QA Round 10 (Documentation Reconciliation & Pre-Tag Cleanup)
 
