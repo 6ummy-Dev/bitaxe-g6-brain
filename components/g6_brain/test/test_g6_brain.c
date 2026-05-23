@@ -2,7 +2,9 @@
  * Unity test suite for G6 Brain v1.0.0-beta5
  *
  * Validates tracking model updates, safety thresholds,
- * outlier gating, input validation (fail-closed routing),
+ * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
+ * POWER_SANITY / NER_BACKOFF / SAMPLE_QUALITY / P_MATRIX_SINGULAR /
+ * INPUT_RANGE), outlier gating, input validation (fail-closed routing),
  * NVS round-trip and corruption recovery, internal slew rate limits,
  * Dinkelbach J/TH efficiency optimization end-to-end, and telemetry snapshot.
  */
@@ -53,6 +55,8 @@ TEST_CASE("g6_brain_update with valid synthetic data respects control_mode", "[g
     esp_err_t ret = g6_brain_update(&test_brain, f, v, hr, pwr, temp, G6_VR_TEMP_NO_SENSOR, err, shares);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_THAN(0.0f, test_brain.model_quality);
+    /* Clean telemetry, no safety conditions firing → status should be OK. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 
     float original_best_f = test_brain.best_f;
 
@@ -60,6 +64,7 @@ TEST_CASE("g6_brain_update with valid synthetic data respects control_mode", "[g
     ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 125.0f, 16.0f, 56.0f, G6_VR_TEMP_NO_SENSOR, 0.4f, 60);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_NOT_EQUAL(original_best_f, test_brain.best_f);
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update in OBSERVE_ONLY does not mutate best_f/best_v", "[g6_brain]") {
@@ -117,6 +122,8 @@ TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 100.0f, 20.0f, 75.0f, G6_VR_TEMP_NO_SENSOR, 1.0f, 40);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(800.0f, test_brain.best_f);
+    /* temp_c=75 above ceiling=60 → hard thermal fires, status reflects that. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
 }
 
 TEST_CASE("Covariance matrix stays symmetric after updates", "[g6_brain]") {
@@ -162,6 +169,8 @@ TEST_CASE("Statistical Outlier Gating rejects severe sensor anomalies", "[g6_bra
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 9999.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_UINT32(prev_count, test_brain.update_count);
+    /* err² greatly exceeds 9*(xPx+0.5), triggering the 3-sigma gate. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_SAMPLE_QUALITY, test_brain.last_safety_status);
 }
 
 TEST_CASE("Internal Slew-Rate Limiting enforces step boundaries", "[g6_brain]") {
@@ -210,6 +219,9 @@ TEST_CASE("VR proactive zone steps back best_v only — frequency untouched", "[
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(1250.0f, test_brain.best_v);
     TEST_ASSERT_GREATER_OR_EQUAL(800.0f - test_brain.dfs_step_mhz, test_brain.best_f);
+    /* vr_temp_c=82 in [80, 85) proactive zone → VR_THERMAL set, ASIC helper
+     * runs after but temp_c=55 is below the proactive zone so it no-ops. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_VR_THERMAL, test_brain.last_safety_status);
 }
 
 TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
@@ -223,6 +235,8 @@ TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(1280.0f, test_brain.best_v);
     TEST_ASSERT_LESS_THAN(850.0f, test_brain.best_f);
+    /* vr_temp_c=86 ≥ ceiling=85 → hard VR thermal fires, status reflects it. */
+    TEST_ASSERT_EQUAL(G6_SAFETY_VR_THERMAL, test_brain.last_safety_status);
 }
 
 /* ====================== BETA5 ====================== */
@@ -308,6 +322,24 @@ TEST_CASE("g6_brain_update routes NaN temp_c to safety layer (fail-closed)", "[g
                                     NAN, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
+}
+
+TEST_CASE("g6_brain_update routes out-of-range power_w to safety layer with POWER_SANITY", "[g6_brain]") {
+    /* power_w outside the [0, 100] W physical sanity bounds is distinct from
+     * the INPUT_RANGE class (which covers non-finite + frequency/voltage
+     * bounds). It gets its own status because power outliers also share the
+     * same enum value. */
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 500.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_POWER_SANITY, test_brain.last_safety_status);
+}
+
+TEST_CASE("g6_brain_update routes negative power_w to safety layer with POWER_SANITY", "[g6_brain]") {
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, -10.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_POWER_SANITY, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update returns INVALID_ARG only for NULL brain pointer", "[g6_brain]") {
