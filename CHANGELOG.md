@@ -2,7 +2,7 @@
 
 All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
-## [1.0.0-beta5] - 2026-05-21 _Completed_
+## [1.0.0-beta6] - _In Progress_
 
 ### [1.0.0-beta6] — 2026-05-23  QA Round 11 (Pre-Field-Test Coverage Polish)
 
@@ -48,6 +48,8 @@ Manifesto alignment: this round is the "we test heavily" line in action. The lev
 - `docs/GLOSSARY.md` (G6SafetyStatus entry expanded to full enum).
 
 ---
+
+## [1.0.0-beta5] - 2026-05-21 _Completed_
 
 ### [1.0.0-beta5] — 2026-05-22  QA Round 10 (Documentation Reconciliation & Pre-Tag Cleanup)
 
