@@ -57,10 +57,17 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **last_safety_status** Internal field tracking the most recent safety condition (or `G6_SAFETY_OK` if none). Exposed via the telemetry snapshot. See `G6SafetyStatus` below for the full taxonomy.
 
-**G6SafetyStatus** Enum of safety conditions reported via `last_safety_status`. Full reference lives in `docs/SAFETY.md`. Key values:
-- `G6_SAFETY_INPUT_RANGE` — input failed validation (NaN, Inf, `hr_ths <= 0`, or out-of-bounds `f_mhz`/`v_mv`).
-- `G6_SAFETY_P_MATRIX_SINGULAR` — covariance trace diverged; brain auto-recovered into a fresh cold-start while preserving operator config. Logged as `"P matrix diverged — cold-start recovery applied"`.
-- `G6_SAFETY_VOLTAGE` — reserved for a future VRM-ripple check; not currently set by any code path.
+**G6SafetyStatus** Enum of safety conditions reported via `last_safety_status`. The authoritative reference with semantics and same-tick priority is in `docs/SAFETY.md`. Full enum:
+
+- `G6_SAFETY_OK` — Sample accepted; no anomaly observed this tick. The steady-state value during normal operation.
+- `G6_SAFETY_THERMAL` — ASIC die at or above the hard ceiling, or in the proactive zone within `G6_TEMP_PROACTIVE_MARGIN` of the ceiling. Triggers frequency and voltage step-back.
+- `G6_SAFETY_VR_THERMAL` — Voltage regulator at or near its ceiling. Proactive zone steps back voltage only; hard ceiling steps back both voltage and frequency.
+- `G6_SAFETY_VOLTAGE` — *Reserved.* Allocated for a future VRM-ripple check; not currently set by any code path. Present in the enum so operators compiled against earlier beta versions don't see integer-mapping changes.
+- `G6_SAFETY_POWER_SANITY` — `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model 3-sigma outlier was rejected during efficiency-mode learning.
+- `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off and re-enters cold-start to re-learn under the new conditions.
+- `G6_SAFETY_SAMPLE_QUALITY` — Hashrate sample was rejected by the 3-sigma statistical outlier gate before reaching the RLS update.
+- `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance trace diverged; brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
+- `G6_SAFETY_INPUT_RANGE` — Input failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds.
 
 **P-Matrix Singular Recovery** The automatic recovery flow triggered when `trace(P) > RLS_TRACE_MAX`. Zeros both `theta` arrays and re-seeds the P diagonals at `1e5`, then restores operator-set fields (mode, ceilings, margins, efficiency mode, etc.). The brain re-enters cold-start. See `SAFETY.md` item 5.
 
