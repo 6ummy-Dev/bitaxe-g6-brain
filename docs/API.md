@@ -37,18 +37,22 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
 | Field | Units | Notes |
 | --- | --- | --- |
-| `f_mhz` | MHz | Current ASIC frequency |
-| `v_mv` | mV | Current core voltage |
-| `hr_ths` | TH/s | Measured hashrate |
-| `power_w` | W | Measured power draw |
-| `temp_c` | °C | Current ASIC die temperature |
-| `vr_temp_c` | °C | Voltage regulator temperature. Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) if no VR sensor is available — all VR thermal checks are silently skipped. |
-| `err_pct` | % | Nonce error rate (0..100) |
+| `f_mhz` | MHz | Current ASIC frequency. Validated against `BM1370_F_MIN`/`MAX`. |
+| `v_mv` | mV | Current core voltage. Validated against `BM1370_V_MIN`/`MAX`. |
+| `hr_ths` | TH/s | Measured hashrate. Validated as finite and `> 0`. |
+| `power_w` | W | Measured power draw. Validated as finite and within `[0, 100]`. |
+| `temp_c` | °C | Current ASIC die temperature. Validated as finite only — see [Sensor Sanity](#sensor-sanity) below. |
+| `vr_temp_c` | °C | Voltage regulator temperature. Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) if no VR sensor is available — all VR thermal checks are silently skipped. Validated as finite only. |
+| `err_pct` | % | Nonce error rate (0..100). Validated as finite only. |
 | `share_count` | count | Shares observed during the measurement window. Pass `0` if unknown. |
 
 - **Returns:**
   - `ESP_OK` on every call where `brain` is a valid pointer — **including** calls with bad numeric inputs. Out-of-bounds, non-finite (NaN/Inf), or otherwise unusable telemetry is routed fail-closed to the safety layer per manifesto non-negotiable 3.7 ("Every safety check executes even on invalid or rejected samples"). The caller should inspect `last_safety_status` (or the telemetry snapshot) to see how the frame was handled — see the [Safety Status Reference](#safety-status-reference) below.
   - `ESP_ERR_INVALID_ARG` **only** when `brain == NULL`. This is the sole structurally-broken call — no brain instance exists for the safety layer to act on. All other failures (NaN, Inf, out-of-bounds, `hr_ths <= 0`) report through `last_safety_status` with `G6_SAFETY_INPUT_RANGE` rather than via an error code.
+
+#### Sensor Sanity
+
+The brain validates **finiteness** on every input and **hardware bounds** on `f_mhz`, `v_mv`, `hr_ths`, and `power_w`. The temperature and error-rate channels (`temp_c`, `vr_temp_c`, `err_pct`) are validated as finite only — beyond that, the brain trusts that finite values within the C `float` domain represent real readings. It does **not** attempt to detect stuck-low, stuck-high, or implausible-but-finite sensor failures on these channels. A stuck-low temperature reading (e.g. `-50°C`) will pass the input gate and be treated as a cold healthy chip. Sensor health monitoring belongs in the integrator's telemetry layer; see `docs/SAFETY.md` for recommended upstream checks.
 
 ### `void g6_brain_get_optimal(const G6BrainState *brain, float *opt_f, float *opt_v, float *pred_hr)`
 
@@ -108,7 +112,7 @@ The `G6BrainTelemetry` struct exposes a consistent point-in-time view of brain s
 
 | Value | Meaning |
 | --- | --- |
-| `G6_SAFETY_OK` | Sample accepted, RLS updated, no anomaly |
+| `G6_SAFETY_OK` | No anomaly observed this tick. Also reported on non-anomaly sample rejections (low share count, insignificant innovation) — distinguish "accepted" from "rejected for non-anomaly reasons" by watching `update_count` deltas |
 | `G6_SAFETY_THERMAL` | ASIC die temperature at or near the hard ceiling (proactive zone or above) |
 | `G6_SAFETY_VR_THERMAL` | VR regulator temperature at or near its ceiling |
 | `G6_SAFETY_VOLTAGE` | Reserved for a future VRM ripple check (not currently set by any code path) |

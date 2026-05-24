@@ -13,7 +13,7 @@ This guide is intended for community members testing the **v1.0.0-beta5** releas
 - **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option and lives in the state struct, matching the VR margin design.
 - **VR Proactive Margin Runtime** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at all call sites.
 - **Safety Status Priority** — Safety helpers are reordered so ASIC thermal, the higher-priority condition, wins on collision when both ASIC and VR conditions fire on the same tick.
-- **NER Defense-in-Depth** — `is_sample_valid()` now independently gates on NER as a redundant safety check.
+- **Belt-and-suspenders NER and thermal gating** — `is_sample_valid()` carries the same NER and thermal predicates as the upstream fast-fail at the top of `g6_brain_update()`. Currently unreachable in normal control flow; retained to guard future refactors that might delete the upstream gates.
 
 **Round 7 safety-model integrity** (full fail-closed contract):
 
@@ -45,6 +45,7 @@ When testing, pay attention to:
 - Temperature behavior (both ASIC and VR when available) and post-optimization thermal scaling actions.
 - `model_quality` and `power_model_quality` values.
 - `safety_status` in telemetry — this is the **primary** signal for any safety event. The brain itself logs almost nothing (see `MONITORING.md`); telemetry is where the information lives.
+- `update_count` deltas alongside `safety_status` — see `docs/MONITORING.md` for the "distinguishing accepted vs rejected samples" note: a flat `update_count` with `safety_status = G6_SAFETY_OK` means samples are being rejected on non-anomaly quality gates, not that the brain is broken.
 - The `Power Outlier Rejected` and `P matrix diverged — cold-start recovery applied` log lines if they appear — those are the two warn-level events the brain emits directly.
 
 ## Grounded Testing Scenarios
@@ -85,7 +86,7 @@ When reporting logs or anomalies, please include:
 
 ### Note on CI test coverage
 
-The Unity test suite (32 cases as of pre-v1.0 polish) is compiled by CI but not executed on hardware or QEMU. Tests that pass compile-check but fail at runtime have slipped through in the past (see B5-BUG-20 in the changelog for a worked example). If you are doing serious testing on real hardware, run the test suite locally with `idf.py -T g6_brain build flash monitor` against a known-good Bitaxe Gamma — that is the most authoritative validation we currently have.
+The Unity test suite is compiled by CI but not executed on hardware or QEMU. See the CHANGELOG for the current test case count per release. Tests that pass compile-check but fail at runtime have slipped through in the past (see B5-BUG-20 in the changelog for a worked example). If you are doing serious testing on real hardware, run the test suite locally with `idf.py -T g6_brain build flash monitor` against a known-good Bitaxe Gamma — that is the most authoritative validation we currently have.
 
 ---
 

@@ -16,7 +16,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Model Quality** A metric (0.0–1.0) indicating how well the current RLS model fits observed data.
 
-**Cold Start** The initial phase after power-on or reset when the brain has insufficient data and operates conservatively. *This state is also dynamically triggered by Trace Accumulation Recovery if the estimator diverges, safely wiping the polynomial surface and resetting matrix confidence.*
+**Cold Start** The initial phase after power-on or reset when the brain has insufficient data and operates conservatively. *This state is also dynamically triggered by Trace Accumulation Recovery if the estimator diverges, safely wiping the polynomial surface and resetting matrix confidence. It is also briefly toggled on by the NER backoff path so the next RLS update runs at the conservative learning rate — see `G6_SAFETY_NER_BACKOFF` below for the distinction.*
 
 **Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) + power model state, stored per physical chip in NVS.
 
@@ -40,11 +40,13 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Hard Ceiling** The temperature at which aggressive setpoint reduction is applied (both voltage and frequency for VR).
 
+**Non-Anomaly Sample Rejection** Two paths in `g6_brain_update()` reject a sample without flagging a safety status: `share_count < MIN_SHARE_COUNT` (normal during startup or after a pool change) and `xPx < RLS_INNOVATION_THRESHOLD` (the sample is too close to existing training data to add new information). Both leave `last_safety_status = G6_SAFETY_OK` and do not increment `update_count`. Operators distinguish accepted vs rejected samples in this regime by watching `update_count` deltas, not by safety status. See `docs/SAFETY.md` for the canonical rule.
+
 ---
 
 ## Safety State & Status Codes
 
-**Sample Validation Gates** Four independent checks the brain applies before accepting a telemetry frame into the RLS update: minimum share count, NER threshold, ASIC thermal safety, and significant innovation in the covariance projection. A frame failing any gate is routed to the safety layer without updating the model. (No internal state machine — previous versions of this glossary referenced a `BrainSampleState` type that has been removed.)
+**Sample Validation Gates** Four independent checks the brain applies before accepting a telemetry frame into the RLS update: minimum share count, NER threshold, ASIC thermal safety, and significant innovation in the covariance projection. A frame failing any gate is routed to the safety layer without updating the model. The thermal and NER gates set their respective safety statuses; the share-count and innovation gates do not (they are not safety events). (No internal state machine — previous versions of this glossary referenced a `BrainSampleState` type that has been removed.)
 
 **NER (Nonce Error Rate)** Hardware error rate reported by the BM1370. Used as a key input to the safety logic.
 
@@ -59,12 +61,12 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **G6SafetyStatus** Enum of safety conditions reported via `last_safety_status`. The authoritative reference with semantics and same-tick priority is in `docs/SAFETY.md`. Full enum:
 
-- `G6_SAFETY_OK` — Sample accepted; no anomaly observed this tick. The steady-state value during normal operation.
+- `G6_SAFETY_OK` — No anomaly observed this tick. The steady-state value during normal operation. Also reported on non-anomaly sample rejections (low share count, insignificant innovation). See **Non-Anomaly Sample Rejection** above.
 - `G6_SAFETY_THERMAL` — ASIC die at or above the hard ceiling, or in the proactive zone within `G6_TEMP_PROACTIVE_MARGIN` of the ceiling. Triggers frequency and voltage step-back.
 - `G6_SAFETY_VR_THERMAL` — Voltage regulator at or near its ceiling. Proactive zone steps back voltage only; hard ceiling steps back both voltage and frequency.
 - `G6_SAFETY_VOLTAGE` — *Reserved.* Allocated for a future VRM-ripple check; not currently set by any code path. Present in the enum so operators compiled against earlier beta versions don't see integer-mapping changes.
 - `G6_SAFETY_POWER_SANITY` — `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model 3-sigma outlier was rejected during efficiency-mode learning.
-- `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off and re-enters cold-start to re-learn under the new conditions.
+- `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate. If the brain has already accumulated more than 25 updates, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges.
 - `G6_SAFETY_SAMPLE_QUALITY` — Hashrate sample was rejected by the 3-sigma statistical outlier gate before reaching the RLS update.
 - `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance trace diverged; brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
 - `G6_SAFETY_INPUT_RANGE` — Input failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds.
@@ -80,6 +82,8 @@ This glossary defines key terms used throughout the codebase, documentation, and
 **last_efficiency** The most recent `power_w / hr_ths` ratio (W/TH). Only updated when `power_w` is within sanity bounds — on fail-closed paths the field retains its last known-good value rather than reporting a garbage ratio.
 
 **model_quality / power_model_quality** Independent fit confidence metrics (0.0–1.0) for the hashrate and power RLS models. Both must be at or above `0.6` for the Dinkelbach J/TH solver to run. Exposed via the telemetry snapshot.
+
+**update_count** Monotonic counter of accepted hashrate RLS updates since last reset. A flat `update_count` paired with `safety_status = G6_SAFETY_OK` indicates samples are being rejected on the non-anomaly quality gates (low share count or insignificant innovation) — a normal startup/post-pool-change pattern, not an error.
 
 ---
 

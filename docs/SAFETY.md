@@ -21,7 +21,7 @@ The following safety behaviors are **fully active**:
 
 2. **Fail-Closed Input Range Protection** Every numeric input is validated against BM1370 hardware bounds (400–950 MHz, 1050–1350 mV) and finiteness (NaN/Inf rejected). Out-of-bounds or non-finite telemetry does not return an error code; it triggers a `G6_SAFETY_INPUT_RANGE` status and routes directly to the fail-closed safety layer to enforce hardware clamps and suspend upward tracking. Per manifesto non-negotiable 3.7: *every safety check executes even on invalid or rejected samples*. `G6_SAFETY_VOLTAGE` is reserved in the enum for a future real VRM-ripple check and is not currently set by any code path.
 
-3. **Sample Quality Gating** Before any RLS update, the brain enforces four independent gates: minimum share count (`MIN_SHARE_COUNT = 20`), NER below `ner_threshold`, ASIC die temperature below the hard ceiling, and significant innovation in the covariance projection (`xPx > RLS_INNOVATION_THRESHOLD`). A sample failing any gate is routed to the safety layer without updating the model.
+3. **Sample Quality Gating** Before any RLS update, the brain enforces four independent gates: minimum share count (`MIN_SHARE_COUNT = 20`), NER below `ner_threshold`, ASIC die temperature below the hard ceiling, and significant innovation in the covariance projection (`xPx > RLS_INNOVATION_THRESHOLD`). A sample failing any gate is routed to the safety layer without updating the model. The thermal and NER gates correspond to true safety events and set their respective statuses; the share-count and innovation gates are not safety events and leave `last_safety_status = G6_SAFETY_OK` (see the Safety Status Reference below).
 
 4. **Stabilized Covariance Update** The P-matrix update uses a Joseph-style congruence transform followed by ridge regularization, symmetrization, and per-diagonal clamping (`RLS_P_CLAMP_MIN`..`RLS_P_CLAMP_MAX`). The combination keeps P symmetric and positive-definite under floating-point arithmetic without requiring the full Joseph form's measurement-noise injection term.
 
@@ -50,18 +50,32 @@ The following safety behaviors are **fully active**:
 
 ---
 
+## Sensor Sanity — Integrator Responsibility
+
+The brain validates **finiteness** on every input and **hardware bounds** on `f_mhz` and `v_mv` specifically. Beyond that, the brain trusts that finite values within the C `float` domain represent real readings. It does **not** attempt to detect stuck-low or stuck-high sensor failures on the temperature (`temp_c`, `vr_temp_c`), error rate (`err_pct`), or hashrate (`hr_ths`) channels. Concrete consequence: an ASIC temperature sensor stuck reporting an implausibly low value (e.g. `-50°C`) passes the input gate, `is_thermal_safe` returns true, and the brain happily trains on the sample as if the chip were cold and healthy. A `err_pct` channel stuck at a negative value similarly never trips the NER gate.
+
+This is a deliberate scope boundary, not an oversight. Sensor health monitoring belongs in the integrator's telemetry layer where domain knowledge of the specific sensor hardware (INA219/INA260, BM1370 die thermal diode, etc.) lives. The brain's contract is "given truthful telemetry, optimize safely"; sanity-checking the truthfulness of that telemetry is upstream.
+
+**Recommended upstream checks:**
+- `temp_c` and `vr_temp_c` within a plausible operating range (e.g. 0–120 °C).
+- `err_pct` within `[0, 100]`.
+- `hr_ths` within an order of magnitude of the expected hardware capability.
+- Sensor freshness (timestamp deltas) — a stale-but-finite reading is invisible to the brain.
+
+---
+
 ## Safety Status Reference
 
 The `last_safety_status` field (exposed via `G6BrainTelemetry.safety_status`) reports the most recent safety condition observed during the current `g6_brain_update()` tick. Values, all defined in `g6_brain.h`:
 
 | Status | Set when |
 | --- | --- |
-| `G6_SAFETY_OK` | Sample accepted into the RLS update; no anomaly observed this tick. |
+| `G6_SAFETY_OK` | No anomaly observed this tick. The steady-state value during normal operation. Also reported on non-anomaly sample rejections (e.g. `share_count < MIN_SHARE_COUNT`, or the sample lies too close to existing training data to provide significant innovation) — both are normal during startup and after pool changes. Operators distinguish "accepted" from "rejected for non-anomaly reasons" by watching `update_count` deltas. |
 | `G6_SAFETY_THERMAL` | ASIC die at or above the hard ceiling, or in the proactive zone (within `G6_TEMP_PROACTIVE_MARGIN` of the ceiling). |
 | `G6_SAFETY_VR_THERMAL` | VR regulator at or near its ceiling. Triggers voltage step-back; both voltage and frequency step back at the hard ceiling. |
 | `G6_SAFETY_VOLTAGE` | Reserved for a future VRM-ripple check. Currently never set by any code path. Operators can ignore this value. |
 | `G6_SAFETY_POWER_SANITY` | `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model statistical outlier was rejected. |
-| `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `ner_threshold`. Triggers a conservative ~8% frequency back-off and re-enters cold-start to re-learn under the new conditions. |
+| `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25 so quality-gated features (J/TH solver) re-arm only after observable recovery, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate (`lambda = 0.985`). If `update_count > 25` at the time of the event, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges. |
 | `G6_SAFETY_SAMPLE_QUALITY` | Hashrate-model statistical outlier rejected by the 3-sigma gate. |
 | `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance trace diverged and the brain ran auto-recovery (see item 5 above). |
 | `G6_SAFETY_INPUT_RANGE` | Input telemetry failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds. |
@@ -92,6 +106,7 @@ Monitor these values in production:
 - NVS auto-save messages
 - `g6_brain_get_cov_condition()`
 - `safety_status` from telemetry
+- `update_count` deltas (the canonical signal for "is the brain actually accepting samples" — a rising `update_count` with `safety_status = G6_SAFETY_OK` is the steady-state happy path; a flat `update_count` with `safety_status = G6_SAFETY_OK` means samples are being rejected on the non-anomaly quality gates)
 
 ---
 

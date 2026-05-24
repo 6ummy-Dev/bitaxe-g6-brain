@@ -40,7 +40,7 @@ The key fields to surface in dashboards or alerts:
 | `model_quality` | Hashrate model fit (0.0–1.0). See thresholds below. |
 | `power_model_quality` | Power model fit (efficiency mode only). Must be ≥ 0.6 alongside `model_quality` for the Dinkelbach J/TH solver to run. |
 | `last_efficiency` | Most recent observed W/TH ratio. Hold-over field — only updated when `power_w` is sane. |
-| `update_count`, `power_update_count` | Monotonic counters of accepted RLS updates per estimator. Useful as a "is the brain actually learning" heartbeat. |
+| `update_count`, `power_update_count` | Monotonic counters of accepted RLS updates per estimator. Useful as a "is the brain actually learning" heartbeat — see [Distinguishing accepted vs rejected samples](#distinguishing-accepted-vs-rejected-samples) below. |
 | `trace_P_hashrate`, `trace_P_power` | Covariance traces. Trending up over a long horizon is normal; spikes near `RLS_TRACE_MAX` (default 1e7) indicate the recovery path is about to fire. |
 | `last_innovation` | Most recent prediction error on hashrate. Sustained large values indicate the model isn't tracking. |
 | `safety_status` | Current `G6SafetyStatus`. See [Safety Status Monitoring](#safety-status-monitoring). |
@@ -56,7 +56,7 @@ The key fields to surface in dashboards or alerts:
 
 `safety_status` reports the most recent safety condition observed during the last `g6_brain_update()` tick. The full reference is in `SAFETY.md`. Quick guide:
 
-- `G6_SAFETY_OK` is the steady-state value during normal operation.
+- `G6_SAFETY_OK` is the steady-state value during normal operation. **Note:** this status is also reported on non-anomaly sample rejections (low share count, insignificant innovation) — see [Distinguishing accepted vs rejected samples](#distinguishing-accepted-vs-rejected-samples) below for how to tell them apart.
 - `G6_SAFETY_THERMAL` or `G6_SAFETY_VR_THERMAL` appearing intermittently → you're brushing the proactive zone. Improve cooling.
 - `G6_SAFETY_NER_BACKOFF` → hardware error rate climbed past threshold. Check PSU / cooling / silicon health.
 - `G6_SAFETY_INPUT_RANGE` → upstream telemetry is feeding the brain bad values (NaN, out-of-bounds). Your integration code has a bug or a sensor failed.
@@ -64,6 +64,15 @@ The key fields to surface in dashboards or alerts:
 - `G6_SAFETY_SAMPLE_QUALITY` → hashrate outlier rejected. Usually transient noise; chronic occurrences mean instability.
 - `G6_SAFETY_P_MATRIX_SINGULAR` → covariance recovery just fired (see also the `WARN` log line above).
 - `G6_SAFETY_VOLTAGE` → not currently set by any code path; reserved for a future VRM-ripple check. You can ignore this value today.
+
+### Distinguishing accepted vs rejected samples
+
+`safety_status == G6_SAFETY_OK` alone does **not** mean the most recent sample was accepted into the RLS update. Two non-anomaly rejection paths leave the status at OK:
+
+1. `share_count < MIN_SHARE_COUNT` (the measurement window had too few shares to be statistically meaningful — normal during startup or after a pool change).
+2. Insignificant innovation (`xPx < RLS_INNOVATION_THRESHOLD` — the new sample is too close to an existing training point to add information).
+
+In both cases `update_count` is not incremented and no RLS update happens. The canonical "is the brain actually accepting samples?" signal is therefore the **rising `update_count` with `safety_status = G6_SAFETY_OK`** combination, not the status alone. If `safety_status` stays at OK but `update_count` is flat for many ticks, your integration is probably feeding the brain low-share windows or repetitive operating points — not a fault, but worth knowing.
 
 ---
 
