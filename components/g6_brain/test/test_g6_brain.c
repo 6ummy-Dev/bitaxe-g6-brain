@@ -5,6 +5,8 @@
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
  * POWER_SANITY / NER_BACKOFF / SAMPLE_QUALITY / P_MATRIX_SINGULAR /
  * INPUT_RANGE), outlier gating, input validation (fail-closed routing),
+ * non-anomaly rejection paths (low shares, insignificant innovation —
+ * status stays OK, update_count unchanged),
  * NVS round-trip and corruption recovery, internal slew rate limits,
  * Dinkelbach J/TH efficiency optimization end-to-end, and telemetry snapshot.
  */
@@ -354,6 +356,56 @@ TEST_CASE("g6_brain_update accepts G6_VR_TEMP_NO_SENSOR sentinel", "[g6_brain]")
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
+}
+
+/* ====================== NON-ANOMALY REJECTION PATHS (B6 R2) ======================
+ *
+ * Two code paths inside g6_brain_update reject a sample WITHOUT setting a
+ * safety status — by design, since they are not safety events:
+ *
+ *   1. share_count < MIN_SHARE_COUNT  (line ~444, via is_sample_valid)
+ *   2. xPx < RLS_INNOVATION_THRESHOLD (line ~471, has_significant_innovation)
+ *
+ * The contract on these paths is:
+ *   - ESP_OK is returned
+ *   - last_safety_status stays G6_SAFETY_OK
+ *   - update_count is NOT incremented (no RLS update happened)
+ *   - the safety layer still runs (clamps, slew logic) — manifesto 3.7
+ *
+ * Operators monitoring telemetry distinguish "accepted" from "rejected for
+ * non-anomaly reasons" by watching update_count deltas, not by safety_status.
+ * These tests pin that contract so it cannot drift silently.
+ */
+
+TEST_CASE("Low share count silently rejects sample with last_safety_status == OK", "[g6_brain]") {
+    /* MIN_SHARE_COUNT = 20. A sample with share_count below the threshold
+     * is a normal early-startup or post-pool-change case, not a safety
+     * event. The brain must skip the RLS update without bumping
+     * update_count or flagging a safety status. */
+    uint32_t count_before = test_brain.update_count;
+
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f,
+                                    MIN_SHARE_COUNT - 1);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_UINT32(count_before, test_brain.update_count);
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
+}
+
+TEST_CASE("Insignificant innovation silently rejects sample with last_safety_status == OK", "[g6_brain]") {
+    /* Driving the gate: with f_mhz = BM1370_F_CENTER and v_mv = BM1370_V_CENTER,
+     * fn=vn=0, so x = [0,0,0,0,0,1] and xPx = P[5][5]. Setting P[5][5] below
+     * RLS_INNOVATION_THRESHOLD (1e-4) forces has_significant_innovation() to
+     * return false, routing to safety_layer with status still OK. */
+    test_brain.P[5][5] = 1e-7f;   /* below RLS_INNOVATION_THRESHOLD */
+    uint32_t count_before = test_brain.update_count;
+
+    esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_CENTER, BM1370_V_CENTER,
+                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_UINT32(count_before, test_brain.update_count);
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 }
 
 /* ====================== NVS HARDENING ====================== */
