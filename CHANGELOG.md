@@ -31,12 +31,14 @@ Manifesto alignment: "We document limitations honestly" (§2 *Transparency*) and
 
 - **Low (B6-NIT-04)**: Refreshed test suite header comment to mention the new non-anomaly rejection-path coverage (B6-NIT-01 and B6-NIT-02).
 
+- **Low (B6-DOC-05)**: Tidied root `README.md` to match the conventions of a stable main-branch landing page. The "What's New in beta5" section had grown three sub-sections covering Rounds 5, 7, and 8 — release-notes content that belongs in `CHANGELOG.md`, not on the front door. Replaced it with a single timeless "Features" list adapted from the `docs/README.md` "What Makes G6 Brain Different" section. Status table trimmed to three rows (Latest Release, Target, License) — the previous "QA Status" and "Default Mode" rows had become redundant with the CHANGELOG deflection (DOC-01) and the Control Modes table directly below. Net: 119 lines → 99 lines, no information loss for the reader (everything removed is still in the CHANGELOG and the Control Modes table).
+
 **Deferred (carried forward from beta5)**: B5-NIT-16 (proactive helper guard symmetry) remains open per Round 11's explicit reasoning — deliberate hold for field data from the beta6 soak. No new findings warrant re-litigation.
 
 **Deferred (carried forward from this round)**: A potential `last_update_timestamp` field on `G6BrainTelemetry` — currently `G6BrainState.last_update_timestamp` is written every accepted update but never read or exposed. Operators wanting a "is the brain still ticking?" heartbeat have to instrument `update_count` deltas with their own wall-clock timestamps. Exposing the field via telemetry is a mild API expansion; deferred to a non-coverage-polish round.
 
 **Files changed**
-- `README.md` (Status table QA-count deflection; NER Defense-in-Depth bullet retitled and explained).
+- `README.md` (Status table QA-count deflection and trim to three rows; NER Defense-in-Depth bullet retitled and explained; three-round "What's New in beta5" section replaced with a single timeless Features list; 119 → 99 lines).
 - `docs/README.md` (three QA-count sites consolidated to "see CHANGELOG").
 - `docs/SAFETY.md` (G6_SAFETY_OK row reframed; NER_BACKOFF row corrected; new "Sensor Sanity — Integrator Responsibility" section; Sample Quality Gating clarified; Recommended Monitoring extended with `update_count` deltas note).
 - `docs/API.md` (G6_SAFETY_OK row reframed; new "Sensor Sanity" subsection under `g6_brain_update()`; parameter table flags which inputs are finiteness-only validated).
