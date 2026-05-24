@@ -4,6 +4,65 @@ All notable changes to the Bitaxe G6 Brain will be documented in this file.
 
 ## [1.0.0-beta6] - _In Progress_
 
+### [1.0.0-beta6] — 2026-05-23  QA Round 12 (Pre-Field-Test Coverage Polish, continued)
+
+Second beta6 QA round. Same shape as Round 11 — pure test-and-doc edits, **no code changes**. The brain's runtime behavior is byte-for-byte identical to the artifact that shipped from Round 11; this round closes documentation gaps and pins two more `g6_brain_update()` rejection paths with explicit tests.
+
+Manifesto alignment: "We document limitations honestly" (§2 *Transparency*) and "Tests (especially safety paths and edge cases) are required" (§3.7). Round 12 lives entirely on those two lines.
+
+- **Medium (B6-BUG-01)**: Corrected `G6_SAFETY_OK` description in operator-facing docs. The status reference in `docs/SAFETY.md`, `docs/API.md`, `docs/GLOSSARY.md`, and `docs/MONITORING.md` read *"Sample accepted into the RLS update; no anomaly observed this tick"* — but a tick can reach `safety_layer` with `last_safety_status == G6_SAFETY_OK` on **two non-anomaly rejection paths** in `g6_brain_update()`:
+  1. `share_count < MIN_SHARE_COUNT` — caught at line 444 via `is_sample_valid()`; the predicate is the only live check in that helper since the thermal and NER gates inside it are unreachable (upstream gates at lines 431 and 436 short-circuit first).
+  2. `xPx < RLS_INNOVATION_THRESHOLD` — caught at lines 471–472 via `has_significant_innovation()`; fires when a new sample is too close to existing training data to add information.
+  Both are normal during startup and after a pool change. Reframed the status description across all four docs: *"No anomaly observed this tick. Also reported on non-anomaly sample rejections — distinguish accepted from rejected for non-anomaly reasons by watching `update_count` deltas."* Added a "Distinguishing accepted vs rejected samples" subsection to `docs/MONITORING.md` making the operator workflow explicit, and a "Non-Anomaly Sample Rejection" glossary entry to anchor the term.
+
+- **Low (B6-NIT-01)**: Added test pinning the low-share-count rejection contract. `Low share count silently rejects sample with last_safety_status == OK` — drives the `MIN_SHARE_COUNT - 1` path, asserts `ESP_OK`, asserts `update_count` unchanged, asserts `last_safety_status == G6_SAFETY_OK`. Without this test, a future refactor introducing a `G6_SAFETY_LOW_SHARES` status (or changing the rejection to bump a counter) could break older operator scripts with no CI signal.
+
+- **Low (B6-NIT-02)**: Added test pinning the insignificant-innovation rejection contract. `Insignificant innovation silently rejects sample with last_safety_status == OK` — drives the gate by pre-loading `P[5][5] = 1e-7f` (below `RLS_INNOVATION_THRESHOLD`) and feeding the update at `f_mhz = BM1370_F_CENTER, v_mv = BM1370_V_CENTER` so that `x = [0,0,0,0,0,1]` and `xPx = P[5][5]`. Same assertion structure as B6-NIT-01.
+
+- **Low (B6-DOC-01)**: Reconciled the QA round count across `README.md` and `docs/README.md`. The Round 10 doc reconciliation updated two of three sites in `docs/README.md` but missed the prose at line 5 — leaving "eight QA rounds" in one paragraph while two other paragraphs in the same file said "nine". With Rounds 11 and 12 now landed, the integer would have to be bumped on every round. Replaced all three sites (plus the corresponding cell in the root `README.md` Status table) with prose that defers to the CHANGELOG: *"Hardened across multiple QA review cycles — see CHANGELOG for the per-round history."* Removes a recurring failure mode where doc edits forget to bump a count.
+
+- **Low (B6-DOC-02)**: Removed the stale test count from `docs/TESTING.md`. The CI-coverage note hardcoded *"The Unity test suite (32 cases as of pre-v1.0 polish)..."*; Round 11 took it to 34, this round takes it to 36. Replaced with *"See the CHANGELOG for the current test case count per release"* — same deflection pattern as B6-DOC-01.
+
+- **Low (B6-DOC-03)**: Corrected `G6_SAFETY_NER_BACKOFF` duration claim. `docs/SAFETY.md` and `docs/GLOSSARY.md` described the path as *"re-enters cold-start to re-learn under the new conditions"*, which implies many ticks of conservative learning. Trace says: `g6_asic_error_handle_non_blocking()` sets `cold_start = true` and `goto safety_layer`. The very next clean tick runs the RLS update at the conservative lambda (`lambda_eff = 0.985f`), bumps `update_count`, and at line 531 the `update_count > 25` branch flips `cold_start = false`. So if the brain has already had 25+ updates (the normal post-warmup case), the conservative learning rate is in effect for **exactly one update**. Rewrote both entries to be truthful: *"momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate; if `update_count > 25` the cold-start flag clears on the very next clean update. The `model_quality = 0.25` floor persists until the model re-converges."* Also added a parenthetical to the `Cold Start` glossary entry distinguishing the three triggers (warmup, trace recovery, NER backoff).
+
+- **Low (B6-DOC-04)**: Tightened "NER Defense-in-Depth" phrasing in root `README.md`. The bullet claimed `is_sample_valid()` *"independently gates on NER as a redundant safety check"* — true in isolation, misleading at the call site, since the upstream gate at the top of `g6_brain_update()` uses an identical predicate (`err_pct > brain->ner_threshold`) and `goto safety_layer`s before `is_sample_valid()` is ever called. The defense-in-depth is structural (guards against future refactors deleting the upstream gate), not operational. Renamed the bullet to *"Belt-and-suspenders NER and thermal gating"* and added the explicit "currently unreachable in normal control flow" caveat. Same fix in `docs/TESTING.md`.
+
+- **Low (B6-NIT-03)**: Documented the asymmetric sensor sanity-check contract. `g6_brain_update()`'s input gate strictly bounds `f_mhz`, `v_mv`, `hr_ths`, and `power_w` against hardware limits; the temperature and error-rate channels (`temp_c`, `vr_temp_c`, `err_pct`) are validated as **finite only**. `AGENTS.md` item 4 was technically accurate ("hard limits ... and finiteness are strictly enforced on every input"), but a careful reader would not realize that a stuck-low temperature sensor reading `-50°C` passes the gate and is happily trained on as a cold healthy chip. Added a "Sensor Sanity — Integrator Responsibility" section to `docs/SAFETY.md` and a "Sensor Sanity" subsection to the `g6_brain_update()` entry in `docs/API.md`, both stating the contract explicitly and listing recommended upstream checks. No code change — sensor health monitoring genuinely belongs in the integrator's telemetry layer where the specific sensor hardware is known.
+
+- **Low (B6-NIT-04)**: Refreshed test suite header comment to mention the new non-anomaly rejection-path coverage (B6-NIT-01 and B6-NIT-02).
+
+**Deferred (carried forward from beta5)**: B5-NIT-16 (proactive helper guard symmetry) remains open per Round 11's explicit reasoning — deliberate hold for field data from the beta6 soak. No new findings warrant re-litigation.
+
+**Deferred (carried forward from this round)**: A potential `last_update_timestamp` field on `G6BrainTelemetry` — currently `G6BrainState.last_update_timestamp` is written every accepted update but never read or exposed. Operators wanting a "is the brain still ticking?" heartbeat have to instrument `update_count` deltas with their own wall-clock timestamps. Exposing the field via telemetry is a mild API expansion; deferred to a non-coverage-polish round.
+
+**Files changed**
+- `README.md` (Status table QA-count deflection; NER Defense-in-Depth bullet retitled and explained).
+- `docs/README.md` (three QA-count sites consolidated to "see CHANGELOG").
+- `docs/SAFETY.md` (G6_SAFETY_OK row reframed; NER_BACKOFF row corrected; new "Sensor Sanity — Integrator Responsibility" section; Sample Quality Gating clarified; Recommended Monitoring extended with `update_count` deltas note).
+- `docs/API.md` (G6_SAFETY_OK row reframed; new "Sensor Sanity" subsection under `g6_brain_update()`; parameter table flags which inputs are finiteness-only validated).
+- `docs/GLOSSARY.md` (G6_SAFETY_OK entry reframed; G6_SAFETY_NER_BACKOFF entry corrected; new "Non-Anomaly Sample Rejection" entry; `Cold Start` distinguishes the three triggers; `update_count` entry added).
+- `docs/MONITORING.md` (G6_SAFETY_OK bullet reframed; new "Distinguishing accepted vs rejected samples" subsection).
+- `docs/TESTING.md` (test count deflected to CHANGELOG; NER-Defense bullet retitled to match README; new "update_count deltas alongside safety_status" monitoring tip).
+- `components/g6_brain/test/test_g6_brain.c` (2 new tests in a new "NON-ANOMALY REJECTION PATHS (B6 R2)" section; header comment refreshed). Test count: 34 → 36.
+
+**Updated test enum coverage**: still every code-active `G6SafetyStatus` value has at least one `TEST_ASSERT_EQUAL`. R12 adds 2 more `G6_SAFETY_OK` assertions on the previously-untested rejection paths, raising that row to 4.
+
+| Status | Assertion count |
+|---|:---:|
+| `G6_SAFETY_OK` | 4 |
+| `G6_SAFETY_THERMAL` | 2 |
+| `G6_SAFETY_VR_THERMAL` | 2 |
+| `G6_SAFETY_VOLTAGE` | 0 *(reserved — never set)* |
+| `G6_SAFETY_POWER_SANITY` | 2 |
+| `G6_SAFETY_NER_BACKOFF` | 1 |
+| `G6_SAFETY_SAMPLE_QUALITY` | 1 |
+| `G6_SAFETY_P_MATRIX_SINGULAR` | 1 |
+| `G6_SAFETY_INPUT_RANGE` | 5 |
+
+With Round 12, the beta6 cycle's coverage-polish phase is complete. No further test-and-doc rounds are planned before field test; the next round will either be a field-data review (B5-NIT-16 resolution) or a tag-cut round depending on soak results.
+
+---
+
 ### [1.0.0-beta6] — 2026-05-23  QA Round 11 (Pre-Field-Test Coverage Polish)
 
 First beta6 QA round. Pure test-and-doc coverage improvements identified during the beta6 level-set sweep. **No code changes** — the brain behavior is unchanged; previously-untested code paths now have explicit assertions, and the glossary is now symmetric with the enum.

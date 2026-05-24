@@ -15,7 +15,7 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 | **Latest Release** | `v1.0.0-beta5` (Release Candidate) |
 | **Target** | ESP32-S3 / Bitaxe Gamma (BM1370) |
 | **License** | MIT |
-| **QA Status** | Nine review cycles completed; full code + docs audit pass |
+| **QA Status** | Multiple review cycles completed — see [`CHANGELOG.md`](CHANGELOG.md) for the per-round history |
 | **Default Mode** | `G6_MODE_RECOMMEND` |
 
 ---
@@ -32,7 +32,7 @@ The beta5 release evolved across multiple QA rounds. Headline changes by phase:
 - **Dinkelbach Solver Bounding** — The exact $O(1)$ efficiency solver mathematically clamps normalized fractional coordinates to prevent overshoot on degraded power surfaces.
 - **Configurable Thermal Margins** — `G6_TEMP_PROACTIVE_MARGIN` and `G6_VR_TEMP_PROACTIVE_MARGIN` are now Kconfig options stored in the state struct, replacing baked-in macros.
 - **Safety Status Priority on Collision** — Safety helpers reordered so ASIC thermal wins in `last_safety_status` when both ASIC and VR thermal conditions fire on the same tick.
-- **NER Defense-in-Depth** — `is_sample_valid()` independently gates on NER as a redundant safety check; `g6_asic_error_handle_non_blocking` uses `fmaxf(BM1370_X_MIN, ...)` consistent with all other safety helpers.
+- **Belt-and-suspenders NER and thermal gating** — `is_sample_valid()` carries the same NER and thermal predicates as the upstream fast-fail at the top of `g6_brain_update()`. Currently unreachable in normal control flow (the upstream gates short-circuit first); retained to guard future refactors that might delete the upstream gates. `g6_asic_error_handle_non_blocking` uses `fmaxf(BM1370_X_MIN, ...)` consistent with all other safety helpers.
 - **Unified State Flags** — `cold_start` unifies both estimators; optimized struct packing for cache-line utilization.
 
 **Safety model integrity (Round 7) — full fail-closed contract:**
