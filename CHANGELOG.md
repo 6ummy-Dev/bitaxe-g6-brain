@@ -1,663 +1,230 @@
 # Changelog
 
-All notable changes to the Bitaxe G6 Brain will be documented in this file.
+All notable changes to the Bitaxe G6 Brain are documented in this file.
 
-## [1.0.0-beta6] - _In Progress_
-
-### [1.0.0-beta6] — 2026-05-23  QA Round 12 (Pre-Field-Test Coverage Polish, continued)
-
-Second beta6 QA round. Same shape as Round 11 — pure test-and-doc edits, **no code changes**. The brain's runtime behavior is byte-for-byte identical to the artifact that shipped from Round 11; this round closes documentation gaps and pins two more `g6_brain_update()` rejection paths with explicit tests.
-
-Manifesto alignment: "We document limitations honestly" (§2 *Transparency*) and "Tests (especially safety paths and edge cases) are required" (§3.7). Round 12 lives entirely on those two lines.
-
-- **Medium (B6-BUG-01)**: Corrected `G6_SAFETY_OK` description in operator-facing docs. The status reference in `docs/SAFETY.md`, `docs/API.md`, `docs/GLOSSARY.md`, and `docs/MONITORING.md` read *"Sample accepted into the RLS update; no anomaly observed this tick"* — but a tick can reach `safety_layer` with `last_safety_status == G6_SAFETY_OK` on **two non-anomaly rejection paths** in `g6_brain_update()`:
-  1. `share_count < MIN_SHARE_COUNT` — caught at line 444 via `is_sample_valid()`; the predicate is the only live check in that helper since the thermal and NER gates inside it are unreachable (upstream gates at lines 431 and 436 short-circuit first).
-  2. `xPx < RLS_INNOVATION_THRESHOLD` — caught at lines 471–472 via `has_significant_innovation()`; fires when a new sample is too close to existing training data to add information.
-  Both are normal during startup and after a pool change. Reframed the status description across all four docs: *"No anomaly observed this tick. Also reported on non-anomaly sample rejections — distinguish accepted from rejected for non-anomaly reasons by watching `update_count` deltas."* Added a "Distinguishing accepted vs rejected samples" subsection to `docs/MONITORING.md` making the operator workflow explicit, and a "Non-Anomaly Sample Rejection" glossary entry to anchor the term.
-
-- **Low (B6-NIT-01)**: Added test pinning the low-share-count rejection contract. `Low share count silently rejects sample with last_safety_status == OK` — drives the `MIN_SHARE_COUNT - 1` path, asserts `ESP_OK`, asserts `update_count` unchanged, asserts `last_safety_status == G6_SAFETY_OK`. Without this test, a future refactor introducing a `G6_SAFETY_LOW_SHARES` status (or changing the rejection to bump a counter) could break older operator scripts with no CI signal.
-
-- **Low (B6-NIT-02)**: Added test pinning the insignificant-innovation rejection contract. `Insignificant innovation silently rejects sample with last_safety_status == OK` — drives the gate by pre-loading `P[5][5] = 1e-7f` (below `RLS_INNOVATION_THRESHOLD`) and feeding the update at `f_mhz = BM1370_F_CENTER, v_mv = BM1370_V_CENTER` so that `x = [0,0,0,0,0,1]` and `xPx = P[5][5]`. Same assertion structure as B6-NIT-01.
-
-- **Low (B6-DOC-01)**: Reconciled the QA round count across `README.md` and `docs/README.md`. The Round 10 doc reconciliation updated two of three sites in `docs/README.md` but missed the prose at line 5 — leaving "eight QA rounds" in one paragraph while two other paragraphs in the same file said "nine". With Rounds 11 and 12 now landed, the integer would have to be bumped on every round. Replaced all three sites (plus the corresponding cell in the root `README.md` Status table) with prose that defers to the CHANGELOG: *"Hardened across multiple QA review cycles — see CHANGELOG for the per-round history."* Removes a recurring failure mode where doc edits forget to bump a count.
-
-- **Low (B6-DOC-02)**: Removed the stale test count from `docs/TESTING.md`. The CI-coverage note hardcoded *"The Unity test suite (32 cases as of pre-v1.0 polish)..."*; Round 11 took it to 34, this round takes it to 36. Replaced with *"See the CHANGELOG for the current test case count per release"* — same deflection pattern as B6-DOC-01.
-
-- **Low (B6-DOC-03)**: Corrected `G6_SAFETY_NER_BACKOFF` duration claim. `docs/SAFETY.md` and `docs/GLOSSARY.md` described the path as *"re-enters cold-start to re-learn under the new conditions"*, which implies many ticks of conservative learning. Trace says: `g6_asic_error_handle_non_blocking()` sets `cold_start = true` and `goto safety_layer`. The very next clean tick runs the RLS update at the conservative lambda (`lambda_eff = 0.985f`), bumps `update_count`, and at line 531 the `update_count > 25` branch flips `cold_start = false`. So if the brain has already had 25+ updates (the normal post-warmup case), the conservative learning rate is in effect for **exactly one update**. Rewrote both entries to be truthful: *"momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate; if `update_count > 25` the cold-start flag clears on the very next clean update. The `model_quality = 0.25` floor persists until the model re-converges."* Also added a parenthetical to the `Cold Start` glossary entry distinguishing the three triggers (warmup, trace recovery, NER backoff).
-
-- **Low (B6-DOC-04)**: Tightened "NER Defense-in-Depth" phrasing in root `README.md`. The bullet claimed `is_sample_valid()` *"independently gates on NER as a redundant safety check"* — true in isolation, misleading at the call site, since the upstream gate at the top of `g6_brain_update()` uses an identical predicate (`err_pct > brain->ner_threshold`) and `goto safety_layer`s before `is_sample_valid()` is ever called. The defense-in-depth is structural (guards against future refactors deleting the upstream gate), not operational. Renamed the bullet to *"Belt-and-suspenders NER and thermal gating"* and added the explicit "currently unreachable in normal control flow" caveat. Same fix in `docs/TESTING.md`.
-
-- **Low (B6-NIT-03)**: Documented the asymmetric sensor sanity-check contract. `g6_brain_update()`'s input gate strictly bounds `f_mhz`, `v_mv`, `hr_ths`, and `power_w` against hardware limits; the temperature and error-rate channels (`temp_c`, `vr_temp_c`, `err_pct`) are validated as **finite only**. `AGENTS.md` item 4 was technically accurate ("hard limits ... and finiteness are strictly enforced on every input"), but a careful reader would not realize that a stuck-low temperature sensor reading `-50°C` passes the gate and is happily trained on as a cold healthy chip. Added a "Sensor Sanity — Integrator Responsibility" section to `docs/SAFETY.md` and a "Sensor Sanity" subsection to the `g6_brain_update()` entry in `docs/API.md`, both stating the contract explicitly and listing recommended upstream checks. No code change — sensor health monitoring genuinely belongs in the integrator's telemetry layer where the specific sensor hardware is known.
-
-- **Low (B6-NIT-04)**: Refreshed test suite header comment to mention the new non-anomaly rejection-path coverage (B6-NIT-01 and B6-NIT-02).
-
-- **Low (B6-DOC-05)**: Tidied root `README.md` to match the conventions of a stable main-branch landing page. The "What's New in beta5" section had grown three sub-sections covering Rounds 5, 7, and 8 — release-notes content that belongs in `CHANGELOG.md`, not on the front door. Replaced it with a single timeless "Features" list adapted from the `docs/README.md` "What Makes G6 Brain Different" section. Status table trimmed to three rows (Latest Release, Target, License) — the previous "QA Status" and "Default Mode" rows had become redundant with the CHANGELOG deflection (DOC-01) and the Control Modes table directly below. Net: 119 lines → 99 lines, no information loss for the reader (everything removed is still in the CHANGELOG and the Control Modes table).
-
-**Deferred (carried forward from beta5)**: B5-NIT-16 (proactive helper guard symmetry) remains open per Round 11's explicit reasoning — deliberate hold for field data from the beta6 soak. No new findings warrant re-litigation.
-
-**Deferred (carried forward from this round)**: A potential `last_update_timestamp` field on `G6BrainTelemetry` — currently `G6BrainState.last_update_timestamp` is written every accepted update but never read or exposed. Operators wanting a "is the brain still ticking?" heartbeat have to instrument `update_count` deltas with their own wall-clock timestamps. Exposing the field via telemetry is a mild API expansion; deferred to a non-coverage-polish round.
-
-**Files changed**
-- `README.md` (Status table QA-count deflection and trim to three rows; NER Defense-in-Depth bullet retitled and explained; three-round "What's New in beta5" section replaced with a single timeless Features list; 119 → 99 lines).
-- `docs/README.md` (three QA-count sites consolidated to "see CHANGELOG").
-- `docs/SAFETY.md` (G6_SAFETY_OK row reframed; NER_BACKOFF row corrected; new "Sensor Sanity — Integrator Responsibility" section; Sample Quality Gating clarified; Recommended Monitoring extended with `update_count` deltas note).
-- `docs/API.md` (G6_SAFETY_OK row reframed; new "Sensor Sanity" subsection under `g6_brain_update()`; parameter table flags which inputs are finiteness-only validated).
-- `docs/GLOSSARY.md` (G6_SAFETY_OK entry reframed; G6_SAFETY_NER_BACKOFF entry corrected; new "Non-Anomaly Sample Rejection" entry; `Cold Start` distinguishes the three triggers; `update_count` entry added).
-- `docs/MONITORING.md` (G6_SAFETY_OK bullet reframed; new "Distinguishing accepted vs rejected samples" subsection).
-- `docs/TESTING.md` (test count deflected to CHANGELOG; NER-Defense bullet retitled to match README; new "update_count deltas alongside safety_status" monitoring tip).
-- `components/g6_brain/test/test_g6_brain.c` (2 new tests in a new "NON-ANOMALY REJECTION PATHS (B6 R2)" section; header comment refreshed). Test count: 34 → 36.
-
-**Updated test enum coverage**: still every code-active `G6SafetyStatus` value has at least one `TEST_ASSERT_EQUAL`. R12 adds 2 more `G6_SAFETY_OK` assertions on the previously-untested rejection paths, raising that row to 4.
-
-| Status | Assertion count |
-|---|:---:|
-| `G6_SAFETY_OK` | 4 |
-| `G6_SAFETY_THERMAL` | 2 |
-| `G6_SAFETY_VR_THERMAL` | 2 |
-| `G6_SAFETY_VOLTAGE` | 0 *(reserved — never set)* |
-| `G6_SAFETY_POWER_SANITY` | 2 |
-| `G6_SAFETY_NER_BACKOFF` | 1 |
-| `G6_SAFETY_SAMPLE_QUALITY` | 1 |
-| `G6_SAFETY_P_MATRIX_SINGULAR` | 1 |
-| `G6_SAFETY_INPUT_RANGE` | 5 |
-
-With Round 12, the beta6 cycle's coverage-polish phase is complete. No further test-and-doc rounds are planned before field test; the next round will either be a field-data review (B5-NIT-16 resolution) or a tag-cut round depending on soak results.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-### [1.0.0-beta6] — 2026-05-23  QA Round 11 (Pre-Field-Test Coverage Polish)
+## [Unreleased] — 1.0.0-beta6
 
-First beta6 QA round. Pure test-and-doc coverage improvements identified during the beta6 level-set sweep. **No code changes** — the brain behavior is unchanged; previously-untested code paths now have explicit assertions, and the glossary is now symmetric with the enum.
-
-Manifesto alignment: this round is the "we test heavily" line in action. The level-set sweep found 5 of 9 `G6SafetyStatus` enum values had no `TEST_ASSERT_EQUAL` on `last_safety_status` — the code paths ran during existing tests but the resulting status was never verified. Closed that gap without changing any code.
-
-- **Low (B6-NIT-01)**: Added explicit `last_safety_status` assertions to 4 existing tests. Each test was already exercising the corresponding code path; now the resulting status is also asserted.
-  - "Safety layer still executes on invalid sample" → asserts `G6_SAFETY_THERMAL` (hard thermal at temp=75 vs ceiling=60).
-  - "Statistical Outlier Gating rejects severe sensor anomalies" → asserts `G6_SAFETY_SAMPLE_QUALITY` (3-sigma gate fires on `hr_ths=9999`).
-  - "VR proactive zone steps back best_v only" → asserts `G6_SAFETY_VR_THERMAL` (proactive zone, vr=82 in [80,85)).
-  - "VR hard ceiling steps back both best_v and best_f" → asserts `G6_SAFETY_VR_THERMAL` (hard ceiling, vr=86 ≥ 85).
-
-- **Low (B6-NIT-02)**: Added 2 new tests covering the `G6_SAFETY_POWER_SANITY` input-validation path:
-  - "g6_brain_update routes out-of-range power_w to safety layer with POWER_SANITY" — `power_w=500` (above 100 W sanity bound).
-  - "g6_brain_update routes negative power_w to safety layer with POWER_SANITY" — `power_w=-10`.
-  - Both verify the fail-closed routing per manifesto non-negotiable 3.7: `power_w` out of bounds reaches the safety layer with the correct status, `ESP_OK` returned, no early `INVALID_ARG`.
-
-- **Low (B6-NIT-03)**: Added `G6_SAFETY_OK` assertions to "valid synthetic data respects control_mode" test. The two successful update calls now confirm both `ESP_OK` return *and* `last_safety_status == G6_SAFETY_OK` — making it explicit that a clean tick produces a clean status, not just absence of error.
-
-- **Low (B6-NIT-04)**: Expanded `G6SafetyStatus` glossary entry to enumerate all 9 enum values with one-line semantics each. Previously only 3 "key values" were listed; the remaining 6 were defined only in `SAFETY.md`. Anyone using GLOSSARY as the entry point for terminology now sees the complete enum with explicit notation that `G6_SAFETY_VOLTAGE` is reserved.
-
-- **Low (B6-NIT-05)**: Updated test suite header comment to reflect the new enum-coverage scope.
-
-**Deferred (carried forward from beta5)**: B5-NIT-16 (proactive helper guard symmetry) remains open. Deliberate hold for field data — beta6's RECOMMEND-mode and AUTO-mode soaks will tell us whether the missing guards on the ASIC helper ever matter in practice. If no edge cases hit them during the soaks, simplify the VR helper down to match. If any do, harden the ASIC helper up.
-
-**Final test enum coverage**: every code-active `G6SafetyStatus` value now has at least one explicit `TEST_ASSERT_EQUAL`. The 8 active enum values are all asserted (some multiple times). `G6_SAFETY_VOLTAGE` is correctly not asserted — it's reserved and no code path sets it.
-
-| Status | Assertion count |
-|---|:---:|
-| `G6_SAFETY_OK` | 2 |
-| `G6_SAFETY_THERMAL` | 2 |
-| `G6_SAFETY_VR_THERMAL` | 2 |
-| `G6_SAFETY_VOLTAGE` | 0 *(reserved — never set)* |
-| `G6_SAFETY_POWER_SANITY` | 2 |
-| `G6_SAFETY_NER_BACKOFF` | 1 |
-| `G6_SAFETY_SAMPLE_QUALITY` | 1 |
-| `G6_SAFETY_P_MATRIX_SINGULAR` | 1 |
-| `G6_SAFETY_INPUT_RANGE` | 5 |
-
-**Files changed**
-- `components/g6_brain/test/test_g6_brain.c` (4 assertions added to existing tests, 2 new tests, header comment refreshed). Test count: 32 → 34.
-- `docs/GLOSSARY.md` (G6SafetyStatus entry expanded to full enum).
-
----
-
-## [1.0.0-beta5] - _Completed_
-
-### [1.0.0-beta5] — 2026-05-22  QA Round 10 (Documentation Reconciliation & Pre-Tag Cleanup)
-
-Final documentation pass before tagging beta5 as a release candidate. No code changes this round — pure documentation reconciliation across the repo to align operator-facing content with the actual code shipped in Rounds 5 through 9. Tagging blocker fixes plus a comprehensive landing-page refresh.
-
-- **Critical (B5-DOC-1)**: Restored `docs/API.md`. The file in the repo was a byte-for-byte duplicate of `docs/GLOSSARY.md` — the public API reference content drafted during the Batch 1 documentation pass had been lost in an upload pipeline mishap and replaced with the glossary body. Operators clicking "Full public API reference" from either the root README or `docs/README.md` were getting the glossary instead. Restored content covers the threading contract, full signatures for all 10 public functions (including the round-9 const-correct `g6_brain_self_test`), the complete 15-row `G6BrainTelemetry` field table, a 9-row Safety Status Reference table matching the current `G6SafetyStatus` enum, and the public constants table including `G6_EFFICIENCY_MIN_HR_THS`.
-
-- **Medium (B5-DOC-2)**: Refreshed root `README.md`. Three discrete fixes:
-  - Status table: "(In Development)" → "(Release Candidate)"; "Deep QA verified, preparing for field testing" → "Nine review cycles completed; full code + docs audit pass".
-  - "What's New in beta5" was Round 5-only — restructured into three labeled phase sub-sections (initial hardening, safety model integrity, pre-v1.0 polish) covering the operator-visible changes from Rounds 5, 7, and 8. Tail link directs readers to the changelog for granular per-bug history.
-  - Documentation table expanded from 6 to 12 entries, listing all 11 docs plus `MANIFESTO.md`. Now matches the documentation map in `docs/README.md` aligned during the Batch 3 documentation pass.
-
-**Batches summary (Rounds 1-3 of documentation, executed prior to this round)**
-
-This round closes out the systematic documentation reconciliation effort that ran in parallel with the code work. For audit completeness, the prior doc batches covered:
-
-- **Batch 1 (`docs/API.md`, `docs/SAFETY.md`, `docs/GLOSSARY.md`)**: Fixed critical doc-vs-code mismatches — the stale `ESP_ERR_INVALID_ARG` contract description, the misnamed `G6_SAFETY_VOLTAGE` references, the deleted `BrainSampleState` type still appearing in the glossary, missing `G6_SAFETY_P_MATRIX_SINGULAR` and `G6_SAFETY_INPUT_RANGE` documentation, and missing `G6BrainTelemetry` field coverage. Softened "Joseph Form" overclaim to "Joseph-style congruence + ridge" consistently across all three.
-
-- **Batch 2 (`docs/MONITORING.md`, `docs/TESTING.md`, `CHANGELOG.md`)**: Rewrote MONITORING — the previous version listed 7 log strings that don't exist in code. Replaced with the actual 5 brain-emitted strings, reframed the document around telemetry-as-primary-observability. TESTING expanded with Round 7 + Round 8 coverage and a frank note on the CI test-execution gap (tests compile but don't run on hardware or QEMU). CHANGELOG status flipped to `_Completed_`.
-
-- **Batch 3 (`docs/AGENTS.md`, `docs/INSTALL.md`, `docs/README.md`)**: Updated AGENTS with current safety taxonomy, added P-matrix singular recovery as item 12, added manifesto 3.7 cross-reference in item 11, expanded Forbidden Patterns with three new explicit rules. INSTALL restructured phase recommendations into three explicit phases with per-status guidance. `docs/README.md` documentation map fixed (AGENTS, GLOSSARY, REFERENCES correctly placed in `docs/` rather than root).
-
-**Files changed in this round**
-- `docs/API.md` (restored from Batch-1 draft — full content recovery)
-- `README.md` (status table, What's New, documentation table)
-
-**Files verified clean, no edits needed**
-- `docs/KCONFIG.md` — all options match Kconfig file, defaults and ranges accurate
-- `docs/REFERENCES.md` — academic citations, doesn't drift with code (Bucy & Joseph 1968 reference appropriately attributes the foundational paper for the technique we use a variant of)
-- `MANIFESTO.md` — clean, timeless; line 37 is the exact non-negotiable 3.7 that other docs now cross-reference correctly
-
----
-
-## Pre-Release Status
-
-With this round, `[1.0.0-beta5]` is ready for tag as **Release Candidate**. Nine code QA rounds + four documentation batches completed. Code, tests, changelog, and docs are end-to-end consistent — every public symbol mentioned in documentation matches a symbol that actually exists in code with the documented semantics, and vice versa.
-
-**Path to v1.0.0:** Two further betas planned, focused on production hardening. Likely scope (subject to design discussion):
-- Resolution of the deferred B5-NIT-16 (proactive helper guard symmetry)
-- The third-party reviewer's deferred items: Dinkelbach HR-drop guardrail, optional theta soft-clamp, optional stochastic excitation when model quality stalls
-- Stress test with deliberately ill-conditioned P matrices over many updates
-- Monte-Carlo on noisy telemetry convergence
-- CI gap: running tests on QEMU or hardware in addition to compile-checking them
-- Field-test soak data review (48h+ on Gamma with VR sensor + without, per the third-party reviewer's recommendation)
-
----
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 8 (Pre-v1.0 Polish: Telemetry, Constants, Const-Correctness)
-
-This round consolidates pre-v1.0 polish work flagged by a second independent QA reviewer. Three groups of changes, all non-blocking: a magic-number cleanup, a telemetry struct expansion (delivered in two passes for symmetry between the hashrate and power estimators), and const-correctness on the self-test entry point. No behavior changes; no safety-layer changes.
-
-- **Low (B5-NIT-11)**: Replaced magic `8.0f` literals in the Dinkelbach J/TH solver with a named constant `G6_EFFICIENCY_MIN_HR_THS` (defined in `g6_brain.h`). This is the minimum predicted hashrate below which the solver skips a candidate point — prevents near-zero division and marks the boundary where the power model has no physical meaning. The literal appeared at two call sites in `optimize_jth_dinkelbach()`; both now reference the constant.
-
-- **Low (B5-NIT-12)**: Expanded `G6BrainTelemetry` snapshot to surface the operator-facing fields callers were previously reading directly off `G6BrainState`. Added `best_f`, `best_v`, `model_quality`, `last_efficiency`, `update_count`. `last_recommended_voltage` is retained as a backward-compat alias that mirrors `best_v` exactly. `g6_brain_get_telemetry()` now populates all new fields.
-
-- **Low (B5-NIT-13)**: Completed the telemetry struct symmetry for the power estimator. The first telemetry expansion (B5-NIT-12) covered the hashrate estimator but missed the analogous fields for the power model. Added `power_model_quality` and `power_update_count`, populated by `g6_brain_get_telemetry()`. Operators running efficiency mode now have visibility into both estimators' convergence and update history via the snapshot.
-
-- **Low (B5-NIT-14)**: `g6_brain_self_test()` is now `const`-correct. Signature changed from `esp_err_t g6_brain_self_test(G6BrainState *brain)` to `esp_err_t g6_brain_self_test(const G6BrainState *brain)` in both header and implementation. The function only reads from `brain` (covariance diagonal range, symmetry, condition number) and now matches `g6_brain_get_telemetry()` in `const` posture. Callers holding a `const G6BrainState *` can now invoke self-test. Source-compatible — no caller has to change.
-
-- **Low (B5-NIT-15)**: Strengthened the "Dinkelbach does not fire below model quality threshold" test. The test previously declared `float pred_hr` and passed it to `g6_brain_get_optimal()` but never asserted on it — set-but-unused. Now asserts `pred_hr ≈ 80.5 TH/s` (the predicted hashrate at the hashrate-only optimum fn=0.5 for the test's theta values), proving both that Dinkelbach was correctly bypassed *and* that `get_optimal()` returned a sensible prediction at the analytical maximum.
-
-**New tests (3)**
-- `Dinkelbach optimizer improves J/TH over naive hashrate-only point` — synthesizes surfaces where lower MHz is more efficient (HR peak at 775 MHz, power monotone increasing), bypasses the quality gate, asserts the solver moves to a lower-MHz point AND that the new J/TH is ≥ 1% better than the starting point. Would catch regressions in the Dinkelbach math.
-- `Dinkelbach does not fire below model quality threshold` — confirms the `model_quality < 0.6` gate holds; optimizer is a no-op when power model is degraded.
-- `g6_brain_get_telemetry snapshot captures all operator fields` — runs 5 updates, captures snapshot, asserts all telemetry fields match the struct exactly at capture time including the `last_recommended_voltage` ↔ `best_v` alias invariant.
-
-**Deferred (B5-NIT-16)**: Asymmetric guard structure between `g6_safety_proactive_thermal_scale()` and `g6_safety_proactive_vr_thermal_scale()`. The VR helper has three independent guards (null brain, sensor sentinel/finiteness, ceiling validity); the ASIC helper has one combined guard. Reconciling them in either direction is a behavior change, not a polish edit — defensive guards would either be added to ASIC (potentially masking config errors) or removed from VR (weakening defensiveness against zeroed ceiling). Flagged for v1.0 design review.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h` (constant, telemetry struct, self_test signature)
-- `components/g6_brain/g6_brain.c` (constant usage, get_telemetry populates new fields, self_test signature)
-- `components/g6_brain/test/test_g6_brain.c` (3 new tests, 1 strengthened assertion)
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 7 (Safety Model Integrity & Full Fail-Closed)
-
-- **Critical (B5-BUG-14)**: Fixed fatal compile error — stray `}` in `test_g6_brain.c`. An orphaned closing brace at end-of-file broke the build. CI was failing since Round 6.
-
-- **Critical (B5-BUG-15)**: Completed removal of dead `power_cold_start` struct field. Round 6 (B5-BUG-12) removed all `.c` references to unify the two estimators under the single `cold_start` flag, but the field remained in the public struct in `g6_brain.h` — zero readers, zero writers, consuming a byte and contradicting the changelog's own claim that unification was complete.
-
-- **High (B5-BUG-16)**: Fixed `g6_brain_recover_cold_start()` silently disabling efficiency mode. The function called `g6_brain_set_defaults()` to reset P and theta, which also reset `use_efficiency_mode` to its Kconfig default (typically `false`). An operator who had enabled efficiency mode at runtime would have it silently turned off on any covariance divergence event, with no diagnostic signal. `use_efficiency_mode` is now snapshotted and restored alongside the other operator-configured fields.
-
-- **High (B5-BUG-17)**: Fixed `G6_SAFETY_P_MATRIX_SINGULAR` defined but never set. The enum value existed since beta5 but no code path ever wrote it. The covariance recovery path in `g6_brain_recover_cold_start()` is the natural owner — it now sets `last_safety_status = G6_SAFETY_P_MATRIX_SINGULAR` and emits a `LOGW("P matrix diverged — cold-start recovery applied")` so operators and telemetry have a signal when a numerical recovery event fires. Note: a more urgent same-tick condition (thermal, VR) will still overwrite this per the established safety-status priority ordering.
-
-- **High (B5-BUG-18)**: Fixed NaN telemetry silently skipping safety ticks. Non-finite inputs (`NaN`, `Inf`) in any telemetry parameter caused an early `return ESP_ERR_INVALID_ARG`, bypassing the safety layer entirely. This directly violated manifesto non-negotiable 3.7: *"Every safety check executes even on invalid or rejected samples."* A NaN channel now routes fail-closed to the safety layer with `G6_SAFETY_INPUT_RANGE`, where all helpers are already NaN-tolerant. The only remaining `ESP_ERR_INVALID_ARG` return is `brain == NULL` — the one truly structurally-broken call where no brain exists to apply safety to.
-
-- **Medium (B5-BUG-19)**: Fixed `G6_SAFETY_VOLTAGE` misused as a catch-all for input range violations. Out-of-bounds `f_mhz` was setting `G6_SAFETY_VOLTAGE`, which would direct operators to inspect their VRM when the actual issue was upstream telemetry out of hardware bounds. Added `G6_SAFETY_INPUT_RANGE` (appended at end of enum — integer mappings for all existing values preserved). All input-range violations (non-finite, `hr_ths ≤ 0`, `f_mhz`/`v_mv` out of bounds) now use this status. `G6_SAFETY_VOLTAGE` is retained in the enum for a future real VRM-ripple check.
-
-- **Medium (B5-BUG-20)**: Fixed slew-limit test silently broken at runtime. The test provided `theta[3] = 200.0f`, which produces an unconstrained optimum at `f_cand ≈ 25,650 MHz` — outside `BM1370_F_MAX`. `get_optimal()` correctly rejected the out-of-bounds candidate and fell back to `best_f`, making `df = 0` and the slew clamp never activating. The test appeared to pass because CI only compiles tests, it does not run them. Fixed with `theta[3] = 1.2f`, producing an in-bounds optimum at `f_cand = 800 MHz` and a clean 150 MHz gap that forces the slew clamp to fire. Assertion relaxed from `EQUAL_FLOAT` to `FLOAT_WITHIN(0.5f)` to be honest about float arithmetic through the full RLS + slew path.
-
-- **Low (B5-NIT-8)**: Fixed `last_efficiency` computed from potentially out-of-range `power_w` on the input-range fail-closed path. When `f_mhz` or `v_mv` was bad, the update routed to `safety_layer` before the `power_w` sanity check. The efficiency calculation ran unconditionally with whatever value `power_w` held. Now gated on `power_w ∈ [0, 100]` — on any tick where power is unvalidated or out-of-range, the field retains its last known-good value rather than reporting a garbage ratio.
-
-- **Low (B5-NIT-9)**: Documented `safety_active` four-term structure. The Boolean's terms are partially redundant (term 2, NER threshold, is fully covered by term 4 via `G6_SAFETY_NER_BACKOFF`), but terms 1 and 3 (ASIC and VR proactive zones) are genuinely required — without them, the slew controller would race against the proactive derate helpers and re-introduce the B4-BUG-1 sawtooth oscillation on the success path. Added inline comment identifying which terms are load-bearing vs. kept for readability.
-
-- **Low (B5-NIT-10)**: Updated stale test suite header comment. Still referenced "post-setpoint learning suppression" — a feature that was designed, prototyped, and ultimately removed during the round-2/3 QA process. Replaced with accurate coverage description.
-
-**New tests (7)**
-- `g6_brain_update routes hr_ths=0 to safety layer (fail-closed)` — replaces the previous `INVALID_ARG` assertion; confirms safety layer runs on bad telemetry.
-- `g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail-closed)` — updated to assert `G6_SAFETY_INPUT_RANGE`.
-- `g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-closed)` — same.
-- `g6_brain_update routes NaN vr_temp_c to safety layer (fail-closed)` — replaces `INVALID_ARG` test; confirms the manifesto 3.7 invariant for sensor NaN.
-- `g6_brain_update routes NaN temp_c to safety layer (fail-closed)` — new NaN path coverage.
-- `g6_brain_update returns INVALID_ARG only for NULL brain pointer` — pins the new contract: NULL is the sole `INVALID_ARG` path.
-- `Trace divergence triggers P-matrix recovery and reports P_MATRIX_SINGULAR` — verifies B5-BUG-17: drives `P` to 1e8 diagonal, confirms `G6_SAFETY_P_MATRIX_SINGULAR` status, zeroed theta, and reset P.
-- `P-matrix recovery preserves operator-configured use_efficiency_mode` — verifies B5-BUG-16: efficiency mode and other runtime config survive a covariance blow-up event.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/test/test_g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-21  Documentation Polish & Alignment
-
-> **Correction note (added in Round 8 cleanup):** This entry was filed as completed but the actual doc updates listed below did not land at that time — the documentation remained unchanged from before. The real doc alignment for beta5 (covering all the items below plus the round 7/8 changes) was completed as a separate effort and is described in the Round 8+ documentation work, not here. Kept in place for historical accuracy.
-
-* **Documentation (B5-DOCS-1)**: Performed a comprehensive sweep across all project documentation to align with the final `v1.0.0-beta5` architectural changes.
-* **API & Safety**: Documented the shift to **Fail-Closed Validation Routing**, explaining how out-of-bounds telemetry now actively triggers hardware clamps rather than bypassing them via early returns.
-* **Mechanisms**: Added detailed technical explanations for **Trace Accumulation Recovery** (matrix reset and zero-fill rules), **Slew-Rate Amnesia** protection, and exact solver bounding.
-* **Guides & Definitions**: Updated `TESTING.md` with specific scenarios for testing fail-closed boundary enforcement. Added new formal definitions to `GLOSSARY.md`.
-* **General**: Refreshed `README.md`, `KCONFIG.md`, and `AGENTS.md` (updated forbidden patterns) to accurately reflect the unified state flags and the complete Beta 5 feature set.
-
-**Files changed**
-
-* `README.md`
-* `docs/API.md`
-* `docs/SAFETY.md`
-* `docs/AGENTS.md`
-* `docs/TESTING.md`
-* `docs/KCONFIG.md`
-* `docs/GLOSSARY.md`
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 6 (Compilation & Math Stability)
-
-* **Critical (B5-BUG-12)**: Fixed fatal compilation error caused by orphaned struct members. Removed all residual references to the deleted `power_cold_start` flag inside `g6_brain.c`. Both hashrate and power estimators now correctly share the unified `cold_start` boolean.
-* **High (B5-BUG-13)**: Fixed latent divergence in RLS Cold-Start Recovery. The `g6_brain_recover_cold_start()` function now explicitly zero-fills the `theta` and `power_theta` coefficient arrays when resetting the `P` matrices to `1.0e5f`. This prevents a violent mathematical explosion in the Kalman gain vector that would otherwise occur if estimator confidence was reset while preserving an already-evolved polynomial surface.
-
-**Files changed**
-
-* `components/g6_brain/g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 5 (Slew Amnesia & Test Suite Repair)
-
-- **Critical (B5-BUG-10)**: Fixed Unity test suite regression. Updated boundary validation tests to correctly assert `ESP_OK` and `G6_SAFETY_VOLTAGE` reflecting the fail-closed API changes introduced in Round 4. CI build is restored to green. *(Superseded by B5-BUG-19 in Round 7: the boundary validation tests were updated again to assert `G6_SAFETY_INPUT_RANGE` after the addition of the dedicated input-range status code.)*
-- **High (B5-BUG-11)**: Fixed slew-rate controller "amnesia". Added `(brain->last_safety_status != G6_SAFETY_OK)` to the `safety_active` guard boolean. Now, statistical outlier rejections and power sanity anomalies properly freeze the upward slew controller rather than allowing it to aggressively march targets upward based on stale prior optimums.
-- **Minor (B5-NIT-7)**: Purged the redundant `g6_safety_check_voltage_ripple` helper function entirely. Its condition is now strictly handled at the top of the update loop, preventing unnecessary re-evaluation in the safety layer.
-
-### [1.0.0-beta5] — 2026-05-21  QA Round 4 (Validation Fixes)
-
-- **Critical (B5-BUG-8)**: Fixed fail-open validation trap in `g6_brain_update()`. Separated the boundary range checks (`BM1370_F_MAX`, `BM1370_V_MAX`, etc.) from the non-finite early-return block. Out-of-range sensor readings now trigger `G6_SAFETY_VOLTAGE` and safely route to the `safety_layer` rather than returning `ESP_ERR_INVALID_ARG`. This prevents hardware limits and proactive thermal protection from being entirely bypassed by transient sensor noise. *(Partially superseded by B5-BUG-19 in Round 7: the status code was changed from `G6_SAFETY_VOLTAGE` to the new dedicated `G6_SAFETY_INPUT_RANGE`, since `G6_SAFETY_VOLTAGE` was misleading operators into checking their VRM when the actual issue was upstream telemetry. The fail-closed routing itself remains in place.)*
-
-- **Medium (B5-BUG-9)**: Fixed `G6BrainState` struct padding regression. Reordered the struct to group all 1-byte `bool` flags (`cold_start`, `nvs_valid`, `power_cold_start`, `use_efficiency_mode`, `enable_low_latency_jobs`) at the bottom. This eliminates invisible compiler padding and restores cache-line packing optimizations.
-
-- **Low (B5-NIT-6)**: Removed redundant `fmaxf`/`fminf` re-clamping from the `g6_safety_check_voltage_ripple` helper. The variables are already securely hard-clamped immediately prior to the safety layer helpers executing, making the inner math unnecessary.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-20  QA Round 3
-
-- **Medium (B5v3-BUG-1)**: Fixed `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored. Header hardcoded `#define G6_JTH_MAX_OUTER_ITERS 7` with no `CONFIG_` guard, making the `menuconfig` option a no-op. Wrapped with `#if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)` guard, matching the pattern used for every other Kconfig-backed constant in the header.
-
-- **Low (B5v3-NIT-1)**: Extended NVS round-trip test to verify `power_theta` and `power_P` survive save/load. Previous test only checked `theta` and `P`, leaving the B5v2-BUG-1 fix (power_P offset increment) without direct test coverage.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/test/test_g6_brain.c`
-
-### [1.0.0-beta5] — 2026-05-20  Safety Layer Hardening & Code Quality (beta5)
-
-**Bug Fixes (from independent deep QA audit)**
-
-- **Critical (B5-BUG-1)**: Fixed VR proactive margin silently ignoring runtime state. `G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT` was used directly at both the safety helper and the `vr_safety_active` gate in the safety layer, instead of reading from a per-state field. This meant tuning `brain->vr_temp_proactive_margin` at runtime had no effect. Added `vr_temp_proactive_margin` to `G6BrainState`, initialized from `G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT` in `g6_brain_set_defaults()`, and replaced both macro references with `brain->vr_temp_proactive_margin`.
-
-- **High (B5-BUG-2)**: Fixed ASIC proactive thermal margin hard-coded and duplicated. The `5.0f` literal appeared at two independent call sites (the safety helper and the `safety_active` slew-suspend gate), creating a risk that future edits could un-sync them and reintroduce the B4-BUG-1 sawtooth oscillation. Added `G6_TEMP_PROACTIVE_MARGIN` to Kconfig (default 5, range 2–15), `temp_proactive_margin` field to `G6BrainState`, and replaced both literals.
-
-- **High (B5-BUG-3)**: Fixed stale `v1.0.0-beta3` version comment at top of `test_g6_brain.c`. Same class of issue as B4-BUG-3 (`docs/API.md` out of sync); the corresponding test file header was missed in the beta4 sweep.
-
-- **Medium (B5-BUG-4)**: Fixed safety status priority collision. When both ASIC thermal and VR thermal conditions fire on the same tick, the last safety helper to run wins `last_safety_status`. Previous ordering (ASIC → voltage → VR) meant VR thermal could mask the ASIC condition in telemetry. Reordered to (voltage → VR → ASIC) so ASIC thermal, the higher-priority condition, always wins on collision. Added a comment documenting the ordering contract.
-
-- **Medium (B5-BUG-5)**: Fixed asymmetric floor clamping in `g6_asic_error_handle_non_blocking`. The NER backoff multiplied `best_f` and `best_v` without floor clamps, relying on the safety layer's hard clamps downstream. Applied `fmaxf(BM1370_F_MIN, ...)` and `fmaxf(BM1370_V_MIN, ...)` consistent with all other safety helpers.
-
-- **Medium (B5-BUG-6/7)**: Fixed `is_sample_valid()` not gating on NER, and containing dead pre-checks. Added `err_pct` parameter and NER gate as defense-in-depth. Removed `isfinite(hr_ths)` and `hr_ths <= 0.0f` checks already enforced upstream by `g6_brain_update`'s input validation. Updated call site to pass `err_pct`.
-
-**Improvements**
-
-- **NVS Blob-Size Mismatch Handling (B5-NIT-2)**: When `nvs_get_blob` succeeds but returns a blob of the wrong size, the load function now logs a `LOGW` warning with expected vs actual sizes and erases the stale blob. Previously this case silently fell through, leaving a corrupt blob in NVS indefinitely.
-
-- **VR Sentinel Check Precision (B5-NIT-1)**: Replaced `vr_temp_c < 0.0f` no-sensor guard with `vr_temp_c <= G6_VR_TEMP_NO_SENSOR` in the safety helper and `vr_temp_c > G6_VR_TEMP_NO_SENSOR` in the `vr_safety_active` gate. A glitched sensor returning a small negative value (e.g. -0.5°C) now correctly still disables VR monitoring rather than passing the `< 0.0f` check and attempting to evaluate thermal conditions. Added explanatory comment.
-
-- **`g6_brain_set_defaults()` helper extracted (B5-NIT-3)**: ~50 lines of duplicated default-setting code shared between `g6_brain_init` and `g6_brain_reset` extracted into a private static helper. Both functions now call `memset` + `g6_brain_set_defaults`. Eliminates the class of bugs where a new field is added to one but not the other.
-
-- **Kconfig cleanup (B5-NIT-5)**: Removed stale `(Phase 1+)` parenthetical from `G6_ENABLE_EFFICIENCY_MODE` option label.
-
-**New Tests (5)**
-- `vr_temp_proactive_margin field is initialized from Kconfig default` — verifies B5-BUG-1 init path.
-- `temp_proactive_margin field is initialized from Kconfig default` — verifies B5-BUG-2 init path.
-- `Runtime vr_temp_proactive_margin change alters proactive zone` — verifies B5-BUG-1 runtime effect: widening the margin to 10°C brings 78°C into the proactive zone where the default 5°C margin would not.
-- `NER blocks RLS update via is_sample_valid defense-in-depth` — verifies B5-BUG-6: high-NER sample reports `NER_BACKOFF` and does not increment `update_count`.
-- `ASIC thermal status wins over VR thermal when both fire on same tick` — verifies B5-BUG-4: with both conditions active, `last_safety_status` reports `G6_SAFETY_THERMAL`, not `G6_SAFETY_VR_THERMAL`.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/Kconfig`
-- `components/g6_brain/test/test_g6_brain.c`
-- `docs/KCONFIG.md`, `docs/SAFETY.md`, `docs/TESTING.md`, `docs/INSTALL.md`, `docs/API.md`, `docs/AGENTS.md`, `docs/GLOSSARY.md`, `docs/MONITORING.md`
-- `README.md`
-
----
-
-## [1.0.0-beta4] - 2026-05-20 _Completed_
-
-### 2026-05-20 — QA Fixes, CI Hardening & Documentation Alignment (beta4)
-
-**Bug Fixes (Core Correctness)**
-
-- **Tick vs Millisecond Unit Confusion**: Fixed `SETTLE_MS` and `MIN_WINDOW_MS` comparisons in the sample state machine. Raw tick deltas were being compared directly against millisecond constants.
-- **Safety Status Telemetry Dead Code**: `safety_status` in telemetry was always reporting `G6_SAFETY_OK`. Added `last_safety_status` tracking and wired it through all safety paths.
-- **Power Validation Fail-Open**: Invalid `power_w` values caused an early return before the safety layer could execute. Changed to fail-closed behavior (`goto safety_layer;`).
-- **Missing Power Outlier Logging**: Added symmetric logging for power model outliers (`Power Outlier Rejected`).
-- **Dead Code Removal**: Removed unused `stored_size` read in `g6_brain_load_nvs_fingerprint()`.
-
-**CI Improvements**
-
-- Reworked the GitHub Actions workflow to properly include `test_g6_brain.c` as a build source.
-- Removed duplicate test folder during CI setup.
-- Improved test runner logging and failure reporting.
-
-**Documentation Updates**
-
-- Updated root `README.md` and multiple documentation files to reflect `v1.0.0-beta4`.
-- Added documentation for new VR thermal safety options (`G6_VR_TEMP_CEILING` and `G6_VR_TEMP_PROACTIVE_MARGIN`) in `docs/KCONFIG.md`.
-- Performed broader documentation sweep across `INSTALL.md`, `SAFETY.md`, `AGENTS.md`, `TESTING.md`, `GLOSSARY.md`, and `MONITORING.md`.
-- Updated Kconfig file header comment.
-
-These changes focus on correctness, safety layer integrity, telemetry accuracy, CI reliability, and documentation alignment for the beta4 release.
-
-### 2026-05-20 — Integration Layer Data Quality (beta4 v3)
-
-`docs/INTEGRATION_EXAMPLE.c` only — zero brain component changes.
-
-- **P2**: Pass `sharesAccepted` delta (window count), not cumulative total. Cumulative inflated the value 85× at T+2h, destroying `MIN_SHARE_COUNT` gate resolution.
-- **P3**: Feed `hashRate_10m` while `model_quality < 0.5` or `cold_start` is active; switch to live `hashRate` once settled. Baseline showed 10m avg tracks expected to 0.31% vs 0.48% for live during the ~2.5h thermal equilibration window.
-- **P4**: Compute NER from `Δerrors / (window_hr × Δt)` using raw `errorCount`, not the rolling `errorPercentage` field which lags over full session uptime. Falls back to `errorPercentage` if elapsed time is insufficient.
-- **P5**: Log VRM droop coefficient (`droop_mv / power_w`) on first valid telemetry frame. Placeholder comment for `brain.droop_mv_per_watt` seeding when Phase 2 P-VUS field lands.
-- **P6**: Scale window share count by `poolDifficulty / G6_REF_POOL_DIFFICULTY` before passing to brain. Caps at 3.0×. Makes `MIN_SHARE_COUNT` gate consistent regardless of pool difficulty assignment.
-
-**Files changed**
-- `docs/INTEGRATION_EXAMPLE.c`
-
-### 2026-05-20 — QA Audit Fixes (beta4 v2)
-
-**Bug Fixes (from independent deep QA audit)**
-
-- **Critical (B4-BUG-1)**: Fixed slew-rate limiter fighting safety derating (sawtooth oscillation). When a safety condition was active (ASIC thermal, NER, or VR thermal), the safety override functions correctly pulled `best_f`/`best_v` down each tick, but `g6_brain_get_optimal()` still produced a high undeflated candidate, causing the slew limiter to pull them back up on the next tick. This created a continuous oscillation at the thermal edge, diluting the intended safety margin. Fixed by evaluating a `safety_active` flag before the slew block — upward slew is suspended whenever any safety condition is in its active zone. Hardware limits and safety derating still apply unconditionally on every tick.
-- **Medium (B4-BUG-2)**: Fixed innovation dead-zone silently mislabelled as outlier rejections. When the covariance matrix `P` converges tightly (`xᵀPx < 1e-4`), the previous code combined the dead-zone check with the 3-sigma gate, causing valid high-confidence samples to be logged as `HR Outlier Rejected` and counted against operators. Separated the two checks: dead-zone (`!has_significant_innovation`) now silently skips the RLS update with a `goto safety_layer` and no log. The 3-sigma gate remains as the only path that logs an outlier warning.
-- **Low (B4-BUG-3)**: Fixed `docs/API.md` out of sync with beta4 signature. Added `vr_temp_c` parameter to the code block and parameter table. Updated version header from beta3 to beta4.
-- **Low (B4-BUG-4)**: Eliminated redundant NVS schema version dual-definition. Removed `static const uint32_t NVS_SCHEMA_VERSION = 3u` from `g6_brain.c` and replaced all internal references with the single canonical `G6_NVS_SCHEMA_VERSION` macro from `g6_brain.h`.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-- `docs/API.md`
-
-### 2026-05-20 — VR Thermal Safety (beta4 v1)
-
-**New Feature: Two-tier thermal safety — voltage regulator monitoring**
-
-The brain previously tracked ASIC die temperature (`temp_c`) only. On hardware where the voltage regulator runs a separate thermal sensor (`vrTemp` in the Bitaxe telemetry API), the brain had no visibility into VR heat. Because VR power dissipation scales with voltage squared, brain-driven voltage exploration could push the VR into thermal distress while the ASIC remained comfortably within its own ceiling.
-
-**Architecture**
-
-ASIC temperature and VR temperature are deliberately treated differently:
-
-- **ASIC temp (`temp_c`)** gates the RLS update entirely: if the ASIC is above ceiling, the sample is discarded and only the safety layer runs. This prevents learning from a thermally-stressed operating point.
-- **VR temp (`vr_temp_c`)** never gates learning. It runs exclusively in the safety layer as a final setpoint constraint. The rationale: VR heat does not corrupt the hashrate or power surface measurements — it only means the resulting setpoints must be reined in. The brain continues to learn the surface accurately while the VR check holds the recommended voltage back.
-
-**Changes**
-
-- `g6_brain_update()` gains a new `vr_temp_c` parameter (position 6, between `temp_c` and `err_pct`). Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) when no VR sensor is available — all VR checks are silently skipped. **This is a breaking API change; callers must be updated.**
-- `g6_safety_proactive_vr_thermal_scale()` added as a static safety function. Runs last in `safety_layer:`, after ASIC thermal and voltage ripple checks.
-  - **Proactive zone** (`vr_temp_c > ceiling − margin`): steps `best_v` back by ×0.992 per cycle. Frequency is left untouched — voltage drives VR dissipation, not clock speed.
-  - **Hard ceiling** (`vr_temp_c ≥ ceiling`): steps back both `best_v` (×0.985) and `best_f` (×0.96) to reduce total power through the VR immediately.
-- `G6BrainState.vr_temp_ceiling` added to the struct (initialized from Kconfig, default 85°C). Lives in the Phase 2 reserved block — no NVS schema change required.
-- `G6_SAFETY_VR_THERMAL` added to the `G6SafetyStatus` enum.
-- `G6_VR_TEMP_NO_SENSOR` sentinel constant (`-1.0f`) exported from header.
-- `G6_NVS_SCHEMA_VERSION` in `g6_brain.h` corrected from stale `2u` to `3u` to match the runtime constant in `g6_brain.c` (housekeeping noted in beta3 v5 QA sign-off).
-
-**Kconfig additions (Safety & Thermal menu)**
-
-| Option | Default | Range | Description |
-|---|---|---|---|
-| `G6_VR_TEMP_CEILING` | 85°C | 70–105 | Hard VR thermal ceiling. Hard throttle above this. |
-| `G6_VR_TEMP_PROACTIVE_MARGIN` | 5°C | 2–15 | Degrees below ceiling where proactive voltage step-back begins. |
-
-**New tests (3)**
-- `VR thermal sentinel (-1) is a no-op` — verifies `G6_VR_TEMP_NO_SENSOR` disables all VR checks.
-- `VR proactive zone steps back best_v only` — verifies voltage reduction and frequency stability in the proactive zone.
-- `VR hard ceiling steps back both best_v and best_f` — verifies both setpoints are reduced at the hard ceiling.
-
-**Files changed**
-- `components/g6_brain/g6_brain.h`
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/Kconfig`
-- `components/g6_brain/test/test_g6_brain.c`
-
----
-
-## [1.0.0-beta3] - 2026-05-20 *Completed*
-
-**Status**: Signed-off and deployed for community soak testing. This release officially introduces the O(1) analytical J/TH solver, Joseph-form covariance stabilization, and 3-Sigma outlier gating.
-
-### 2026-05-20 — Final QA Polish (beta3 v5)
-
-- **Minor (B3-COSMETIC-1)**: Resolved a header/source schema version mismatch. Synchronized the public `#define G6_NVS_SCHEMA_VERSION` macro in `g6_brain.h` from `2u` to `3u` to perfectly match the internal operational constant in `g6_brain.c`. This eliminates technical debt and prevents confusion for future maintainers.
-
-**Bug Fixes (from independent QA sign-off review)**
-- **Critical (B3-BUG-6)**: Fixed inverted safety layer semantics. The thermal scaling and voltage ripple checks were incorrectly repositioned above the internal slew limiter and `g6_brain_get_optimal()` calls during refactoring. Because the slew-rate limiter steps `best_f` toward a candidate target, running thermal derating *first* meant the safety reduction was immediately partially undone by the slew step within the same clock cycle. Re-ordered the execution so that hardware clamps and safety overrides (`g6_safety_proactive_thermal_scale` and `g6_safety_check_voltage_ripple`) strictly execute last as unconditional post-optimization constraints.
-- **Medium (B3-LATENT-1)**: Fixed silent power model truncation in NVS warm-start persistence. In `g6_brain_save_nvs_fingerprint()`, the memory `offset` variable was not incremented after copying `brain->power_P` into the serialization buffer, resulting in `nvs_set_blob()` saving a truncated 200-byte frame instead of the full 344 bytes. Added `offset += sizeof(brain->power_P)` before the save call, and bumped `NVS_SCHEMA_VERSION` to 3u to explicitly reject any stale v2 blobs stored without a power matrix.
-- **Medium (B3-TEST-1)**: Fixed the internal slew-rate validation test (`test_g6_brain.c`). The mock `theta` coefficients assigned in the test suite previously yielded a zero determinant ($4ab - c^2 = 0$), failing the convexity guard in `get_optimal()`. As a result, the solver safely fell back, `candidate` equaled `best_f` (df=0), and the slew rate logic test assertion failed. Added a negative `theta[1]` and bounded linear `theta[3]` constraint to guarantee a valid concave-down test surface determinant.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/test/test_g6_brain.c`
-
-### 2026-05-19 — Production Sign-Off & Safety Core Alignment
-
-**Bug Fixes & Algorithmic Corrections**
-- **Enforced Safety Layer Fall-Through**: Extracted the premature `return ESP_OK;` statement preceding the `safety_layer:` label. This ensures that internal slew-rate limits, absolute hardware boundaries, and proactive thermal derating scaling overrides unconditionally execute on every operational update run instead of only executing during sample rejection cycles.
-- **Localized Statistical 3-Sigma Gating**: Restored localized, coordinate-specific innovation variance mapping ($x^T P x + 0.5f$) inside the telemetry validation filter. This aligns outlier rejection dynamically with the running operational load line, protecting the surface from being distorted by noise.
-- **Cleaned Test Suite Build Noise**: Removed the unused static global string declaration `TAG` from `test_g6_brain.c` to maintain clean compilation under strict `-Werror=unused-variable` parameters.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/test/test_g6_brain.c`
-
-### 2026-05-19 — Final QA Polish & Pre-Release Hardening
-
-**Bug Fixes**
-- Fixed **outlier gating asymmetry** in efficiency mode: Hashes and power model outlier checks now run together *before* either model is updated. This prevents the hashrate model from advancing while the power model is rejected on the same sample (which could cause gradual drift in J/TH optimization).
-
-**Improvements**
-- Added clear Phase 2 comments in `g6_brain.h` for three vestigial fields (`nonce_offset`, `enable_low_latency_jobs`, `valid_sample_count`) and the unused PID coefficients (`Kp`/`Ki`/`Kd`).
-- Improved `const` correctness in `g6_brain_get_optimal()` (removed unnecessary cast when calling the Dinkelbach solver).
-- Added recommended minimum task stack size documentation in `INSTALL.md`.
-- Implemented internal slew-rate limiting in `AUTO` mode (frequency steps by `dfs_step_mhz`, voltage limited to 5 mV steps).
-
-**Impact**
-- Stronger numerical consistency between hashrate and power models when efficiency mode is active.
-- Cleaner public API surface and better long-term maintainability.
-- Final minor issues from deep QA resolved.
-- Codebase is now in a clean, production-ready state for field testing.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/g6_brain.h`
-  
-### 2026-05-19 — Critical Bug Fixes (beta3 v4)
-
-**Bug Fixes (from independent QA review — beta3 v3)**
-
-- **Critical (B3-BUG-4)**: Fixed safety layer completely bypassed on all successful RLS updates. A bare `return ESP_OK` had been inserted at the end of the normal update path, immediately before the `safety_layer:` label, inverting the intended control flow: the slew-rate limiter, thermal clamping, and voltage ripple check were only reachable when a sample was *rejected* (bad thermal, high NER, invalid, or outlier). On every *successful* update — the majority of calls — the function returned before any safety logic ran. Fixed by removing the early return and letting the normal path fall through to `safety_layer:`, which already carries its own `return ESP_OK` at the end.
-- **Critical (B3-BUG-5)**: Fixed NVS warm-start silently corrupting `power_theta` and `power_P`. In `g6_brain_load_nvs_fingerprint()`, the buffer offset was advanced by `sizeof(brain->theta)` (24 bytes) after copying `brain->P`, instead of `sizeof(brain->P)` (144 bytes). This caused `power_theta` and `power_P` to be read from the middle of the P-matrix data on every warm-start. The J/TH solver would then compute efficiency gradients against a completely wrong power surface, producing incorrect and potentially aggressive setpoint changes with no visible error. The save path was unaffected. Fixed by correcting the single `sizeof` argument at line 174.
-
-**Impact**
-- Safety layer (slew-rate limiting, proactive thermal scaling, voltage ripple clamping) now correctly executes on every call path, including the normal successful-update path it was designed for.
-- Power model state is correctly restored on reboot. J/TH solver operates on a valid surface from the first post-warm-start cycle.
-- The "Internal Slew-Rate Limiting" test added in beta3 v3, which was structurally correct but failing due to B3-BUG-4, now passes as intended.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-
-### 2026-05-19 — CI Pipeline Repair, Slogan Unification & Warning Cleanup
-
-**CI Pipeline & Compilation Fixes**
-- **Fixed CI Target Build Crash**: Resolved environment compilation failures caused by a non-existent native build command target (`unknown target 'test'`).
-- **Automated Test Compilation**: Linked `test_g6_brain.c` directly into the dummy verification application sources layout inside the GitHub Actions environment, substituting `idf.py test` with a rigid `idf.py build` pass. This ensures active, cloud-based syntax and signature checking for the entire unit test suite on every commit.
-- **Resolved Header Dependency Failures**: Added `nvs_flash` to the explicit component dependency requirements array inside the test execution container (`test_app/main/CMakeLists.txt`), resolving a fatal missing header compilation error for `nvs_flash.h`.
-- **Fixed Syntax Redeclaration Error**: Replaced an accidental local variable trailing comma with a declaration statement semicolon inside `g6_brain_get_optimal()`, correcting a parser parsing bug that previously triggered downstream signature compilation crashes.
-- **Removed Dead Build Warnings**: Extracted the unused global variable declaration `TAG` from `test_g6_brain.c` to comply with strict embedded `-Werror=unused-variable` compile parameters.
-- **Fixed Self-Test Typo**: Corrected `RLS_SYMMETOW_TOLERANCE` to `RLS_SYMMETRY_TOLERANCE` within the covariance validation block inside `g6_brain_self_test()`.
-- **Cleared Test Variable Clutter**: Removed the dead string declaration `TAG` from `test_g6_brain.c` to resolve unused variable compiler build drops.
-
-**Documentation & Slogan Stabilization Pass**
-- **Grounded Vocabulary Migration**: Stripped hyper-inflated marketing jargon and unneeded adjectives (e.g., "aerospace-grade", "avionics-class") across all asset descriptions. Replaced them with exact technical definitions ("Joseph Form Covariance Stabilization", "Statistical Outlier Gating").
-- **Slogan Consolidation**: Streamlined and unified the fractured project messaging layout into a single, cohesive two-tier slogan schema:
-  - *Core Engineering Philosophy*: Applied `"Start safe. Learn. Then optimize."` uniformly across all primary structural code and safety design layers.
-  - *Product Tagline*: Isolated `"The brain your Bitaxe always wanted."` strictly to user-facing onboarding and system configuration maps.
-  - Completely purged all obsolete, redundant variations (such as *"Fail safe. Learn fast..."*) to eliminate text clutter.
-
-### 2026-05-19 — Mathematical Stabilization & C Optimization
-
-**Mathematical Stability**
-- **Joseph Stabilized Covariance Update**: Replaced standard RLS covariance subtraction with the Joseph form. Guarantees the covariance matrix remains symmetric and positive semi-definite despite floating-point truncation, preventing matrix collapse.
-- **Statistical Outlier Gating (3-Sigma)**: The brain now dynamically calculates the expected variance of the innovation. Samples with errors exceeding the 3-sigma bound are rejected as physical sensor glitches, protecting the response surface from corruption.
-
-**Embedded C Optimizations**
-- **Struct Packing**: Reordered `G6BrainState` to group 1-byte booleans, eliminating invisible compiler padding. The struct is now tightly packed, improving cache-line utilization during heavy matrix operations.
-- **Internal Slew-Rate Limiting**: Moved slew-rate constraints inside the brain. The brain now safely steps towards the mathematical optimum based on the ASIC's current physical state, ensuring internal models perfectly match physical reality.
-- **Fast Math**: Replaced `powf` with hardware-accelerated `exp2f` for VFF gradients.
-
-### 2026-05-19 — O(1) Analytical J/TH Solver (Architectural Leap)
-
-**Major Optimization**
-- **Replaced Heuristic Gradient Descent with O(1) Math**: The Dinkelbach inner loop no longer relies on iterative gradient descent with a hardcoded learning rate. It now mathematically calculates the exact global minimum of the combined 2D quadratic sub-problem in a single $O(1)$ step using Cramer's rule.
-- **CPU Efficiency**: Eliminated the inner loop entirely, reducing the solver from ~40+ floating-point operations per step down to a single block of ~15 constant-time operations.
-
-**Cleanup & Configuration**
-- Removed the `G6_JTH_INNER_STEPS` Kconfig option and macro, as the analytical solver eliminates the need for iterative inner steps.
-- Updated `docs/KCONFIG.md` and `docs/TESTING.md` to reflect the simplified solver configuration.
-
-**Impact**
-- **Guaranteed Convergence**: The solver now instantly finds the absolute mathematical minimum of the efficiency surface on every cycle, completely eliminating "zigzagging" or slow convergence caused by arbitrary learning rates.
-- The `v1.0.0-beta3` release is now mathematically optimal and significantly lighter on the ESP32-S3 CPU.
-
-### 2026-05-19 — QA Hardening Pass (Dinkelbach Bugs + Safety/CI Fixes)
-
-**Bug Fixes (from independent QA review)**
-- **Critical (B3-BUG-1)**: Added missing `power_model_quality` check in `optimize_jth_dinkelbach()`. The J/TH solver now gates on **both** `model_quality >= 0.6` **and** `power_model_quality >= 0.6`. This prevents the optimizer from following noisy gradients from an underfit power model on cold boots or early in learning.
-- **Medium (B3-BUG-2)**: Fixed broken convergence detection in the Dinkelbach outer loop. The previous check compared `new_lambda` to `lambda` *after* assignment, making it always true after any improvement. Now correctly uses `prev_lambda` to detect actual convergence.
-- **Minor (B3-BUG-3)**: Removed dead `hr_i`/`pw_i` variables inside the inner gradient loop. Note: this fix was subsequently superseded — the entire inner gradient loop was eliminated in the same build by the O(1) analytical solver (see "O(1) Analytical J/TH Solver" entry above).
-
-**Robustness & Housekeeping**
-- Restored the `"Proactive thermal derating triggers correctly"` Unity test (had been removed). Explicit coverage for the proactive thermal scaling safety path is now back.
-- Updated `docs/TESTING.md` for the beta3 release. Added guidance for testing the Dinkelbach solver and `power_model_quality` behavior.
-- Tightened CI in `.github/workflows/build.yml`: Removed the `|| echo` fallback from the test step so that `idf.py test` failures now correctly fail the build (previously test failures were swallowed).
-
-**Impact**
-- Dinkelbach J/TH optimizer is now properly guarded and numerically safer.
-- Safety test coverage restored.
-- CI provides truthful results instead of always-green badges.
-- No regressions on beta2 functionality.
-
-**Files changed**
-- `components/g6_brain/g6_brain.c`
-- `components/g6_brain/test/test_g6_brain.c`
-- `docs/TESTING.md`
-- `.github/workflows/build.yml`
-
-### 2026-05-19 — Code Quality & Maintainability Pass
-
-**Non-functional improvements** (no behavior changes):
-- Added small, clean helper functions (`evaluate_quadratic()` and `get_quadratic_gradient()`) to reduce code duplication and improve readability of quadratic model evaluations.
-- Reorganized `g6_brain.c` into a clearer logical structure: Small pure helpers → RLS helpers → Safety → NVS → Core algorithms → Public API.
-- Cleaned up `g6_brain.h`: Centralized macro groupings, improved documentation of the `G6BrainState` struct with section comments, and improved general readability.
-
-### 2026-05-19 — QA Fixes & Polish (Critical + Robustness)
-
-**Critical Fixes**
-- Fixed major math bug in Dinkelbach J/TH optimizer: inner gradient descent now correctly operates entirely in normalized space (`fn_inner`/`vn_inner`). Scaling mismatch between normalized gradients and absolute frequency/voltage is resolved.
-- Made NVS fingerprint read/write buffers symmetric and removed Variable Length Array (VLA) from the stack by introducing `#define G6_NVS_FINGERPRINT_BUFFER_SIZE`.
-
-**Improvements**
-- Replaced `powf(2.0f, -L)` with `exp2f(-L)` in Variable Forgetting Factor calculation for better performance on ESP32-S3.
-- Improved test robustness: removed brittle hardcoded `RLS_VFF_SIGMA_SQ` assertion and added `nvs_flash_init()` in `setUp()` for more reliable test execution.
-
-### 2026-05-19 — Phase 2 Early Improvements (J/TH Solver + CI + Quality)
-
-- Added `model_quality` gate in the J/TH optimizer: skips aggressive optimization when `model_quality < 0.6` (important safety improvement for the analytical solver).
-- Added Kconfig options for the Dinkelbach J/TH solver: `G6_JTH_MAX_OUTER_ITERS` and `G6_JTH_INNER_STEPS`.
-- Updated `g6_brain.h` with proper macro definitions for the new Kconfig options (fixed build error).
-- Polished the Dinkelbach-based J/TH optimizer in `g6_brain.c` with improved comments and structure.
-- Updated CI workflow (`.github/workflows/build.yml`): Replaced dummy `echo` step with real `idf.py test` execution and made the test step graceful (non-fatal) for the current minimal CI setup.
-- Updated documentation across `docs/API.md` and `docs/KCONFIG.md` to map new parametric parameters.
-
----
-
-## [1.0.0-beta2] - 2026-05-18 *Completed*
-
-**Status**: First signed-off beta release. Ready for field testing and soak testing.
-
-This release consolidates work completed across May 2026.
-
-### 2026-05-18 — Highlights of this release
-- NVS warm-start fully fixed (models now correctly restore after reboot).
-- Schema version made consistent across header and implementation (`G6_NVS_SCHEMA_VERSION = 2u`).
-- `g6_brain_get_telemetry()` cleanly integrated into the public API.
-- All critical bugs from previous QA rounds resolved and verified.
-- Documentation refreshed for consistency.
-
-### 2026-05-18 — Phase 1 — J/TH Efficiency Mode
-- Added separate RLS power model (`power_theta` + `power_P`).
-- New Kconfig option `G6_ENABLE_EFFICIENCY_MODE` (opt-in, default = `n`).
-- When enabled: brain optimizes for minimum J/TH using the predicted power surface.
-- When disabled: behaves exactly as before (safe hashrate maximizer).
-- NVS schema bumped to v2 with full power model persistence.
-- `g6_brain_reset()` extended to handle Phase 1 fields.
-- No breaking changes — existing integrations continue to work unchanged.
-
-### 2026-05-17 — Polish, Tests & Documentation
-- Significantly expanded Unity test suite including input validations, safety overrides, proactive thermal scale monitoring, and covariance matrix metrics.
-- Added explanatory comment on the `goto safety_layer` safety pattern.
-- Added power sanity check in `g6_brain_update()`.
-- Improved Kconfig with clearer help texts and section organization.
-- Made `INTEGRATION_EXAMPLE.c` the main recommended integration example.
-- Consolidated documentation and updated version parameters to v1.0.0-beta2.
-
-### 2026-05-17 — Phase 0 + 0.1 — Foundation
-- Full Kconfig wiring and control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` default / `AUTO`).
-- NVS auto-save + true warm-start.
-- Comprehensive safety layer, validation sample windows, and centralized parameters.
-
----
-
-## [1.0.0-beta1] - 2026-05-12 *Completed*
-
-**Status**: Extensively reviewed and hardened. Ready for community field testing.
+Pre-field-test polish across two QA rounds. No production code changes; documentation reconciliation and test coverage for previously-implicit contracts.
 
 ### Added
-- Fully self-contained safety layer (thermal, voltage ripple, NER, proactive derating).
-- Stabilized conventional RLS with Variable Forgetting Factor, innovation gating, covariance symmetrization, ridge regularization, and proper cold-start initialization.
-- NVS persistence of both `theta` and full covariance `P` for true warm-start.
-- Sample quality state machine with settle + measure windows.
-- Lambda guard and trace monitoring to prevent covariance collapse.
+- Test pinning the low-share-count rejection contract (`share_count < MIN_SHARE_COUNT` → `ESP_OK`, `update_count` unchanged, `last_safety_status = G6_SAFETY_OK`).
+- Test pinning the insignificant-innovation rejection contract (`xPx < RLS_INNOVATION_THRESHOLD` → same behavior as above).
+- Test pinning `G6_SAFETY_POWER_SANITY` routing for `power_w` out of `[0, 100]` (both positive and negative cases).
+- `last_safety_status` assertions on four existing tests (`G6_SAFETY_THERMAL`, `G6_SAFETY_SAMPLE_QUALITY`, `G6_SAFETY_VR_THERMAL` × 2) to lock in the resulting status, not just the rejection.
+- `docs/SAFETY.md`: "Sensor Sanity — Integrator Responsibility" section documenting which input channels are finiteness-checked vs hardware-bounded.
+- `docs/API.md`: "Sensor Sanity" subsection under `g6_brain_update()` with the same disclosure.
+- `docs/MONITORING.md`: "Distinguishing accepted vs rejected samples" guidance using `update_count` deltas.
+- `docs/GLOSSARY.md`: full `G6SafetyStatus` enum table, "Non-Anomaly Sample Rejection" entry, `update_count` entry.
 
 ### Changed
-- Switched from Bierman-Thornton UD factorization to conventional stabilized RLS for better maintainability.
-- Efficiency objective corrected to proper **J/TH**.
+- `G6_SAFETY_OK` description across `SAFETY.md`, `API.md`, `GLOSSARY.md`, `MONITORING.md`: now accurately reports "no anomaly observed this tick" rather than "sample accepted into the RLS update" — the status is also set on non-anomaly sample rejections.
+- `G6_SAFETY_NER_BACKOFF` description: corrected to reflect actual duration ("momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate"); previously oversold as a sustained re-learning window.
+- `README.md`: replaced three-round "What's New in beta5" section with a single timeless Features list; trimmed Status table to three rows; QA count and test count references deflected to CHANGELOG.
+- `docs/README.md`: QA round count consolidated to "see CHANGELOG" across all three sites.
+- `docs/TESTING.md`: hardcoded test count replaced with CHANGELOG deflection; NER defense bullet retitled "Belt-and-suspenders NER and thermal gating" with explicit "currently unreachable in normal control flow" caveat.
+- Test suite header comment refreshed to describe full coverage scope including non-anomaly rejection paths.
+
+### Deferred
+- B5-NIT-16 — proactive helper guard symmetry (ASIC vs VR). Held for field data from the beta6 soak.
+- `last_update_timestamp` exposure via `G6BrainTelemetry`. Mild API expansion, not coverage polish.
+
+---
+
+## [1.0.0-beta5] — 2026-05-22
+
+Safety-model integrity, full fail-closed contract, telemetry expansion, and pre-tag documentation reconciliation. Tagged as release candidate.
+
+### Added
+- `G6_SAFETY_INPUT_RANGE` enum value for input-validation failures (replaces the prior `G6_SAFETY_VOLTAGE` overload).
+- `G6_SAFETY_P_MATRIX_SINGULAR` is now wired up: the covariance trace-recovery path sets it and emits `WARN: "P matrix diverged — cold-start recovery applied"`.
+- `G6_TEMP_PROACTIVE_MARGIN` Kconfig option and runtime field (mirrors the VR margin design).
+- `G6_EFFICIENCY_MIN_HR_THS` named constant replacing hardcoded `8.0f` literals in the Dinkelbach solver.
+- `G6BrainTelemetry` extended with `best_f`, `best_v`, `model_quality`, `power_model_quality`, `last_efficiency`, `update_count`, `power_update_count`. `last_recommended_voltage` retained as a back-compat alias for `best_v`.
+- NVS schema versioning with bad-blob auto-erase and a `WARN` log line on size/version mismatch.
+- End-to-end Dinkelbach test verifying the J/TH solver actually improves efficiency on synthetic surfaces and respects the model-quality gate.
+- Tests for VR thermal sentinel/proactive/hard-ceiling behavior, P-matrix recovery + operator-state preservation, runtime margin changes, fail-closed routing on NaN/Inf/out-of-bounds inputs, and the const-correct self-test path.
+
+### Changed
+- Fail-closed contract is now uniform: every bad numeric input (NaN, Inf, out-of-bounds, `hr_ths <= 0`) routes to the safety layer with `G6_SAFETY_INPUT_RANGE`. `ESP_ERR_INVALID_ARG` returns **only** when `brain == NULL`.
+- Slew-rate amnesia: upward slew is frozen during *any* active safety condition (thermal, VR thermal, input-range, power sanity, NER backoff, statistical outlier, P-matrix recovery).
+- Dinkelbach solver clamps normalized fractional coordinates to physical bounds to prevent overshoot on degraded power surfaces.
+- Trace accumulation recovery zeros both polynomial surfaces (`theta`, `power_theta`) when resetting P, preventing recursive gain explosions; preserves operator-configured state (mode, ceilings, margins, efficiency mode, NER threshold, slew step) across the event.
+- Safety status priority on collision: ASIC thermal wins over VR thermal when both fire on the same tick.
+- VR proactive margin moved from baked-in macro to per-state runtime field (`vr_temp_proactive_margin`).
+- `G6_SAFETY_VOLTAGE` is now reserved (no code path sets it); kept in the enum for ABI compatibility with earlier beta consumers.
+- `last_efficiency` is now gated on `power_w` being within sanity bounds; retains last known-good value on fail-closed paths instead of reporting garbage.
+- `is_sample_valid()` carries NER and thermal predicates redundantly with the upstream fast-fail (belt-and-suspenders against future refactors).
+- `g6_asic_error_handle_non_blocking()` floor-clamps via `fmaxf(BM1370_X_MIN, ...)` consistent with other safety helpers.
+- `g6_brain_self_test()` signature is now `const`-correct.
+- `G6BrainState` struct repacked: booleans grouped to eliminate compiler padding.
+- `g6_brain_set_defaults()` extracted into a shared static helper between `init` and `reset`.
+- VR sentinel check uses `<= G6_VR_TEMP_NO_SENSOR` / `> G6_VR_TEMP_NO_SENSOR` instead of `< 0.0f`, so a glitched sensor returning a small negative value still disables VR monitoring rather than partially engaging it.
+- Public API documentation (`docs/API.md`) restored after an upload pipeline mishap replaced it with the glossary body; full content reconciliation across all docs against the shipped code.
+- Documentation: softened "Joseph Form" overclaim to "Joseph-style congruence + ridge" consistently.
 
 ### Fixed
-- Critical cold-start bug (zeroed P matrix).
+- NaN telemetry silently skipping safety ticks (manifesto §3.7 violation): non-finite inputs now route fail-closed instead of returning `ESP_ERR_INVALID_ARG`.
+- `g6_brain_recover_cold_start()` silently disabling `use_efficiency_mode`: operator-set efficiency mode is now snapshotted and restored across recovery.
+- Out-of-bounds telemetry incorrectly setting `G6_SAFETY_VOLTAGE`, misdirecting operators to inspect their VRM.
+- Slew-limit validation test silently broken at runtime (theta values produced an out-of-bounds optimum, making the slew clamp inactive).
+- Asymmetric floor clamping in NER backoff (now consistent with other safety helpers).
+- Dead `power_cold_start` struct field removed (zero readers, zero writers).
+- Orphaned references to deleted `power_cold_start` causing compile errors.
+- Stray `}` at end of `test_g6_brain.c` breaking the build.
+- `G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT` macro used at runtime instead of the per-state field, so runtime margin changes had no effect.
+- ASIC proactive thermal margin duplicated at two call sites with identical `5.0f` literals (now single Kconfig-backed field).
+- `G6_JTH_MAX_OUTER_ITERS` Kconfig option silently ignored due to unguarded `#define` in the header.
+- Stale `v1.0.0-beta3` version stamp in `test_g6_brain.c`.
+
+---
+
+## [1.0.0-beta4] — 2026-05-20
+
+VR thermal safety (two-tier protection), tick/millisecond unit corrections, integration-layer data-quality fixes.
+
+### Added
+- VR regulator temperature monitoring as a second thermal tier alongside ASIC die temperature.
+  - New `vr_temp_c` parameter to `g6_brain_update()` (between `temp_c` and `err_pct`). **Breaking API change.**
+  - `G6_VR_TEMP_NO_SENSOR` sentinel (`-1.0f`) for hardware without a VR sensor — all VR checks silently skip.
+  - `G6_SAFETY_VR_THERMAL` enum value.
+  - `G6_VR_TEMP_CEILING` (default 85°C, range 70–105) and `G6_VR_TEMP_PROACTIVE_MARGIN` (default 5°C, range 2–15) Kconfig options.
+  - Proactive zone (`vr_temp_c > ceiling − margin`): steps `best_v` back by ×0.992 per cycle, frequency untouched.
+  - Hard ceiling (`vr_temp_c ≥ ceiling`): steps back both `best_v` (×0.985) and `best_f` (×0.96).
+- `last_safety_status` tracking wired through all safety paths (telemetry was always reporting `G6_SAFETY_OK` before).
+- Symmetric `Power Outlier Rejected` WARN log line for power-model outlier rejections.
+- Unit tests for VR sentinel/proactive/hard-ceiling behavior.
+
+### Changed
+- ASIC temperature gates RLS learning (sample discarded above ceiling). VR temperature *never* gates learning — only constrains setpoints in the safety layer. Rationale: VR heat doesn't corrupt hashrate or power measurements; it only means the setpoints must be reined in.
+- `goto safety_layer` is now the default control flow on rejected samples (was an early `return` on power-validation failures).
+- `G6_NVS_SCHEMA_VERSION` corrected from `2u` to `3u` to match `g6_brain.c`.
+- Integration example (`docs/INTEGRATION_EXAMPLE.c`): pass window-delta `sharesAccepted` not cumulative; feed 10m hashrate average during warm-up, switch to live once `model_quality ≥ 0.5`; compute NER from `Δerrors / (window_hr × Δt)`; log VRM droop coefficient on first valid frame; scale shares by `poolDifficulty / G6_REF_POOL_DIFFICULTY`.
+
+### Fixed
+- Slew-rate limiter fighting safety derating: a `safety_active` flag now suspends upward slew whenever any safety condition is active, eliminating sawtooth oscillation at the thermal edge.
+- Innovation dead-zone (`xᵀPx < 1e-4`) was incorrectly logged as outlier rejections; now silently skips the RLS update.
+- `SETTLE_MS` and `MIN_WINDOW_MS` comparisons mixing raw tick deltas with millisecond constants.
+- Invalid `power_w` fail-open (was returning early before safety layer could run).
+- Redundant `NVS_SCHEMA_VERSION` dual-definition in `g6_brain.c`; replaced with the canonical macro from the header.
+- `docs/API.md` out of sync with beta4 signature (missing `vr_temp_c` parameter).
+- Dead `stored_size` read in `g6_brain_load_nvs_fingerprint()`.
+
+---
+
+## [1.0.0-beta3] — 2026-05-20
+
+O(1) analytical J/TH solver, Joseph-form covariance stabilization, 3-sigma outlier gating.
+
+### Added
+- 3-sigma statistical outlier gating with localized coordinate-specific innovation variance mapping (`xᵀPx + 0.5f`); rejects sensor glitches without distorting the response surface.
+- `model_quality ≥ 0.6` **and** `power_model_quality ≥ 0.6` gates on the J/TH efficiency solver; prevents following noisy gradients from underfit models.
+- `G6_JTH_MAX_OUTER_ITERS` Kconfig option.
+- `G6_NVS_FINGERPRINT_BUFFER_SIZE` define replacing a stack VLA in the NVS save/load buffers.
+- `evaluate_quadratic()` and `get_quadratic_gradient()` helpers reducing duplicated quadratic evaluations.
+- Phase 2 reservation comments on vestigial struct fields (`nonce_offset`, `enable_low_latency_jobs`, `valid_sample_count`, `Kp`/`Ki`/`Kd`).
+- Internal slew-rate limiting in `AUTO` mode: frequency steps by `dfs_step_mhz`, voltage limited to 5 mV steps.
+- Recommended minimum task stack size documentation in `INSTALL.md`.
+
+### Changed
+- **Dinkelbach J/TH solver replaced** iterative gradient descent with an O(1) analytical inner solve using Cramer's rule. Eliminated the inner loop entirely (~40+ FP ops/step → ~15 constant-time ops); guarantees convergence to the exact mathematical minimum of the quadratic sub-problem each cycle.
+- Joseph-style covariance stabilization replaces standard RLS subtraction; keeps P symmetric and positive semi-definite under floating-point arithmetic.
+- Outlier gating runs on both hashrate and power models *before* either is updated (eliminates J/TH drift from asymmetric rejections in efficiency mode).
+- Dinkelbach outer-loop convergence detection now correctly uses `prev_lambda` (previous check was always true after any improvement).
+- `G6BrainState` struct packed: 1-byte booleans grouped to eliminate compiler padding.
+- `powf(2.0f, -L)` → `exp2f(-L)` in Variable Forgetting Factor (hardware-accelerated on ESP32-S3).
+- `g6_brain.c` reorganized into clear logical sections (pure helpers → RLS → safety → NVS → core → public API).
+- `g6_brain.h` macro groupings centralized; struct documented with section comments.
+- Documentation vocabulary grounded: removed "aerospace-grade" / "avionics-class" language in favor of exact technical terms.
+
+### Fixed
+- Safety layer completely bypassed on successful RLS updates: a stray `return ESP_OK` before the `safety_layer:` label made the slew-rate limiter, thermal clamping, and voltage ripple checks unreachable on the happy path.
+- NVS warm-start silently corrupting `power_theta` and `power_P`: offset advanced by `sizeof(theta)` instead of `sizeof(P)` after the P-matrix copy, reading `power_*` from the middle of P data.
+- Silent power-model truncation on NVS save: missing `offset += sizeof(power_P)` saved a 200-byte frame instead of the full 344 bytes.
+- Inverted safety layer execution order: thermal/ripple checks were running *before* the slew limiter, so safety reductions were immediately undone within the same cycle.
+- Dinkelbach J/TH inner gradient now operates entirely in normalized space (scaling mismatch between normalized gradients and absolute MHz/mV resolved).
+- Slew-rate validation test had zero-determinant mock `theta` coefficients, causing the convexity guard to short-circuit the test silently.
+- `RLS_SYMMETRY_TOLERANCE` typo (`RLS_SYMMETOW_TOLERANCE`) in `g6_brain_self_test()`.
+- CI test step no longer swallows failures (`|| echo` fallback removed).
+- Brittle hardcoded `RLS_VFF_SIGMA_SQ` test assertion replaced.
+- `nvs_flash_init()` added to test `setUp()` for reliable execution.
+
+### Removed
+- `G6_JTH_INNER_STEPS` Kconfig option (no longer meaningful with the analytical solver).
+- Iterative Dinkelbach inner gradient loop (eliminated by the analytical replacement).
+- Unused `TAG` static global in `test_g6_brain.c`.
+
+---
+
+## [1.0.0-beta2] — 2026-05-18
+
+J/TH efficiency mode (opt-in), NVS warm-start hardening, public telemetry API.
+
+### Added
+- `G6_ENABLE_EFFICIENCY_MODE` Kconfig option (default `n`).
+- Separate RLS power model (`power_theta` + `power_P`) for J/TH optimization.
+- `g6_brain_get_telemetry()` and `G6BrainTelemetry` struct integrated into the public API.
+- NVS schema bumped to v2 with full power-model persistence.
+- Power sanity check in `g6_brain_update()`.
+- Unity test coverage expansion: input validation, safety overrides, proactive thermal scale, covariance matrix metrics.
+- Kconfig wiring and full control mode enforcement (`OBSERVE_ONLY` / `RECOMMEND` / `AUTO`).
+
+### Changed
+- `g6_brain_reset()` extended to clear Phase 1 fields.
+- `INTEGRATION_EXAMPLE.c` promoted to the canonical integration reference.
+- Kconfig help texts and section organization improved.
+- Documentation refreshed for consistency.
+
+### Fixed
+- NVS warm-start (models now correctly restore after reboot).
+- Schema version consistency between header and implementation.
+
+---
+
+## [1.0.0-beta1] — 2026-05-12
+
+First reviewed and hardened beta. Ready for community field testing.
+
+### Added
+- Self-contained safety layer (thermal, voltage ripple, NER, proactive derating).
+- Stabilized RLS with Variable Forgetting Factor, innovation gating, covariance symmetrization, ridge regularization, cold-start initialization.
+- NVS persistence of `theta` + full covariance `P` for warm-start.
+- Sample quality state machine (settle + measure windows).
+- Lambda guard and trace monitoring against covariance collapse.
+
+### Changed
+- Bierman-Thornton UD factorization replaced with conventional stabilized RLS (maintainability).
+- Efficiency objective corrected to proper J/TH.
+
+### Fixed
+- Cold-start bug (zeroed P matrix).
 - Double-settle timing bug.
-- Thermal scaling and clamps now always execute via `goto safety_layer` pattern even on rejected samples.
+- Thermal scaling and clamps now always execute via `goto safety_layer` pattern, including on rejected samples.
 
 ---
 
-## [v1.0.0-beta] - May 2026 (Early Development)
+## [1.0.0-beta] — May 2026
 
-**Hardening Foundations**
-- Added Enhanced Feed-Forward Predictive Cooling (dP/dt + K_ff term for Vcore prediction).
-- Added I2C Heartbeat + 9-clock sanitization at init.
-- Added Voltage-Floor Interlock (hard 400mV–1200mV clamp for BM1366 safety).
-- Integrated explicit self-test criteria boundaries.
+Early development. Foundations of the current architecture.
 
-**QA Audit Response**
-- RLS PSD safeguard upgraded to strict Positive Definite (nonzero ridge_epsilon enforced).
+### Added
+- Enhanced Feed-Forward Predictive Cooling (`dP/dt + K_ff` term for Vcore prediction).
+- I2C heartbeat + 9-clock sanitization at init.
+- Voltage-Floor Interlock (hard 400–1200 mV clamp for BM1366 safety).
+- Self-test criteria boundaries.
+- `GLOSSARY.md` and `AGENTS.md` safety-invariants section.
+
+### Changed
+- RLS PSD safeguard upgraded to strict positive definite (nonzero `ridge_epsilon` enforced).
 - Cold-start guard extended from 10 → 30 ticks.
-- Added GLOSSARY.md and AGENTS.md safety invariants section.
-- Main branch locked as sole development line.
+- Main branch locked as the sole development line.
 
 ---
 
-## Earlier History (Pre-Beta)
+## Pre-Beta
 
 - **v1.0.0-beta.0**: Initial quadratic RLS + safety foundations + NVS fingerprint (Bierman-Thornton prototype).
-- Pre-v1.0 work archived in `v1.8` branch history.
-- Early development focused on RLS modeling, safety interlocks, and ESP-Miner integration patterns.
-
----
-
-**Next Phase (Phase 2)**: Analytical J/TH solver improvements, RLS enhancements, active thermal slope detection (ΔT/dt), PID fan control integration, and extended soak testing.
+- Earlier work focused on RLS modeling, safety interlocks, and ESP-Miner integration patterns. Archived in the `v1.8` branch.
