@@ -1,0 +1,83 @@
+# Bitaxe G6 Brain - .gitignore
+# Clean, comprehensive ignore list for ESP-IDF + C projects
+
+# ======================
+# Build & Generated
+# ======================
+build/
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+dependencies.lock
+managed_components/
+*.bin
+*.elf
+*.map
+*.o
+*.a
+*.hex
+*.fw
+
+# ======================
+# ESP-IDF Specific
+# ======================
+# Partition tables and flash images
+partitions*.csv
+bootloader/
+
+# ======================
+# IDE / Editor
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ======================
+# OS Generated
+# ======================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ======================
+# Python / Scripts
+# ======================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+env/
+venv/
+
+# ======================
+# Logs & Temp
+# ======================
+*.log
+*.tmp
+*.temp
+core
+crash.log
+
+# ======================
+# Test & Debug
+# ======================
+test/build/
+*.test
+*.gcda
+*.gcno
+*.gcov
+
+# ======================
+# Documentation (if generated)
+# ======================
+# docs/_build/          # Uncomment if you ever use Sphinx/Doxygen
+# *.pdf                 # Uncomment if you generate PDFs
+
+# ======================
+# Sensitive / Local
+# ======================
+# wifi_credentials.h
+# secrets/
+# nvs_data.bin
