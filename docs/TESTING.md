@@ -2,33 +2,15 @@
 
 This guide is intended for community members testing the **v1.0.0-beta5** release.
 
-## What's New in beta5
+## What to Test
 
-**Round 5 hardening** (originally shipped beta5):
+Read [`CHANGELOG.md`](../CHANGELOG.md) for the full list of changes by release. From a tester's perspective, the behaviors most worth exercising in the current build are:
 
-- **Fail-Closed Validation Routing** — Out-of-bounds sensor readings (e.g., impossible frequencies or voltages) no longer result in ignored telemetry. They actively trigger the safety layer to freeze the optimizer and enforce hardware clamps.
-- **Slew-Rate Amnesia Protection** — Upward setpoint slew is now strictly frozen during *any* safety anomaly (power sanity, statistical outliers, thermal events) rather than continuing to climb based on stale mathematical optimums.
-- **Trace Accumulation Recovery** — If the estimator's covariance matrix trace exceeds safe thresholds during long unbounded learning loops, the brain now safely zeroes the polynomial surface and resets matrix confidence to prevent recursive gain explosions.
-- **Dinkelbach Solver Bounding** — The exact analytical efficiency solver now explicitly clamps fractional coordinates, eliminating mathematical overshoot on degraded power surfaces.
-- **Configurable ASIC Proactive Thermal Margin** — `G6_TEMP_PROACTIVE_MARGIN` is now a Kconfig option and lives in the state struct, matching the VR margin design.
-- **VR Proactive Margin Runtime** — `brain->vr_temp_proactive_margin` replaces the baked-in default macro at all call sites.
-- **Safety Status Priority** — Safety helpers are reordered so ASIC thermal, the higher-priority condition, wins on collision when both ASIC and VR conditions fire on the same tick.
-- **Belt-and-suspenders NER and thermal gating** — `is_sample_valid()` carries the same NER and thermal predicates as the upstream fast-fail at the top of `g6_brain_update()`. Currently unreachable in normal control flow; retained to guard future refactors that might delete the upstream gates.
-
-**Round 7 safety-model integrity** (full fail-closed contract):
-
-- **Uniform fail-closed input handling** — Every bad numeric input (NaN, Inf, out-of-bounds, `hr_ths <= 0`) now routes to the safety layer with `G6_SAFETY_INPUT_RANGE`. `ESP_ERR_INVALID_ARG` is returned **only** when `brain == NULL`. Previous behavior of returning early on NaN was silently skipping safety ticks — that's fixed.
-- **`G6_SAFETY_INPUT_RANGE` added** — new enum value, replaces the prior overload of `G6_SAFETY_VOLTAGE` for input-range violations. `G6_SAFETY_VOLTAGE` is now reserved for a future VRM-ripple check.
-- **`G6_SAFETY_P_MATRIX_SINGULAR` wired up** — the trace-recovery path now sets this status so operators see covariance recovery events in telemetry, plus a single `WARN`-level log line.
-- **Efficiency mode preserved across recovery** — `g6_brain_recover_cold_start()` now snapshots `use_efficiency_mode` along with the other operator-configured fields.
-- **`last_efficiency` no longer reports garbage** on fail-closed paths where `power_w` was unvalidated — the field now retains its last known-good value.
-
-**Pre-v1.0 polish** (telemetry & test maturity):
-
-- **`G6BrainTelemetry` extended** — `best_f`, `best_v`, `model_quality`, `power_model_quality`, `last_efficiency`, `update_count`, `power_update_count` now exposed via the snapshot. `last_recommended_voltage` retained as a back-compat alias for `best_v`.
-- **Named constants** — `G6_EFFICIENCY_MIN_HR_THS` (8.0 TH/s) replaces hardcoded literals in the Dinkelbach solver.
-- **`g6_brain_self_test()` is now const-correct** — accepts `const G6BrainState *`, source-compatible with prior callers.
-- **End-to-end Dinkelbach test** — synthetic surfaces with known-optimal points; verifies the solver actually improves J/TH and respects the quality gate. CI gap exposed: tests are compiled but not run on hardware — see [Reporting Issues](#reporting-issues).
+- **Fail-closed input handling.** Every bad numeric input (NaN, Inf, out-of-bounds, `hr_ths <= 0`) routes through the safety layer with `G6_SAFETY_INPUT_RANGE` rather than being silently dropped. `ESP_ERR_INVALID_ARG` is reserved for `brain == NULL`. Confirm via telemetry: a sensor glitch should be visible as a status, never as a missed tick.
+- **Two-tier thermal protection.** ASIC die temperature gates RLS learning; VR regulator temperature is enforced on the setpoint path. Both have configurable hard ceilings and proactive margins. If your board has a VR sensor, pass `vr_temp_c` and verify both proactive and hard-ceiling derating; otherwise pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`).
+- **Slew-rate amnesia.** Upward slew is frozen during *any* active safety condition. After a fault clears, the controller resumes from the constrained setpoint, not from the pre-fault optimum.
+- **P-matrix divergence recovery.** When the covariance trace exceeds bounds, the brain re-cold-starts while preserving operator config (mode, ceilings, margins, efficiency mode, slew step, NER threshold). One `WARN`-level log line and `G6_SAFETY_P_MATRIX_SINGULAR` on the recovery tick — hard to reach in practice, but if it happens you should see exactly this signature.
+- **Telemetry-as-primary-signal.** The brain logs almost nothing during normal operation; the `G6BrainTelemetry` snapshot is the canonical health signal. Watch `update_count` deltas alongside `safety_status` — see [`MONITORING.md`](MONITORING.md) for the "distinguishing accepted vs rejected samples" guidance.
 
 ## Recommended Starting Point
 
@@ -36,7 +18,7 @@ This guide is intended for community members testing the **v1.0.0-beta5** releas
 - Do **not** switch to `AUTO` mode until you have monitored tracking logs for several hours.
 - Use `G6_MODE_OBSERVE_ONLY` if you only want background metrics without tuning suggestions.
 
-If your hardware provides VR temperature (`vrTemp`), pass it to `g6_brain_update()` so the new two-tier thermal protection can activate. Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) otherwise.
+If your hardware provides VR temperature (`vrTemp`), pass it to `g6_brain_update()` so the two-tier thermal protection can activate. Use `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) otherwise.
 
 ## What to Monitor
 
