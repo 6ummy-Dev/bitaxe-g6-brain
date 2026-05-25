@@ -82,6 +82,12 @@ static bool is_thermal_safe(const G6BrainState *brain, float temp_c)
 static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
 {
     if (!brain || !isfinite(temp_c)) return;
+    /* Ceiling and margin sanity — mirrors the VR helper's entry guards.
+     * Defense-in-depth against a future refactor that corrupts these fields;
+     * normal operation never hits these paths because both are set from
+     * Kconfig-defined defaults and validated at init/reset. */
+    if (!isfinite(brain->temp_ceiling) || brain->temp_ceiling <= 0.0f) return;
+    if (!isfinite(brain->temp_proactive_margin)) return;
     if (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) {
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
