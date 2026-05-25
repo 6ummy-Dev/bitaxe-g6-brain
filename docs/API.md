@@ -100,6 +100,7 @@ The `G6BrainTelemetry` struct exposes a consistent point-in-time view of brain s
 | `last_efficiency` | `float` | Most recent W/TH ratio (only updated when `power_w` is within sanity bounds) |
 | `update_count` | `uint32_t` | Number of accepted hashrate RLS updates since last reset |
 | `power_update_count` | `uint32_t` | Number of accepted power RLS updates (efficiency mode only) |
+| `last_update_timestamp` | `uint32_t` | FreeRTOS tick (`xTaskGetTickCount()`) of the most recent accepted RLS update. Advances iff `update_count` advances; both move together on accepted samples, neither moves on rejected ones. Wraps roughly every 49.7 days at the 1ms default tick rate — operators comparing across long windows should reset or wrap-correct. |
 | `safety_status` | `G6SafetyStatus` | Current operational state (see [Safety Status Reference](#safety-status-reference)) |
 | `efficiency_mode_active` | `bool` | `true` when `use_efficiency_mode` is set at runtime |
 | `last_recommended_voltage` | `float` | Backward-compatibility alias — mirrors `best_v` exactly |

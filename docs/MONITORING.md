@@ -41,6 +41,7 @@ The key fields to surface in dashboards or alerts:
 | `power_model_quality` | Power model fit (efficiency mode only). Must be ≥ 0.6 alongside `model_quality` for the Dinkelbach J/TH solver to run. |
 | `last_efficiency` | Most recent observed W/TH ratio. Hold-over field — only updated when `power_w` is sane. |
 | `update_count`, `power_update_count` | Monotonic counters of accepted RLS updates per estimator. Useful as a "is the brain actually learning" heartbeat — see [Distinguishing accepted vs rejected samples](#distinguishing-accepted-vs-rejected-samples) below. |
+| `last_update_timestamp` | FreeRTOS tick of the most recent accepted RLS update. Pairs with `update_count`: both advance together on an accepted sample, neither moves on a rejection. Lets you tell "the brain learned 30s ago" from "the brain hasn't learned since boot" without sampling fast enough to catch the update tick. Wraps every ~49.7 days at the default 1ms tick rate. |
 | `trace_P_hashrate`, `trace_P_power` | Covariance traces. Trending up over a long horizon is normal; spikes near `RLS_TRACE_MAX` (default 1e7) indicate the recovery path is about to fire. |
 | `last_innovation` | Most recent prediction error on hashrate. Sustained large values indicate the model isn't tracking. |
 | `safety_status` | Current `G6SafetyStatus`. See [Safety Status Monitoring](#safety-status-monitoring). |

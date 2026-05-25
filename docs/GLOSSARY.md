@@ -85,6 +85,8 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **update_count** Monotonic counter of accepted hashrate RLS updates since last reset. A flat `update_count` paired with `safety_status = G6_SAFETY_OK` indicates samples are being rejected on the non-anomaly quality gates (low share count or insignificant innovation) — a normal startup/post-pool-change pattern, not an error.
 
+**last_update_timestamp** FreeRTOS tick (`xTaskGetTickCount()`) captured at the moment of the most recent accepted RLS update. Paired with `update_count`: both advance together on an accepted sample, neither moves on a rejection (sample-quality, thermal, NER, input-range, or power-sanity). Wraps every ~49.7 days at the default 1ms tick rate.
+
 ---
 
 ## Configuration & Limits
