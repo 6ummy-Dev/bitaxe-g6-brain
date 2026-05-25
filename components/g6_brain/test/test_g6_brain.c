@@ -162,6 +162,42 @@ TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain]") {
     TEST_ASSERT_LESS_OR_EQUAL(700.0f, test_brain.best_f);
 }
 
+TEST_CASE("Proactive thermal helper bails on corrupted temp_ceiling", "[g6_brain]") {
+    /* B5-NIT-16 hardening: mirrors the VR helper's ceiling sanity guard.
+     * If brain->temp_ceiling is ever non-finite or non-positive (a future
+     * refactor corrupting the field), the proactive helper must not derate
+     * the setpoint based on bogus arithmetic. The hard-thermal path will
+     * still mark the tick as G6_SAFETY_THERMAL via is_thermal_safe(); the
+     * assertion here is specifically that the proactive helper's body
+     * does not run, so best_f / best_v are not scaled by 0.96 / 0.992. */
+
+    /* Case 1: NaN ceiling. is_thermal_safe returns false (ceiling not finite),
+     * so status becomes THERMAL via the upstream gate. Proactive helper guard
+     * fires on the isfinite(temp_ceiling) check — body skipped. */
+    float saved_f = test_brain.best_f;
+    float saved_v = test_brain.best_v;
+    test_brain.temp_ceiling = NAN;
+
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 115.0f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_FLOAT(saved_f, test_brain.best_f);
+    TEST_ASSERT_EQUAL_FLOAT(saved_v, test_brain.best_v);
+
+    /* Case 2: zero ceiling. is_thermal_safe sees temp_c=55 not < 0 → false →
+     * status becomes THERMAL. Without the new guard, the proactive helper
+     * would evaluate `55 > (0 - margin)` as true and scale the setpoint
+     * down based on a bogus ceiling. With the guard, body is skipped. */
+    test_brain.temp_ceiling = 0.0f;
+    saved_f = test_brain.best_f;
+    saved_v = test_brain.best_v;
+
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 115.0f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_FLOAT(saved_f, test_brain.best_f);
+    TEST_ASSERT_EQUAL_FLOAT(saved_v, test_brain.best_v);
+    TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
+}
+
 /* ====================== RLS & OUTLIER GATING ====================== */
 
 TEST_CASE("Statistical Outlier Gating rejects severe sensor anomalies", "[g6_brain]") {
