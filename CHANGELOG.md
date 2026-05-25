@@ -14,8 +14,8 @@ Pre-field-test polish. Test coverage for previously-implicit contracts, document
 - Test pinning the low-share-count rejection contract (`share_count < MIN_SHARE_COUNT` → `ESP_OK`, `update_count` unchanged, `last_safety_status = G6_SAFETY_OK`).
 - Test pinning the insignificant-innovation rejection contract (`xPx < RLS_INNOVATION_THRESHOLD` → same behavior as above).
 - Test pinning `G6_SAFETY_POWER_SANITY` routing for `power_w` out of `[0, 100]` (both positive and negative cases).
-- Test pinning the ASIC proactive helper's ceiling sanity guard (`temp_ceiling = NaN` and `temp_ceiling = 0.0f` cases — helper body does not run; setpoints unchanged).
-- Test pinning the `last_update_timestamp` ↔ `update_count` pairing contract (both advance on accepted samples, neither moves on rejected samples — exercised across low-share and input-range rejection paths).
+- Test pinning the ASIC proactive helper's ceiling sanity guard (`temp_ceiling = NaN` and `temp_ceiling = 0.0f` cases — helper body does not run; setpoints unchanged; `last_safety_status = G6_SAFETY_THERMAL` from the upstream `is_thermal_safe()` gate in both cases).
+- Test pinning the `last_update_timestamp` ↔ `update_count` pairing contract (both advance on accepted samples, neither moves on rejected samples — exercised across low-share, input-range, and final-accepted paths with the full `OK → OK → INPUT_RANGE → OK` status trajectory pinned).
 - `last_safety_status` assertions on four existing tests (`G6_SAFETY_THERMAL`, `G6_SAFETY_SAMPLE_QUALITY`, `G6_SAFETY_VR_THERMAL` × 2) to lock in the resulting status, not just the rejection.
 - `G6BrainTelemetry.last_update_timestamp` — FreeRTOS tick of the most recent accepted RLS update, paired with `update_count`. Internal field already existed; this exposes it via the snapshot and tightens its assignment point so the pairing contract holds.
 - `docs/SAFETY.md`: "Sensor Sanity — Integrator Responsibility" section documenting which input channels are finiteness-checked vs hardware-bounded.
