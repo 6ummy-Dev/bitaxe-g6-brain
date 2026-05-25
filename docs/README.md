@@ -2,7 +2,7 @@
 
 Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370.
 
-A clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints. Hardened across eight QA rounds for fail-closed safety, numerical stability, and educational clarity.
+A clean, modular ESP-IDF control component that uses **Recursive Least Squares (RLS) quadratic response surface modeling** to dynamically optimize frequency and voltage while enforcing strict hardware safety constraints. Engineered for fail-closed safety, numerical stability, and educational clarity.
 
 ---
 
@@ -48,7 +48,6 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 - Per-chip NVS fingerprinting (warm start across power cycles, with schema versioning and bad-blob auto-erase).
 - Clean `G6BrainTelemetry` snapshot for monitoring and dashboards.
 - Modular, single-threaded, swappable component.
-- Hardened through nine QA review cycles with explicit changelog accountability.
 
 ---
 
@@ -56,7 +55,6 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 
 - **Version:** v1.0.0-beta5 (May 2026)
 - **Maturity:** Beta — ready for field testing (48h+ soak recommended before v1.0 tag)
-- **QA:** Nine review cycles completed; full code+docs audit pass
 - **License:** MIT
 
 ---
