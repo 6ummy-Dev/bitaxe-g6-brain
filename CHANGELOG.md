@@ -8,29 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] — 1.0.0-beta6
 
-Pre-field-test polish across two QA rounds. No production code changes; documentation reconciliation and test coverage for previously-implicit contracts.
+Pre-field-test polish. Test coverage for previously-implicit contracts, documentation reconciliation, and one targeted hardening of the ASIC proactive thermal helper (defense-in-depth, no observable behavior change in normal operation).
 
 ### Added
 - Test pinning the low-share-count rejection contract (`share_count < MIN_SHARE_COUNT` → `ESP_OK`, `update_count` unchanged, `last_safety_status = G6_SAFETY_OK`).
 - Test pinning the insignificant-innovation rejection contract (`xPx < RLS_INNOVATION_THRESHOLD` → same behavior as above).
 - Test pinning `G6_SAFETY_POWER_SANITY` routing for `power_w` out of `[0, 100]` (both positive and negative cases).
+- Test pinning the ASIC proactive helper's ceiling sanity guard (`temp_ceiling = NaN` and `temp_ceiling = 0.0f` cases — helper body does not run; setpoints unchanged).
 - `last_safety_status` assertions on four existing tests (`G6_SAFETY_THERMAL`, `G6_SAFETY_SAMPLE_QUALITY`, `G6_SAFETY_VR_THERMAL` × 2) to lock in the resulting status, not just the rejection.
 - `docs/SAFETY.md`: "Sensor Sanity — Integrator Responsibility" section documenting which input channels are finiteness-checked vs hardware-bounded.
 - `docs/API.md`: "Sensor Sanity" subsection under `g6_brain_update()` with the same disclosure.
 - `docs/MONITORING.md`: "Distinguishing accepted vs rejected samples" guidance using `update_count` deltas.
 - `docs/GLOSSARY.md`: full `G6SafetyStatus` enum table, "Non-Anomaly Sample Rejection" entry, `update_count` entry.
+- `docs/AGENTS.md`: explicit note under "Thermal Protection" documenting the two intentional asymmetries between the ASIC and VR proactive helpers (sensor-sentinel guard, tiered response structure) and the entry-guard pattern that is now shared by both.
 
 ### Changed
+- `g6_safety_proactive_thermal_scale()` now guards on `isfinite(temp_ceiling) && temp_ceiling > 0.0f` and `isfinite(temp_proactive_margin)` before evaluating the proactive threshold — mirrors the VR helper's pattern. Defense-in-depth against a future refactor corrupting either field; no behavior change in normal operation because both are set from Kconfig-defined defaults and validated at init/reset. Closes B5-NIT-16.
 - `G6_SAFETY_OK` description across `SAFETY.md`, `API.md`, `GLOSSARY.md`, `MONITORING.md`: now accurately reports "no anomaly observed this tick" rather than "sample accepted into the RLS update" — the status is also set on non-anomaly sample rejections.
 - `G6_SAFETY_NER_BACKOFF` description: corrected to reflect actual duration ("momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate"); previously oversold as a sustained re-learning window.
-- `README.md`: replaced three-round "What's New in beta5" section with a single timeless Features list; trimmed Status table to three rows; QA count and test count references deflected to CHANGELOG.
-- `docs/README.md`: QA round count consolidated to "see CHANGELOG" across all three sites.
-- `docs/TESTING.md`: hardcoded test count replaced with CHANGELOG deflection; NER defense bullet retitled "Belt-and-suspenders NER and thermal gating" with explicit "currently unreachable in normal control flow" caveat.
+- `README.md`: replaced three-round "What's New in beta5" section with a single timeless Features list; trimmed Status table to three rows; QA count and test count references deflected to CHANGELOG; "per-round QA log" wording removed.
+- `docs/README.md`: "eight QA rounds" and "nine QA review cycles" claims removed (round-count forensics live in git, not the docs).
+- `docs/TESTING.md`: round-numbered "What's New in beta5" section replaced with a tester-focused "What to Test" summary pointing at `CHANGELOG.md` for details; stale "the new two-tier thermal protection" qualifier dropped.
 - Test suite header comment refreshed to describe full coverage scope including non-anomaly rejection paths.
 
 ### Deferred
-- B5-NIT-16 — proactive helper guard symmetry (ASIC vs VR). Held for field data from the beta6 soak.
-- `last_update_timestamp` exposure via `G6BrainTelemetry`. Mild API expansion, not coverage polish.
+- `last_update_timestamp` exposure via `G6BrainTelemetry`. Mild API expansion, not coverage polish — the internal field already exists and is written on accepted updates; only the snapshot surface is pending. Defer to a separate PR.
 
 ---
 
