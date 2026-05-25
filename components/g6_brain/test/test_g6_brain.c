@@ -182,6 +182,7 @@ TEST_CASE("Proactive thermal helper bails on corrupted temp_ceiling", "[g6_brain
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_FLOAT(saved_f, test_brain.best_f);
     TEST_ASSERT_EQUAL_FLOAT(saved_v, test_brain.best_v);
+    TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
 
     /* Case 2: zero ceiling. is_thermal_safe sees temp_c=55 not < 0 → false →
      * status becomes THERMAL. Without the new guard, the proactive helper
@@ -643,12 +644,13 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
     vTaskDelay(1);
 
     /* Rejected sample: low share count. Neither update_count nor timestamp
-     * should advance. */
+     * should advance. Per the non-anomaly rejection contract, status stays OK. */
     ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
                           55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, /*shares=*/5);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_UINT32(uc_after_accept, test_brain.update_count);
     TEST_ASSERT_EQUAL_UINT32(ts_after_accept, test_brain.last_update_timestamp);
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 
     /* Rejected sample: out-of-bounds frequency (fail-closed). Same expectation. */
     ret = g6_brain_update(&test_brain, 1500.0f, 1220.0f, 120.0f, 15.0f,
@@ -658,11 +660,13 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
     TEST_ASSERT_EQUAL_UINT32(uc_after_accept, test_brain.update_count);
     TEST_ASSERT_EQUAL_UINT32(ts_after_accept, test_brain.last_update_timestamp);
 
-    /* Accepted sample again. Both must advance together. */
+    /* Accepted sample again. Both must advance together. Status resets to OK
+     * from the prior INPUT_RANGE since an accepted sample clears it. */
     vTaskDelay(1);
     ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 121.0f, 15.0f,
                           55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_THAN(uc_after_accept, test_brain.update_count);
     TEST_ASSERT_GREATER_THAN(ts_after_accept, test_brain.last_update_timestamp);
+    TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 }
