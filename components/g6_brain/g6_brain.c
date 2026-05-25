@@ -444,8 +444,6 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         goto safety_layer;
     }
 
-    brain->last_update_timestamp = now;
-
     bool valid = is_sample_valid(brain, hr_ths, temp_c, err_pct, share_count);
     if (!valid) goto safety_layer;
 
@@ -534,6 +532,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     rls_symmetrize_clamp_and_stabilize(brain->P);
     brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + 1.0f));
     brain->update_count++;
+    brain->last_update_timestamp = now;
     if (brain->update_count > 25) brain->cold_start = false;
 
     if (brain->use_efficiency_mode) {
@@ -733,6 +732,7 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
     out->last_efficiency = brain->last_efficiency;
     out->update_count = brain->update_count;
     out->power_update_count = brain->power_update_count;
+    out->last_update_timestamp = brain->last_update_timestamp;
     out->safety_status = brain->last_safety_status;
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;

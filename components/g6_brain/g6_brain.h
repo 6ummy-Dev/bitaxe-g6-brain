@@ -178,6 +178,7 @@ typedef struct {
     float last_efficiency;
     uint32_t update_count;
     uint32_t power_update_count;
+    uint32_t last_update_timestamp; /* FreeRTOS tick of the most recent accepted RLS update (paired with update_count) */
     /* Status */
     G6SafetyStatus safety_status;
     bool efficiency_mode_active;
