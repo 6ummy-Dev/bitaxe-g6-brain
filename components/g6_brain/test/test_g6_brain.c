@@ -616,8 +616,53 @@ TEST_CASE("g6_brain_get_telemetry snapshot captures all operator fields", "[g6_b
     TEST_ASSERT_EQUAL_FLOAT(test_brain.model_quality, t.model_quality);
     TEST_ASSERT_EQUAL_FLOAT(test_brain.last_efficiency, t.last_efficiency);
     TEST_ASSERT_EQUAL_UINT32(test_brain.update_count,  t.update_count);
+    TEST_ASSERT_EQUAL_UINT32(test_brain.last_update_timestamp, t.last_update_timestamp);
     TEST_ASSERT_EQUAL(test_brain.last_safety_status,   t.safety_status);
     /* Backward-compat alias must mirror best_v. */
     TEST_ASSERT_EQUAL_FLOAT(t.best_v, t.last_recommended_voltage);
     TEST_ASSERT_GREATER_THAN(0u, t.update_count);
+}
+
+TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain]") {
+    /* Contract: the timestamp is paired with update_count. Both move on an
+     * accepted RLS update; neither moves on a rejected sample. This lets
+     * operators answer "is the brain learning, and when did it last learn"
+     * from a single snapshot, without sampling at a rate fast enough to
+     * catch the update tick directly. */
+
+    /* Prime with one accepted update so timestamp is non-zero. */
+    test_brain.control_mode = G6_MODE_RECOMMEND;
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                                    55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_GREATER_THAN(0u, test_brain.update_count);
+    uint32_t ts_after_accept = test_brain.last_update_timestamp;
+    uint32_t uc_after_accept = test_brain.update_count;
+
+    /* Wait one tick so any subsequent write would differ. */
+    vTaskDelay(1);
+
+    /* Rejected sample: low share count. Neither update_count nor timestamp
+     * should advance. */
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+                          55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, /*shares=*/5);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_UINT32(uc_after_accept, test_brain.update_count);
+    TEST_ASSERT_EQUAL_UINT32(ts_after_accept, test_brain.last_update_timestamp);
+
+    /* Rejected sample: out-of-bounds frequency (fail-closed). Same expectation. */
+    ret = g6_brain_update(&test_brain, 1500.0f, 1220.0f, 120.0f, 15.0f,
+                          55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
+    TEST_ASSERT_EQUAL_UINT32(uc_after_accept, test_brain.update_count);
+    TEST_ASSERT_EQUAL_UINT32(ts_after_accept, test_brain.last_update_timestamp);
+
+    /* Accepted sample again. Both must advance together. */
+    vTaskDelay(1);
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 121.0f, 15.0f,
+                          55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_GREATER_THAN(uc_after_accept, test_brain.update_count);
+    TEST_ASSERT_GREATER_THAN(ts_after_accept, test_brain.last_update_timestamp);
 }
