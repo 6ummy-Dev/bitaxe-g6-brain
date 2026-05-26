@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta5
+ * Unity test suite for G6 Brain v1.0.0-beta6
  *
  * Validates tracking model updates, safety thresholds,
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
@@ -278,7 +278,7 @@ TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
     TEST_ASSERT_EQUAL(G6_SAFETY_VR_THERMAL, test_brain.last_safety_status);
 }
 
-/* ====================== BETA5 ====================== */
+/* ====================== RUNTIME PROACTIVE MARGINS ====================== */
 
 TEST_CASE("vr_temp_proactive_margin field is initialized from Kconfig default", "[g6_brain]") {
     TEST_ASSERT_EQUAL_FLOAT(G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT, test_brain.vr_temp_proactive_margin);
@@ -328,7 +328,7 @@ TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick"
     TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
 }
 
-/* ====================== INPUT VALIDATION (beta5 hardening) ====================== */
+/* ====================== INPUT VALIDATION ====================== */
 
 TEST_CASE("g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail-closed)", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_MAX + 50.0f, 1220.0f,
