@@ -12,7 +12,7 @@ The G6 Brain is a self-contained ESP-IDF component that models the quadratic rel
 
 | | |
 |---|---|
-| **Latest Release** | `v1.0.0-beta5` (Release Candidate) |
+| **Latest Release** | `v1.0.0-beta6` |
 | **Target** | ESP32-S3 / Bitaxe Gamma (BM1370) |
 | **License** | MIT |
 

@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [Unreleased] — 1.0.0-beta6
+## [Unreleased]
+
+_Next release will go here._
+
+---
+
+## [1.0.0-beta6] — 2026-05-25
 
 Pre-field-test polish. Test coverage for previously-implicit contracts, documentation reconciliation, one targeted hardening of the ASIC proactive thermal helper, and one mild telemetry-surface expansion (`last_update_timestamp`).
 
