@@ -24,7 +24,7 @@ This file provides proper academic credit and stable references for the core tec
 
 ---
 
-## Numerical Stability & Robust Estimation (beta3 Upgrades)
+## Numerical Stability & Robust Estimation
 
 - **Bucy, R. S., & Joseph, P. D.** (1968). *Filtering for Stochastic Processes with Applications to Guidance*. Interscience Publishers.  
   Introduces the mathematically stabilized Joseph Form covariance equation, ensuring symmetry and positive semi-definiteness under truncation limits.

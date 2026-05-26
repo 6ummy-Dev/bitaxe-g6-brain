@@ -1,6 +1,6 @@
-# G6 Brain Testing Guide (beta5)
+# G6 Brain Testing Guide
 
-This guide is intended for community members testing the **v1.0.0-beta5** release.
+This guide is intended for community members testing the **v1.0.0-beta6** release.
 
 ## What to Test
 
@@ -72,4 +72,4 @@ The Unity test suite is compiled by CI but not executed on hardware or QEMU. See
 
 ---
 
-**Version:** v1.0.0-beta5 (May 2026)
+**Version:** v1.0.0-beta6 (May 2026)

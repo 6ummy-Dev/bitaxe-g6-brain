@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta5**
+**G6 Brain v1.0.0-beta6**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -28,9 +28,9 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ---
 
-## Safety & Thermal (beta5)
+## Safety & Thermal
 
-**Two-tier Thermal Safety** The beta5 architecture that treats ASIC die temperature and VR regulator temperature differently:
+**Two-tier Thermal Safety** The architecture that treats ASIC die temperature and VR regulator temperature differently:
 - ASIC temperature gates learning.
 - VR temperature only constrains setpoints in the safety layer.
 
@@ -103,4 +103,4 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ---
 
-**Last updated:** May 2026 (v1.0.0-beta5)
+**Last updated:** May 2026 (v1.0.0-beta6)

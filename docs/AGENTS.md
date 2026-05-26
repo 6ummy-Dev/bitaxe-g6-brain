@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta5**
+**G6 Brain v1.0.0-beta6**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 
@@ -14,7 +14,7 @@ The brain must prioritize hardware longevity and stability over marginal hashrat
 
 ---
 
-## Current Safety Behavior (beta5)
+## Current Safety Behavior
 
 The following safety behaviors are **now implemented and enforced**:
 
