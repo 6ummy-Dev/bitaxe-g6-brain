@@ -23,11 +23,11 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 ## Features
 
 - Pure RLS quadratic modeling with separate hashrate and power surfaces — fully explainable, no black boxes.
-- Stabilized covariance updates (Joseph-style congruence + ridge + symmetrize + clamp) for numerical robustness under floating-point arithmetic.
+- Full Joseph-form covariance updates (symmetric congruence + measurement-noise `k kᵀ` injection + ridge + symmetrize + clamp) — the exact RLS posterior covariance, numerically robust under floating-point arithmetic.
 - 3-sigma statistical outlier gating on both estimators.
 - Fail-closed safety contract — every numeric input (including NaN, Inf, out-of-bounds) routes to the safety layer. `ESP_ERR_INVALID_ARG` returns only on `brain == NULL`.
 - Two-tier thermal safety — independent ASIC and VR temperature protection with configurable proactive margins and hard ceilings.
-- Bounded analytical Dinkelbach J/TH solver — exact $O(1)$ fractional minimization, gated on both model qualities ≥ 0.6.
+- Bounded analytical Dinkelbach J/TH solver — $O(1)$-per-step fractional minimization (exact closed form for interior optima; clamped boundary point otherwise), gated on both model qualities ≥ 0.6.
 - P-matrix divergence auto-recovery — when the estimator goes singular, the brain re-cold-starts while preserving operator-configured state.
 - Per-chip NVS fingerprinting with schema versioning and bad-blob auto-erase — warm-start survives power cycles, schema bumps survive cleanly.
 - Clean `G6BrainTelemetry` snapshot for monitoring, dashboards, and integration logging.
