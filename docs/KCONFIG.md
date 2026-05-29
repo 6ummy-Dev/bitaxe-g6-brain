@@ -55,6 +55,23 @@ All options live under: **Component config → G6 Brain Configuration**
 - **Type:** int (50–2000)
 - **Default:** `250` (= 2.50%)
 - **Description:** Nonce Error Rate threshold in 0.01% units. Exceeding this value forces conservative fallback behavior.
+
+### `G6_ENABLE_TEMP_PLAUSIBILITY`
+- **Type:** bool
+- **Default:** `n` (disabled)
+- **Description:** Opt-in defense-in-depth gate. When enabled, finite-but-implausible ASIC/VR temperature readings outside `[G6_TEMP_PLAUSIBILITY_MIN, G6_TEMP_PLAUSIBILITY_MAX]` are routed fail-closed to the safety layer with `G6_SAFETY_INPUT_RANGE`. This catches stuck-low / stuck-high sensors — e.g. a `-50 °C` reading that the finiteness-only check would treat as a cold, healthy chip, letting the brain train the RLS models on a thermally-stressed ASIC. **Default OFF:** out of the box the brain validates temperature for finiteness only and trusts the integrator's telemetry layer for sensor health. The VR no-sensor sentinel (`-1.0`) is always exempt from this band, enabled or not.
+
+### `G6_TEMP_PLAUSIBILITY_MIN`
+- **Type:** int (−40–40), °C
+- **Default:** `0`
+- **Depends on:** `G6_ENABLE_TEMP_PLAUSIBILITY`
+- **Description:** Lower bound of the optional temperature plausibility band. Readings below this (and finite, and not the VR sentinel) are rejected fail-closed when the band is enabled.
+
+### `G6_TEMP_PLAUSIBILITY_MAX`
+- **Type:** int (90–200), °C
+- **Default:** `120`
+- **Depends on:** `G6_ENABLE_TEMP_PLAUSIBILITY`
+- **Description:** Upper bound of the optional temperature plausibility band. Readings above this are rejected fail-closed when the band is enabled. Note the hard thermal ceiling (`G6_TEMP_CEILING`) still applies independently — this band guards against implausible *sensor* values, not normal over-temperature, which the thermal layer already handles.
   
 ---
 

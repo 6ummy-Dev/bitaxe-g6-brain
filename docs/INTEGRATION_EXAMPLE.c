@@ -41,8 +41,11 @@ void g6_brain_example_task(void *arg)
         float    freq_mhz         = 800.0f;
         float    volt_mv          = 1207.0f;  /* coreVoltageActual */
         float    volt_set_mv      = 1210.0f;  /* coreVoltage */
-        float    hashrate_live    = 1639.8f;  /* hashRate */
-        float    hashrate_10m     = 1637.1f;  /* hashRate_10m */
+        /* AxeOS reports hashRate/hashRate_10m in GH/s; g6_brain_update() expects
+         * TH/s. Convert on read so every downstream use (the brain update below
+         * and the H/s conversion in the NER block) sees the correct unit. */
+        float    hashrate_live    = 1639.8f / 1000.0f;  /* hashRate (GH/s) → TH/s */
+        float    hashrate_10m     = 1637.1f / 1000.0f;  /* hashRate_10m (GH/s) → TH/s */
         float    power_w          = 24.12f;
         float    temp_c           = 58.75f;
         float    vr_temp_c        = 74.0f;    /* vrTemp */

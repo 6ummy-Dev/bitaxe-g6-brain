@@ -35,9 +35,9 @@ The following safety behaviors are **now implemented and enforced**:
 5. **Internal Slew Limiting & Amnesia Protection**: Slew-rate constraints are managed directly inside the tracking loop. Upward slew is completely frozen during *any* safety anomaly (ASIC or VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery) to prevent the controller from advancing blindly on stale optimums.
 
 6. **Numerical Stability**:
-   - Stabilized covariance updates (Joseph-style congruence transform + ridge regularization + symmetrization + per-diagonal clamping)
+   - Full Joseph-form covariance update (symmetric congruence + measurement-noise `k kᵀ` injection + ridge regularization + symmetrization + per-diagonal clamping) — equals the exact RLS posterior covariance
    - Trace constraints and automatic accumulation recovery (see item 11)
-   - Exact $O(1)$ Dinkelbach boundary clamping with `G6_EFFICIENCY_MIN_HR_THS` floor
+   - $O(1)$-per-step Dinkelbach minimization with boundary clamping and the `G6_EFFICIENCY_MIN_HR_THS` floor (exact closed form for interior optima; clamped boundary point otherwise)
    - Adaptive Variable Forgetting Factor
 
 7. **Statistical Outlier Gating**: 3-Sigma innovation variance validation.
@@ -59,7 +59,7 @@ The following safety behaviors are **now implemented and enforced**:
 
 ## Efficiency Optimization
 
-True J/TH efficiency tracking uses a discrete secondary power model and an exact $O(1)$ analytical fraction minimizer. Solver updates are strictly gated by independent model convergence thresholds (`model_quality >= 0.6` and `power_model_quality >= 0.6`) and generated coordinates are bounded to the normalized physical limits to prevent solver overshoot.
+True J/TH efficiency tracking uses a discrete secondary power model and an $O(1)$-per-step analytical fraction minimizer (exact closed form for an interior optimum; the clamped boundary point at the box edge). Solver updates are strictly gated by independent model convergence thresholds (`model_quality >= 0.6` and `power_model_quality >= 0.6`) and generated coordinates are bounded to the normalized physical limits to prevent solver overshoot.
 
 ---
 
@@ -79,7 +79,7 @@ True J/TH efficiency tracking uses a discrete secondary power model and an exact
 - Never clear tracking matrices without valid re-initialization invariants.
 - **Never reset covariance confidence (`P` matrix) without simultaneously zeroing the corresponding response surface (`theta`), to prevent recursive gain explosions.** Use `g6_brain_recover_cold_start()` for any non-trivial reset — it handles operator-state preservation correctly.
 - Never use unbound floating-point computations or unregularized updates.
-- Never add a new `last_safety_status` value without also setting it from somewhere. Dead enum values mislead operators and waste the taxonomy.
+- Never add a new `last_safety_status` value without either setting it from somewhere **or** documenting it as an explicitly *reserved* value in API.md, SAFETY.md, MONITORING.md, and GLOSSARY.md. Undocumented dead enum values mislead operators and waste the taxonomy; the sole sanctioned exception is a value deliberately reserved for backward-compatible integer mapping (e.g. `G6_SAFETY_VOLTAGE`, held for a future VRM-ripple check), which must be called out as reserved everywhere it appears.
 - Never read brain state fields that are also exposed via `G6BrainTelemetry` from outside the brain. Use the snapshot. Direct reads break the const contract and create implicit coupling.
 
 ---

@@ -20,7 +20,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Warm Start / NVS Fingerprint** The learned RLS coefficients (`theta`) + full covariance matrix (`P`) + power model state, stored per physical chip in NVS.
 
-**Stabilized Covariance Update** A Joseph-style congruence transform applied to the P-matrix on each RLS step, followed by ridge regularization, symmetrization, and per-diagonal clamping. The combination preserves symmetry and positive-definiteness of P under floating-point arithmetic. Not the full classical Joseph form (which would include a measurement-noise injection term).
+**Stabilized Covariance Update** The full Joseph-form P-matrix update applied on each RLS step: a symmetric congruence transform plus the measurement-noise (`k kᵀ`, R=1) injection term, followed by ridge regularization, symmetrization, and per-diagonal clamping. Including the injection term makes the update the exact RLS posterior covariance; the congruence-plus-clamp structure preserves symmetry and positive-definiteness of P under floating-point arithmetic. (An earlier revision omitted the injection term and computed only `(M P Mᵀ)/λ`, which biased P downward.)
 
 **Trace Accumulation Recovery** A safety mechanism that automatically arrests covariance matrix divergence during unbounded learning loops. It zeroes the active polynomial surface and resets matrix confidence to prevent recursive gain explosions, forcing a safe cold-start.
 
@@ -97,7 +97,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **G6_VR_TEMP_PROACTIVE_MARGIN** Temperature margin below the VR ceiling where proactive voltage reduction begins.
 
-**G6_EFFICIENCY_MIN_HR_THS** Minimum predicted hashrate (`8.0` TH/s) below which the Dinkelbach J/TH solver skips a candidate point. Prevents near-zero division and guards against optimizing in regions where the power model has no physical meaning. Compile-time macro, not a Kconfig option.
+**G6_EFFICIENCY_MIN_HR_THS** Minimum predicted hashrate (`0.5` TH/s) below which the Dinkelbach J/TH solver skips a candidate point. Prevents near-zero division and guards against optimizing in regions where the power model has no physical meaning. Must sit well below the BM1370's real hashrate (~1.0–1.2 TH/s); the prior `8.0` value exceeded real hashrate and silently disabled efficiency mode on hardware. Compile-time macro, not a Kconfig option.
 
 **Slew Rate** The internally controlled rate of change for frequency and voltage. Upward slew is frozen during safety anomalies.
 

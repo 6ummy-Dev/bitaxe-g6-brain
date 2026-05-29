@@ -60,7 +60,7 @@ The key fields to surface in dashboards or alerts:
 - `G6_SAFETY_OK` is the steady-state value during normal operation. **Note:** this status is also reported on non-anomaly sample rejections (low share count, insignificant innovation) — see [Distinguishing accepted vs rejected samples](#distinguishing-accepted-vs-rejected-samples) below for how to tell them apart.
 - `G6_SAFETY_THERMAL` or `G6_SAFETY_VR_THERMAL` appearing intermittently → you're brushing the proactive zone. Improve cooling.
 - `G6_SAFETY_NER_BACKOFF` → hardware error rate climbed past threshold. Check PSU / cooling / silicon health.
-- `G6_SAFETY_INPUT_RANGE` → upstream telemetry is feeding the brain bad values (NaN, out-of-bounds). Your integration code has a bug or a sensor failed.
+- `G6_SAFETY_INPUT_RANGE` → upstream telemetry is feeding the brain bad values (NaN, out-of-bounds). Your integration code has a bug or a sensor failed. If you enabled the optional temperature plausibility band (`G6_ENABLE_TEMP_PLAUSIBILITY`), a finite-but-implausible temperature (stuck-low/stuck-high sensor) outside the configured band also surfaces here.
 - `G6_SAFETY_POWER_SANITY` → `power_w` is implausible or a power outlier fired. Inspect the power sensor.
 - `G6_SAFETY_SAMPLE_QUALITY` → hashrate outlier rejected. Usually transient noise; chronic occurrences mean instability.
 - `G6_SAFETY_P_MATRIX_SINGULAR` → covariance recovery just fired (see also the `WARN` log line above).

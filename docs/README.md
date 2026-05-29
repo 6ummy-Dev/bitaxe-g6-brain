@@ -39,12 +39,12 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 ## What Makes G6 Brain Different
 
 - Pure RLS quadratic modeling with separate hashrate and power surfaces — fully explainable.
-- Stabilized covariance updates (Joseph-style congruence + ridge + symmetrize + clamp) for numerical robustness.
+- Full Joseph-form covariance updates (symmetric congruence + measurement-noise `k kᵀ` injection + ridge + symmetrize + clamp) — the exact RLS posterior covariance, numerically robust.
 - 3-sigma statistical outlier gating on both estimators.
 - **Fail-closed safety contract** — every numeric input (including NaN, Inf, out-of-bounds) routes to the safety layer. `ESP_ERR_INVALID_ARG` returns only on `brain == NULL`.
 - **P-matrix divergence auto-recovery** — when the estimator goes singular, the brain re-cold-starts while preserving operator-configured state.
 - **Two-tier thermal safety** — independent ASIC and VR temperature protection with configurable proactive margins.
-- **Bounded Dinkelbach J/TH solver** — exact $O(1)$ fractional minimization, gated on both model qualities ≥ 0.6.
+- **Bounded Dinkelbach J/TH solver** — $O(1)$-per-step fractional minimization (exact closed form for interior optima; clamped boundary point otherwise), gated on both model qualities ≥ 0.6.
 - Per-chip NVS fingerprinting (warm start across power cycles, with schema versioning and bad-blob auto-erase).
 - Clean `G6BrainTelemetry` snapshot for monitoring and dashboards.
 - Modular, single-threaded, swappable component.

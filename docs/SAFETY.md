@@ -23,7 +23,7 @@ The following safety behaviors are **fully active**:
 
 3. **Sample Quality Gating** Before any RLS update, the brain enforces four independent gates: minimum share count (`MIN_SHARE_COUNT = 20`), NER below `ner_threshold`, ASIC die temperature below the hard ceiling, and significant innovation in the covariance projection (`xPx > RLS_INNOVATION_THRESHOLD`). A sample failing any gate is routed to the safety layer without updating the model. The thermal and NER gates correspond to true safety events and set their respective statuses; the share-count and innovation gates are not safety events and leave `last_safety_status = G6_SAFETY_OK` (see the Safety Status Reference below).
 
-4. **Stabilized Covariance Update** The P-matrix update uses a Joseph-style congruence transform followed by ridge regularization, symmetrization, and per-diagonal clamping (`RLS_P_CLAMP_MIN`..`RLS_P_CLAMP_MAX`). The combination keeps P symmetric and positive-definite under floating-point arithmetic without requiring the full Joseph form's measurement-noise injection term.
+4. **Stabilized Covariance Update** The P-matrix update uses the full Joseph form — a symmetric congruence transform plus the measurement-noise (`k kᵀ`, R=1) injection term — followed by ridge regularization, symmetrization, and per-diagonal clamping (`RLS_P_CLAMP_MIN`..`RLS_P_CLAMP_MAX`). Including the injection term makes the update the exact RLS posterior covariance (an earlier revision computed only `(M P Mᵀ)/λ` and omitted the term, which biased P downward and shrank the gain faster than RLS prescribes); the congruence-plus-clamp structure keeps P symmetric and positive-definite under floating-point arithmetic.
 
 5. **Trace Accumulation Recovery** If the covariance trace exceeds `RLS_TRACE_MAX` due to unbounded learning, the brain runs `g6_brain_recover_cold_start()` to safely zero both polynomial surfaces (`theta`, `power_theta`), reset matrix confidence to the cold-start diagonal, and surface the event:
    - Sets `last_safety_status = G6_SAFETY_P_MATRIX_SINGULAR` so operators monitoring telemetry see the recovery happened (the status may still be overwritten by a more urgent thermal condition firing on the same tick — that priority is intentional).
@@ -42,7 +42,7 @@ The following safety behaviors are **fully active**:
 
 9. **Internal Slew Limiting & Slew Amnesia Protection** Slew-rate logic is embedded directly within the tracking update loop. Upward slew is strictly frozen if *any* safety anomaly is active (thermal, VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery), preventing the controller from stepping targets upward based on stale mathematical optimums during unstable physical conditions.
 
-10. **Analytical J/TH Solver Bounding** The exact $O(1)$ efficiency fractional solver strictly clamps generated normalized coordinates to prevent mathematical overshoot or bounding-box stalls when traversing degraded power surfaces. 
+10. **Analytical J/TH Solver Bounding** The analytical efficiency fractional solver runs in $O(1)$ per outer step (no iterative line search): for an *interior* optimum the Dinkelbach inner step is an exact closed-form minimizer, while at the bounding box the result is the clamped boundary point. Generated normalized coordinates are strictly clamped to the physical limits to prevent mathematical overshoot or bounding-box stalls when traversing degraded power surfaces. 
 
 11. **Model Quality Gates** The J/TH efficiency optimizer is protected by both `model_quality >= 0.6` **and** `power_model_quality >= 0.6`.
 
@@ -104,7 +104,7 @@ Monitor these values in production:
 - `best_f` / `best_v`
 - `temp_c` and `vr_temp_c` (when available)
 - NVS auto-save messages
-- `g6_brain_get_cov_condition()`
+- `g6_brain_get_cov_condition()` (Gershgorin upper-bound estimate of the condition number)
 - `safety_status` from telemetry
 - `update_count` deltas (the canonical signal for "is the brain actually accepting samples" — a rising `update_count` with `safety_status = G6_SAFETY_OK` is the steady-state happy path; a flat `update_count` with `safety_status = G6_SAFETY_OK` means samples are being rejected on the non-anomaly quality gates)
 

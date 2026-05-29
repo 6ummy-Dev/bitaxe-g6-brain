@@ -69,11 +69,11 @@ The brain validates **finiteness** on every input and **hardware bounds** on `f_
 
 ### `float g6_brain_get_cov_condition(const G6BrainState *brain)`
 
-- **Purpose:** Computes the numeric condition number of the tracking covariance matrix (`max_diag / min_diag`) to detect parameter divergence boundaries.
+- **Purpose:** Returns an *upper-bound estimate* of the tracking covariance matrix's 2-norm condition number, used to detect parameter-divergence boundaries. The estimate comes from Gershgorin disc bounds (`max_i(P_ii + Σ_{j≠i}|P_ij|) / min_i(P_ii − Σ_{j≠i}|P_ij|)`), so — unlike a bare `max_diag/min_diag` ratio — it accounts for off-diagonal mass and cannot report a near-singular matrix as well-conditioned. If the lower Gershgorin bound is non-positive (near-indefinite), a large sentinel (`RLS_P_CLAMP_MAX/RLS_P_CLAMP_MIN`) is returned so callers treat the matrix as ill-conditioned.
 
 ### `esp_err_t g6_brain_self_test(const G6BrainState *brain)`
 
-- **Purpose:** Validates matrix symmetry, diagonal range, and condition number to determine if estimators are running normally or in a degraded state. Returns `ESP_OK` when healthy, `ESP_FAIL` when any check fails, or `ESP_ERR_INVALID_ARG` if `brain` is `NULL`.
+- **Purpose:** Validates matrix symmetry, diagonal range, and the Gershgorin condition-number estimate (see `g6_brain_get_cov_condition` above) to determine if estimators are running normally or in a degraded state. Returns `ESP_OK` when healthy, `ESP_FAIL` when any check fails, or `ESP_ERR_INVALID_ARG` if `brain` is `NULL`.
 - **Const-correct:** the function only reads from `brain`; callers holding a `const G6BrainState *` can invoke it directly.
 
 ### `esp_err_t g6_brain_reset(G6BrainState *brain)`
@@ -148,6 +148,6 @@ Defined in `g6_brain.h`. Useful for callers that want to check input ranges or i
 | `BM1370_F_MIN` / `BM1370_F_MAX` | 400 / 950 MHz | Hardware frequency bounds |
 | `BM1370_V_MIN` / `BM1370_V_MAX` | 1050 / 1350 mV | Hardware voltage bounds |
 | `G6_VR_TEMP_NO_SENSOR` | `-1.0f` | Sentinel for `vr_temp_c` when no VR sensor is wired |
-| `G6_EFFICIENCY_MIN_HR_THS` | `8.0f` TH/s | Minimum predicted hashrate below which the Dinkelbach solver skips a candidate point (prevents near-zero division and degenerate efficiency calculations) |
+| `G6_EFFICIENCY_MIN_HR_THS` | `0.5f` TH/s | Minimum predicted hashrate below which the Dinkelbach solver skips a candidate point (prevents near-zero division and degenerate efficiency calculations). Must sit well below the BM1370's real hashrate (~1.0–1.2 TH/s stock, ~1.5 OC); the prior `8.0` value silently disabled efficiency mode on real hardware. Feed `hr_ths` in TH/s — convert AxeOS GH/s by dividing by 1000. |
 | `MIN_SHARE_COUNT` | 20 | Minimum shares before a sample is considered for RLS update |
 | `RLS_N` | 6 | Number of RLS coefficients (quadratic in two variables) |
