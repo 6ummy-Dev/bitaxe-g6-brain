@@ -74,6 +74,7 @@ All modes run the complete safety layer on every update.
 | [`docs/REFERENCES.md`](docs/REFERENCES.md) | Scientific & mathematical foundations |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 | [`MANIFESTO.md`](MANIFESTO.md) | Project philosophy and non-negotiables |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | What's next: scope, version plans, and engineering follow-ups |
 
 ---
 
