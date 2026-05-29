@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta6
+ * Unity test suite for G6 Brain v1.0.0-beta6.5
  *
  * Validates tracking model updates, safety thresholds,
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
@@ -10,7 +10,8 @@
  * NVS round-trip and corruption recovery, internal slew rate limits,
  * Dinkelbach J/TH efficiency optimization end-to-end, RLS quadratic
  * convergence on a known noiseless surface (estimator-learns regression
- * guard at the real BM1370 TH/s scale), and telemetry snapshot.
+ * guard at the real BM1370 TH/s scale), covariance-divergence recovery on a
+ * non-PSD (negative predicted-variance) covariance, and telemetry snapshot.
  */
 
 #include "unity.h"
@@ -497,6 +498,32 @@ TEST_CASE("Trace divergence triggers P-matrix recovery and reports P_MATRIX_SING
     TEST_ASSERT_EQUAL_FLOAT(0.0f, test_brain.theta[0]);
     TEST_ASSERT_EQUAL_FLOAT(1.0e5f, test_brain.P[0][0]);
     TEST_ASSERT_TRUE(test_brain.cold_start);
+}
+
+TEST_CASE("Negative predicted variance triggers P-matrix recovery (not silent freeze)", "[g6_brain]") {
+    /* Regression for the fixed-operating-point covariance-divergence path.
+     * At a single (f,v) the quadratic basis is unidentifiable and the power
+     * covariance can drift indefinite (non-PSD) with a bounded trace — so the
+     * trace check cannot catch it. The signature is a negative predicted
+     * variance xᵀ·power_P·x, which is impossible for a valid covariance.
+     *
+     * Construct that state deterministically: at (F_CENTER, V_CENTER) the basis
+     * is x = [0,0,0,0,0,1], so xᵀ·power_P·x = power_P[5][5]. A negative value
+     * must trigger cold-start recovery (G6_SAFETY_P_MATRIX_SINGULAR), NOT be
+     * silently swallowed by the innovation gate (which would freeze both
+     * channels while still reporting OK). */
+    test_brain.use_efficiency_mode = true;
+    test_brain.power_P[RLS_N - 1][RLS_N - 1] = -1.0f;  /* indefinite in the constant-term direction */
+    test_brain.cold_start = false;                     /* so recovery flipping it back is observable */
+
+    esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_CENTER, BM1370_V_CENTER,
+                                    1.2f, 20.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(G6_SAFETY_P_MATRIX_SINGULAR, test_brain.last_safety_status);
+    TEST_ASSERT_TRUE(test_brain.cold_start);                       /* recovery re-armed cold start */
+    TEST_ASSERT_EQUAL_FLOAT(1.0e5f, test_brain.power_P[RLS_N - 1][RLS_N - 1]); /* power_P reset to 1e5·I */
+    TEST_ASSERT_EQUAL_FLOAT(1.0e5f, test_brain.P[0][0]);           /* HR P reset too */
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_brain.power_theta[0]);      /* theta zeroed by recovery */
 }
 
 TEST_CASE("P-matrix recovery preserves operator-configured use_efficiency_mode", "[g6_brain]") {
