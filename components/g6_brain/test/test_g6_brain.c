@@ -8,7 +8,9 @@
  * non-anomaly rejection paths (low shares, insignificant innovation —
  * status stays OK, update_count unchanged),
  * NVS round-trip and corruption recovery, internal slew rate limits,
- * Dinkelbach J/TH efficiency optimization end-to-end, and telemetry snapshot.
+ * Dinkelbach J/TH efficiency optimization end-to-end, RLS quadratic
+ * convergence on a known noiseless surface (estimator-learns regression
+ * guard at the real BM1370 TH/s scale), and telemetry snapshot.
  */
 
 #include "unity.h"
@@ -63,7 +65,7 @@ TEST_CASE("g6_brain_update with valid synthetic data respects control_mode", "[g
     float original_best_f = test_brain.best_f;
 
     test_brain.control_mode = G6_MODE_AUTO;
-    ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 125.0f, 16.0f, 56.0f, G6_VR_TEMP_NO_SENSOR, 0.4f, 60);
+    ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 1.25f, 16.0f, 56.0f, G6_VR_TEMP_NO_SENSOR, 0.4f, 60);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_NOT_EQUAL(original_best_f, test_brain.best_f);
     TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
@@ -75,18 +77,24 @@ TEST_CASE("g6_brain_update in OBSERVE_ONLY does not mutate best_f/best_v", "[g6_
     float start_f = test_brain.best_f;
     float start_v = test_brain.best_v;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 130.0f, 18.0f, 60.0f, G6_VR_TEMP_NO_SENSOR, 0.3f, 50);
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 1.3f, 18.0f, 60.0f, G6_VR_TEMP_NO_SENSOR, 0.3f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_FLOAT(start_f, test_brain.best_f);
     TEST_ASSERT_EQUAL_FLOAT(start_v, test_brain.best_v);
 }
 
 TEST_CASE("g6_brain_self_test detects good vs degraded state", "[g6_brain]") {
+    /* Fresh fixture: P is diagonal at 1e5 — symmetric, in range, well-conditioned. */
+    TEST_ASSERT_EQUAL(ESP_OK, g6_brain_self_test(&test_brain));
+
+    /* Degrade: drive one diagonal far past RLS_P_CLAMP_MAX (1e6). This both
+     * blows the diagonal-range check and pushes the Gershgorin condition
+     * estimate (~1e12) past the 5e5 self-test ceiling. */
     test_brain.P[0][0] = 1e9f;
     test_brain.P[1][1] = 1e-3f;
 
     esp_err_t ret = g6_brain_self_test(&test_brain);
-    TEST_ASSERT(ret == ESP_OK || ret == ESP_FAIL);
+    TEST_ASSERT_EQUAL(ESP_FAIL, ret);
 }
 
 TEST_CASE("NVS fingerprint save/load round-trip", "[g6_brain]") {
@@ -121,7 +129,7 @@ TEST_CASE("g6_brain_update routes hr_ths=0 to safety layer (fail-closed)", "[g6_
 TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain]") {
     test_brain.temp_ceiling = 60.0f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 100.0f, 20.0f, 75.0f, G6_VR_TEMP_NO_SENSOR, 1.0f, 40);
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1300.0f, 1.2f, 20.0f, 75.0f, G6_VR_TEMP_NO_SENSOR, 1.0f, 40);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(800.0f, test_brain.best_f);
     /* temp_c=75 above ceiling=60 → hard thermal fires, status reflects that. */
@@ -130,7 +138,7 @@ TEST_CASE("Safety layer still executes on invalid sample", "[g6_brain]") {
 
 TEST_CASE("Covariance matrix stays symmetric after updates", "[g6_brain]") {
     for (int i = 0; i < 10; i++) {
-        g6_brain_update(&test_brain, 650.0f + i*5, 1220.0f, 115.0f + i, 16.0f, 52.0f, G6_VR_TEMP_NO_SENSOR, 0.6f, 40);
+        g6_brain_update(&test_brain, 650.0f + i*5, 1220.0f, 1.15f + i*0.01f, 16.0f, 52.0f, G6_VR_TEMP_NO_SENSOR, 0.6f, 40);
     }
 
     bool symmetric = true;
@@ -148,7 +156,7 @@ TEST_CASE("Cold start flag clears after sufficient updates", "[g6_brain]") {
     TEST_ASSERT_TRUE(test_brain.cold_start);
 
     for (int i = 0; i < 30; i++) {
-        g6_brain_update(&test_brain, 650.0f, 1220.0f, 118.0f, 16.5f, 53.0f, G6_VR_TEMP_NO_SENSOR, 0.7f, 40);
+        g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.18f, 16.5f, 53.0f, G6_VR_TEMP_NO_SENSOR, 0.7f, 40);
     }
 
     TEST_ASSERT_FALSE(test_brain.cold_start);
@@ -157,7 +165,7 @@ TEST_CASE("Cold start flag clears after sufficient updates", "[g6_brain]") {
 TEST_CASE("Proactive thermal derating triggers correctly", "[g6_brain]") {
     test_brain.temp_ceiling = 65.0f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 110.0f, 18.0f, 62.0f, G6_VR_TEMP_NO_SENSOR, 0.8f, 50);
+    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 1.1f, 18.0f, 62.0f, G6_VR_TEMP_NO_SENSOR, 0.8f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_OR_EQUAL(700.0f, test_brain.best_f);
 }
@@ -178,7 +186,7 @@ TEST_CASE("Proactive thermal helper bails on corrupted temp_ceiling", "[g6_brain
     float saved_v = test_brain.best_v;
     test_brain.temp_ceiling = NAN;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 115.0f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.15f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_FLOAT(saved_f, test_brain.best_f);
     TEST_ASSERT_EQUAL_FLOAT(saved_v, test_brain.best_v);
@@ -192,7 +200,7 @@ TEST_CASE("Proactive thermal helper bails on corrupted temp_ceiling", "[g6_brain
     saved_f = test_brain.best_f;
     saved_v = test_brain.best_v;
 
-    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 115.0f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.15f, 16.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_FLOAT(saved_f, test_brain.best_f);
     TEST_ASSERT_EQUAL_FLOAT(saved_v, test_brain.best_v);
@@ -202,13 +210,13 @@ TEST_CASE("Proactive thermal helper bails on corrupted temp_ceiling", "[g6_brain
 /* ====================== RLS & OUTLIER GATING ====================== */
 
 TEST_CASE("Statistical Outlier Gating rejects severe sensor anomalies", "[g6_brain]") {
-    g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     uint32_t prev_count = test_brain.update_count;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 9999.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 99.99f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_UINT32(prev_count, test_brain.update_count);
-    /* err² greatly exceeds 9*(xPx+0.5), triggering the 3-sigma gate. */
+    /* err² greatly exceeds 9*(xPx + G6_HR_OUTLIER_VAR_FLOOR_THS2), triggering the 3-sigma gate. */
     TEST_ASSERT_EQUAL(G6_SAFETY_SAMPLE_QUALITY, test_brain.last_safety_status);
 }
 
@@ -229,7 +237,7 @@ TEST_CASE("Internal Slew-Rate Limiting enforces step boundaries", "[g6_brain]") 
     test_brain.theta[3] = 1.2f;    /* d → f_norm_opt = -d/(2a) = 0.6 */
     test_brain.theta[4] = 0.0f;    /* e → v_norm_opt = 0 */
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_FLOAT_WITHIN(0.5f, 650.0f + test_brain.dfs_step_mhz, test_brain.best_f);
 }
@@ -240,7 +248,7 @@ TEST_CASE("VR thermal sentinel (-1) is a no-op — does not affect setpoints", "
     test_brain.control_mode = G6_MODE_AUTO;
     test_brain.vr_temp_ceiling = 85.0f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_OR_EQUAL(BM1370_V_MIN, test_brain.best_v);
@@ -253,7 +261,7 @@ TEST_CASE("VR proactive zone steps back best_v only — frequency untouched", "[
     test_brain.best_f = 800.0f;
     test_brain.best_v = 1250.0f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1250.0f, 130.0f, 22.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1250.0f, 1.3f, 22.0f,
                                     55.0f, 82.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(1250.0f, test_brain.best_v);
@@ -269,7 +277,7 @@ TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
     test_brain.best_f = 850.0f;
     test_brain.best_v = 1280.0f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 850.0f, 1280.0f, 140.0f, 26.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 850.0f, 1280.0f, 1.4f, 26.0f,
                                     55.0f, 86.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(1280.0f, test_brain.best_v);
@@ -297,7 +305,7 @@ TEST_CASE("Runtime vr_temp_proactive_margin change alters proactive zone", "[g6_
     test_brain.best_f = 800.0f;
 
     /* 78°C is inside the widened zone (85-10=75) but outside the default zone (85-5=80) */
-    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1250.0f, 130.0f, 22.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 800.0f, 1250.0f, 1.3f, 22.0f,
                                     55.0f, 78.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_LESS_THAN(1250.0f, test_brain.best_v);
@@ -307,7 +315,7 @@ TEST_CASE("Runtime vr_temp_proactive_margin change alters proactive zone", "[g6_
 TEST_CASE("NER blocks RLS update via is_sample_valid defense-in-depth", "[g6_brain]") {
     uint32_t count_before = test_brain.update_count;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR,
                                     test_brain.ner_threshold + 1.0f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
@@ -322,7 +330,7 @@ TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick"
     test_brain.vr_temp_proactive_margin = 5.0f;
 
     /* temp_c=62 → ASIC proactive zone; vr_temp_c=82 → VR proactive zone */
-    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 110.0f, 18.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 1.1f, 18.0f,
                                     62.0f, 82.0f, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_THERMAL, test_brain.last_safety_status);
@@ -332,7 +340,7 @@ TEST_CASE("ASIC thermal status wins over VR thermal when both fire on same tick"
 
 TEST_CASE("g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail-closed)", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_MAX + 50.0f, 1220.0f,
-                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
@@ -340,7 +348,7 @@ TEST_CASE("g6_brain_update routes f_mhz above BM1370_F_MAX to safety layer (fail
 
 TEST_CASE("g6_brain_update routes v_mv above BM1370_V_MAX to safety layer (fail-closed)", "[g6_brain]") {
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, BM1370_V_MAX + 50.0f,
-                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
@@ -350,14 +358,14 @@ TEST_CASE("g6_brain_update routes NaN vr_temp_c to safety layer (fail-closed)", 
     /* Under manifesto non-negotiable 3.7, NaN telemetry must not skip a
      * safety tick. The brain reports INPUT_RANGE and runs the safety layer
      * (where downstream helpers no-op on NaN). */
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, NAN, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update routes NaN temp_c to safety layer (fail-closed)", "[g6_brain]") {
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     NAN, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
@@ -368,14 +376,14 @@ TEST_CASE("g6_brain_update routes out-of-range power_w to safety layer with POWE
      * the INPUT_RANGE class (which covers non-finite + frequency/voltage
      * bounds). It gets its own status because power outliers also share the
      * same enum value. */
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 500.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 500.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_POWER_SANITY, test_brain.last_safety_status);
 }
 
 TEST_CASE("g6_brain_update routes negative power_w to safety layer with POWER_SANITY", "[g6_brain]") {
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, -10.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, -10.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_POWER_SANITY, test_brain.last_safety_status);
@@ -384,13 +392,13 @@ TEST_CASE("g6_brain_update routes negative power_w to safety layer with POWER_SA
 TEST_CASE("g6_brain_update returns INVALID_ARG only for NULL brain pointer", "[g6_brain]") {
     /* NULL brain is the one truly structurally-broken call — no brain
      * exists to apply safety to, so INVALID_ARG is correct. */
-    esp_err_t ret = g6_brain_update(NULL, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(NULL, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
 }
 
 TEST_CASE("g6_brain_update accepts G6_VR_TEMP_NO_SENSOR sentinel", "[g6_brain]") {
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 }
@@ -421,7 +429,7 @@ TEST_CASE("Low share count silently rejects sample with last_safety_status == OK
      * update_count or flagging a safety status. */
     uint32_t count_before = test_brain.update_count;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f,
                                     MIN_SHARE_COUNT - 1);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
@@ -438,7 +446,7 @@ TEST_CASE("Insignificant innovation silently rejects sample with last_safety_sta
     uint32_t count_before = test_brain.update_count;
 
     esp_err_t ret = g6_brain_update(&test_brain, BM1370_F_CENTER, BM1370_V_CENTER,
-                                    120.0f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
+                                    1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR,
                                     0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_UINT32(count_before, test_brain.update_count);
@@ -479,7 +487,7 @@ TEST_CASE("Trace divergence triggers P-matrix recovery and reports P_MATRIX_SING
     for (int i = 0; i < RLS_N; i++) test_brain.P[i][i] = 1.0e8f;
     test_brain.cold_start = false;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     /* Recovery zeroed theta and reset P diagonal to 1e5, then surfaced the
@@ -499,7 +507,7 @@ TEST_CASE("P-matrix recovery preserves operator-configured use_efficiency_mode",
     test_brain.ner_threshold = 3.0f;  /* non-default; must also survive */
     for (int i = 0; i < RLS_N; i++) test_brain.P[i][i] = 1.0e8f;
 
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_TRUE(test_brain.use_efficiency_mode);
@@ -511,29 +519,31 @@ TEST_CASE("P-matrix recovery preserves operator-configured use_efficiency_mode",
 
 TEST_CASE("Dinkelbach optimizer improves J/TH over naive hashrate-only point", "[g6_brain]") {
     /* Synthetic surfaces designed so the hashrate-only optimum (high MHz) is
-     * less efficient than a lower-MHz operating point:
+     * less efficient than a lower-MHz operating point. Hashrate is in TH/s at
+     * the real BM1370 scale (~1.2 TH/s), power in W:
      *
-     *   HR  surface: theta = [-2, -1, 0, 2, 0, 80]
-     *     Peak at fn=0.5 (775 MHz), ~80.5 TH/s. Concave-down in f and v.
+     *   HR  surface: theta = [-0.03, -0.015, 0, 0.03, 0, 1.2]
+     *     Peak at fn=0.5 (775 MHz), ~1.2075 TH/s. Concave-down in f and v.
      *
      *   PWR surface: power_theta = [0.5, 0.2, 0, 3, 0, 20]
      *     Convex (opens up): more frequency = more watts.
      *     At fn=0 (650 MHz): ~20W.  At fn=0.5 (775 MHz): ~21.6W.
      *
-     * Starting J/TH at 650 MHz: 20/80 = 0.250 W/TH.
-     * Dinkelbach should find a lower-MHz point with better W/TH. */
+     * Starting J/TH at 775 MHz: 21.625/1.2075 = 17.91 W/TH.
+     * Dinkelbach should find a lower-MHz point with better W/TH (min ~15.35
+     * W/TH at the 400 MHz frequency floor). */
     test_brain.use_efficiency_mode = true;
     /* Bypass the quality gate — we're testing the optimizer math, not
      * the convergence of the RLS models. */
     test_brain.model_quality = 0.8f;
     test_brain.power_model_quality = 0.8f;
 
-    test_brain.theta[0] = -2.0f;
-    test_brain.theta[1] = -1.0f;
+    test_brain.theta[0] = -0.03f;
+    test_brain.theta[1] = -0.015f;
     test_brain.theta[2] =  0.0f;
-    test_brain.theta[3] =  2.0f;
+    test_brain.theta[3] =  0.03f;
     test_brain.theta[4] =  0.0f;
-    test_brain.theta[5] = 80.0f;
+    test_brain.theta[5] =  1.2f;
 
     test_brain.power_theta[0] =  0.5f;
     test_brain.power_theta[1] =  0.2f;
@@ -579,8 +589,8 @@ TEST_CASE("Dinkelbach does not fire below model quality threshold", "[g6_brain]"
     test_brain.model_quality = 0.8f;
     test_brain.power_model_quality = 0.4f;  /* below gate */
 
-    test_brain.theta[0] = -2.0f; test_brain.theta[1] = -1.0f;
-    test_brain.theta[3] =  2.0f; test_brain.theta[5] = 80.0f;
+    test_brain.theta[0] = -0.03f; test_brain.theta[1] = -0.015f;
+    test_brain.theta[3] =  0.03f; test_brain.theta[5] =  1.2f;
     test_brain.power_theta[0] = 0.5f; test_brain.power_theta[3] = 3.0f;
     test_brain.power_theta[5] = 20.0f;
 
@@ -590,12 +600,57 @@ TEST_CASE("Dinkelbach does not fire below model quality threshold", "[g6_brain]"
     float opt_f, opt_v, pred_hr;
     g6_brain_get_optimal(&test_brain, &opt_f, &opt_v, &pred_hr);
 
-    /* Hashrate-only optimum for these theta values: fn_opt = -d/(2a) = -2/(2*-2) = 0.5
+    /* Hashrate-only optimum for these theta values: fn_opt = -d/(2a) = -0.03/(2*-0.03) = 0.5
      * → f_cand = 0.5*250 + 650 = 775 MHz — within bounds, so optimizer stays there. */
     TEST_ASSERT_FLOAT_WITHIN(1.0f, 775.0f, opt_f);
     /* Predicted HR at the hashrate-only optimum: theta[0]*0.5² + theta[3]*0.5 + theta[5]
-     *   = -2*0.25 + 2*0.5 + 80 = 80.5 TH/s */
-    TEST_ASSERT_FLOAT_WITHIN(0.5f, 80.5f, pred_hr);
+     *   = -0.03*0.25 + 0.03*0.5 + 1.2 = 1.2075 TH/s */
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.2075f, pred_hr);
+}
+
+TEST_CASE("RLS converges to a known quadratic surface (noiseless)", "[g6_brain]") {
+    /* End-to-end estimator regression guard: feed many noiseless samples drawn
+     * from a known quadratic hashrate surface and confirm the RLS coefficients
+     * converge to the true coefficients. The surface is expressed at the real
+     * BM1370 TH/s scale (~1.0-1.2 TH/s), so this also exercises the corrected
+     * outlier-gate and model-quality floors at the scale the brain sees in the
+     * field — a mis-scaled gate (e.g. the old TH/s-vs-100x confusion) would
+     * reject these in-distribution samples and stall convergence here.
+     *
+     * Scope note: this verifies the point-estimate (theta) recursion, NOT the
+     * covariance magnitude. On consistent noiseless data both a correct RLS
+     * covariance update and one missing the measurement-noise (+k kᵀ) injection
+     * term drive theta to the same fixed point; the covariance term's
+     * correctness is validated separately (see host-side numerical checks and
+     * CHANGELOG). A deterministic tracking-based covariance regression test is
+     * tracked as future work. */
+    float th_true[RLS_N] = { -0.05f, -0.02f, 0.01f, 0.06f, 0.0f, 1.15f };
+
+    /* Sweep a grid spanning the valid operating envelope enough times to both
+     * exit cold-start (update_count > 25) and excite all six basis terms. */
+    for (int sweep = 0; sweep < 12; sweep++) {
+        for (int fi = 0; fi < 10; fi++) {
+            for (int vi = 0; vi < 7; vi++) {
+                float f = 450.0f + fi * 50.0f;     /* 450..900 MHz */
+                float v = 1100.0f + vi * 40.0f;    /* 1100..1340 mV */
+                float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
+                float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
+                float hr = th_true[0]*fn*fn + th_true[1]*vn*vn + th_true[2]*fn*vn
+                         + th_true[3]*fn + th_true[4]*vn + th_true[5];
+                /* temp/NER/power all comfortably in-range so only the RLS path runs. */
+                g6_brain_update(&test_brain, f, v, hr, 18.0f, 50.0f,
+                                G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+            }
+        }
+    }
+
+    /* Correct implementation converges to ~1e-7; 0.02 absolute is a generous,
+     * non-flaky bound that still flags gross estimator or scaling breakage. */
+    for (int i = 0; i < RLS_N; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(0.02f, th_true[i], test_brain.theta[i]);
+    }
+    /* Model quality should be high once converged on clean data. */
+    TEST_ASSERT_GREATER_THAN(0.6f, test_brain.model_quality);
 }
 
 /* ====================== TELEMETRY SNAPSHOT ====================== */
@@ -605,7 +660,7 @@ TEST_CASE("g6_brain_get_telemetry snapshot captures all operator fields", "[g6_b
      * snapshot is consistent with the struct at the moment of capture. */
     test_brain.control_mode = G6_MODE_RECOMMEND;
     for (int i = 0; i < 5; i++) {
-        g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+        g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                         55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     }
 
@@ -633,7 +688,7 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
 
     /* Prime with one accepted update so timestamp is non-zero. */
     test_brain.control_mode = G6_MODE_RECOMMEND;
-    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                                     55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_THAN(0u, test_brain.update_count);
@@ -645,7 +700,7 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
 
     /* Rejected sample: low share count. Neither update_count nor timestamp
      * should advance. Per the non-anomaly rejection contract, status stays OK. */
-    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 120.0f, 15.0f,
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
                           55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, /*shares=*/5);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL_UINT32(uc_after_accept, test_brain.update_count);
@@ -653,7 +708,7 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
     TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 
     /* Rejected sample: out-of-bounds frequency (fail-closed). Same expectation. */
-    ret = g6_brain_update(&test_brain, 1500.0f, 1220.0f, 120.0f, 15.0f,
+    ret = g6_brain_update(&test_brain, 1500.0f, 1220.0f, 1.2f, 15.0f,
                           55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(G6_SAFETY_INPUT_RANGE, test_brain.last_safety_status);
@@ -663,7 +718,7 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
     /* Accepted sample again. Both must advance together. Status resets to OK
      * from the prior INPUT_RANGE since an accepted sample clears it. */
     vTaskDelay(1);
-    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 121.0f, 15.0f,
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.21f, 15.0f,
                           55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_GREATER_THAN(uc_after_accept, test_brain.update_count);
