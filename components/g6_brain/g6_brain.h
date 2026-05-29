@@ -63,10 +63,42 @@ typedef enum {
 
 /* Minimum predicted hashrate (TH/s) below which J/TH efficiency calculations
  * are skipped. Prevents division by near-zero and guards against operating in
- * regions where the power model has no physical meaning. */
-#define G6_EFFICIENCY_MIN_HR_THS 8.0f
+ * regions where the power model has no physical meaning.
+ *
+ * IMPORTANT — UNITS: hr_ths is TH/s. A single BM1370 (Bitaxe Gamma) hashes
+ * ~1.0-1.2 TH/s stock and ~1.5 TH/s overclocked, so this floor MUST be well
+ * below the chip's real hashrate or the Dinkelbach solver never arms. The old
+ * value (8.0) was ~6x the device's real hashrate and silently disabled
+ * efficiency mode on the documented target. 0.5 TH/s is a physical "barely
+ * hashing" floor. If you feed the brain GH/s (e.g. AxeOS `hashRate`), convert
+ * to TH/s first (divide by 1000) — see docs/INTEGRATION_EXAMPLE.c. */
+#define G6_EFFICIENCY_MIN_HR_THS 0.5f
 
 #define MIN_SHARE_COUNT 20
+
+/* Statistical outlier-gate noise-variance floors (the "+sigma^2" term added to
+ * the innovation variance xPx before the 3-sigma test err^2 > 9*(xPx+floor)).
+ * These are unit-coupled and MUST match the channel's physical scale:
+ *   - hashrate err is in TH/s  -> floor is (TH/s)^2. ~0.1 TH/s measurement
+ *     sigma => 0.01. A single 0.5f floor (the old shared value) corresponds to
+ *     a 0.7 TH/s sigma, which at TH/s scale only catches absurd (>2 TH/s)
+ *     deviations and lets gross glitches through.
+ *   - power err is in W -> floor is W^2. ~0.7 W sigma => 0.5 is reasonable for
+ *     a ~20 W board.
+ * Both are best-estimate starting points; validate against real telemetry. */
+#define G6_HR_OUTLIER_VAR_FLOOR_THS2 0.01f
+#define G6_PW_OUTLIER_VAR_FLOOR_W2   0.5f
+
+/* model_quality / power_model_quality use 1 - |err| / (signal + floor). The
+ * floor keeps quality finite and > 0 on the first (cold) update where the
+ * prediction is zero and err == signal. It is unit-coupled like the gates
+ * above: the hashrate floor is in TH/s (kept small so quality tracks relative
+ * error at the ~1.2 TH/s scale instead of being dominated by a fixed +1), the
+ * power floor is in W. The old shared +1.0f was sized for a ~100x larger
+ * hashrate scale and made the quality gate (>=0.6) trivially easy to satisfy
+ * at TH/s scale. Validate against real telemetry. */
+#define G6_QUALITY_DENOM_FLOOR_HR_THS 0.1f
+#define G6_QUALITY_DENOM_FLOOR_PW_W   1.0f
 
 #if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
 #define G6_JTH_MAX_OUTER_ITERS CONFIG_G6_JTH_MAX_OUTER_ITERS

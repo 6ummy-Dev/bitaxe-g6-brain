@@ -81,6 +81,36 @@ menu "G6 Brain Configuration"
             range 50 2000
             help
                 Nonce Error Rate threshold in 0.01% units.
+
+        config G6_ENABLE_TEMP_PLAUSIBILITY
+            bool "Enable optional temperature plausibility band (fail-closed)"
+            default n
+            help
+                When enabled, finite-but-implausible ASIC/VR temperature readings
+                outside [G6_TEMP_PLAUSIBILITY_MIN, G6_TEMP_PLAUSIBILITY_MAX] are
+                routed fail-closed to the safety layer with G6_SAFETY_INPUT_RANGE.
+                Catches stuck-low / stuck-high sensors (e.g. a -50 C reading that
+                would otherwise be treated as a cold, healthy chip and allow the
+                brain to train on a thermally-stressed ASIC). Default OFF: by
+                default the brain validates temperature for finiteness only and
+                trusts the integrator's telemetry layer for sensor health (see
+                docs/SAFETY.md). The VR no-sensor sentinel (-1.0) is always exempt.
+
+        config G6_TEMP_PLAUSIBILITY_MIN
+            int "Minimum plausible temperature (C)"
+            default 0
+            range -40 40
+            depends on G6_ENABLE_TEMP_PLAUSIBILITY
+            help
+                Lower bound of the optional temperature plausibility band.
+
+        config G6_TEMP_PLAUSIBILITY_MAX
+            int "Maximum plausible temperature (C)"
+            default 120
+            range 90 200
+            depends on G6_ENABLE_TEMP_PLAUSIBILITY
+            help
+                Upper bound of the optional temperature plausibility band.
     endmenu
 
     menu "Optimization Behavior"

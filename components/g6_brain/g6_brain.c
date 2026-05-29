@@ -427,6 +427,27 @@ esp_err_t g6_brain_update(G6BrainState *brain,
         goto safety_layer;
     }
 
+#if defined(CONFIG_G6_ENABLE_TEMP_PLAUSIBILITY) && CONFIG_G6_ENABLE_TEMP_PLAUSIBILITY
+    /* Optional, opt-in plausibility band on the temperature channels. The
+     * brain's default contract validates temp_c / vr_temp_c for finiteness
+     * only and trusts the integrator's telemetry layer to detect stuck/implausible
+     * sensors (see docs/SAFETY.md, "Sensor Sanity"). When this Kconfig is
+     * enabled, a finite-but-implausible reading — e.g. a stuck-low -50 C ASIC
+     * sensor that would otherwise pass is_thermal_safe() and let the brain
+     * train on a thermally-stressed chip — is routed fail-closed to the safety
+     * layer with G6_SAFETY_INPUT_RANGE. The VR no-sensor sentinel is exempt.
+     * Default-off: when the Kconfig is unset this entire block compiles out and
+     * behavior is byte-identical to the finiteness-only contract. */
+    if (temp_c < (float)CONFIG_G6_TEMP_PLAUSIBILITY_MIN ||
+        temp_c > (float)CONFIG_G6_TEMP_PLAUSIBILITY_MAX ||
+        (vr_temp_c > G6_VR_TEMP_NO_SENSOR &&
+         (vr_temp_c < (float)CONFIG_G6_TEMP_PLAUSIBILITY_MIN ||
+          vr_temp_c > (float)CONFIG_G6_TEMP_PLAUSIBILITY_MAX))) {
+        brain->last_safety_status = G6_SAFETY_INPUT_RANGE;
+        goto safety_layer;
+    }
+#endif
+
     if (power_w < 0.0f || power_w > 100.0f) {
         brain->last_safety_status = G6_SAFETY_POWER_SANITY;
         goto safety_layer;
@@ -475,12 +496,12 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     if (!has_significant_innovation(brain->P, x)) goto safety_layer;
     if (brain->use_efficiency_mode && !has_significant_innovation(brain->power_P, x)) goto safety_layer;
 
-    bool hr_outlier = (err * err > 9.0f * (xPx + 0.5f));
+    bool hr_outlier = (err * err > 9.0f * (xPx + G6_HR_OUTLIER_VAR_FLOOR_THS2));
     bool pw_outlier = false;
     if (brain->use_efficiency_mode) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
-        pw_outlier = (power_err * power_err > 9.0f * (power_xPx + 0.5f));
+        pw_outlier = (power_err * power_err > 9.0f * (power_xPx + G6_PW_OUTLIER_VAR_FLOOR_W2));
     }
 
     if (hr_outlier || pw_outlier) {
@@ -519,18 +540,26 @@ esp_err_t g6_brain_update(G6BrainState *brain,
             for (int l = 0; l < RLS_N; l++)
                 T_mat[i][j] += M[i][l] * brain->P[l][j];
 
+    /* Full Joseph-form covariance update:
+     *     P = (1/lambda) (I - k x^T) P (I - k x^T)^T  +  k k^T
+     * The congruence (M P M^T)/lambda by itself equals the exact RLS recursion
+     * (I - k x^T)P/lambda MINUS k k^T. The +k k^T term is the measurement-noise
+     * injection term (R = 1 in the RLS normalization) and is what makes this
+     * the textbook RLS covariance. Omitting it biased P downward each step,
+     * shrinking the Kalman gain faster than RLS prescribes and producing
+     * over-confident, sluggish tracking of a drifting response surface. */
     for (int i = 0; i < RLS_N; i++) {
         for (int j = 0; j < RLS_N; j++) {
             float sum = 0.0f;
             for (int l = 0; l < RLS_N; l++) sum += T_mat[i][l] * M[j][l];
-            brain->P[i][j] = sum / lambda_eff;
+            brain->P[i][j] = sum / lambda_eff + k[i] * k[j];
         }
         brain->P[i][i] += brain->ridge_epsilon;
     }
 
     brain->last_innovation = err;
     rls_symmetrize_clamp_and_stabilize(brain->P);
-    brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + 1.0f));
+    brain->model_quality = fmaxf(0.0f, 1.0f - fabsf(err) / (hr_ths + G6_QUALITY_DENOM_FLOOR_HR_THS));
     brain->update_count++;
     brain->last_update_timestamp = now;
     if (brain->update_count > 25) brain->cold_start = false;
@@ -560,17 +589,19 @@ esp_err_t g6_brain_update(G6BrainState *brain,
                 for (int l = 0; l < RLS_N; l++)
                     Tp_mat[i][j] += Mp[i][l] * brain->power_P[l][j];
 
+        /* Full Joseph form — see the hashrate update above for the derivation
+         * of why the +kp kp^T term is required for the exact RLS recursion. */
         for (int i = 0; i < RLS_N; i++) {
             for (int j = 0; j < RLS_N; j++) {
                 float sum = 0.0f;
                 for (int l = 0; l < RLS_N; l++) sum += Tp_mat[i][l] * Mp[j][l];
-                brain->power_P[i][j] = sum / lambda_p;
+                brain->power_P[i][j] = sum / lambda_p + kp[i] * kp[j];
             }
             brain->power_P[i][i] += brain->ridge_epsilon;
         }
 
         rls_symmetrize_clamp_and_stabilize(brain->power_P);
-        brain->power_model_quality = fmaxf(0.0f, 1.0f - fabsf(power_err) / (power_w + 1.0f));
+        brain->power_model_quality = fmaxf(0.0f, 1.0f - fabsf(power_err) / (power_w + G6_QUALITY_DENOM_FLOOR_PW_W));
         brain->power_update_count++;
     }
 
@@ -684,15 +715,36 @@ float g6_brain_get_model_quality(const G6BrainState *brain)
     return brain ? brain->model_quality : 0.0f;
 }
 
+/* Gershgorin upper-bound estimate of the covariance 2-norm condition number.
+ * Eigenvalues of a symmetric P lie in the union of Gershgorin discs
+ *     [P_ii - R_i, P_ii + R_i],   R_i = sum_{j!=i} |P_ij|,
+ * so lambda_max <= max_i(P_ii + R_i) and lambda_min >= min_i(P_ii - R_i).
+ * The ratio hi/lo (for lo > 0) is therefore a true upper bound on the condition
+ * number. This is O(N^2), needs no iteration, and — unlike a bare
+ * max_diag/min_diag ratio, which ignores all off-diagonal mass — cannot report
+ * a near-singular matrix as well-conditioned. If the lower bound is
+ * non-positive the matrix is (near-)indefinite/ill-conditioned and we return a
+ * large sentinel so callers and self_test flag it rather than treating it as
+ * healthy. */
+static float cov_condition_estimate(const float P[RLS_N][RLS_N])
+{
+    float lo = 1e30f, hi = 0.0f;
+    for (int i = 0; i < RLS_N; i++) {
+        float radius = 0.0f;
+        for (int j = 0; j < RLS_N; j++) if (j != i) radius += fabsf(P[i][j]);
+        float disc_lo = P[i][i] - radius;
+        float disc_hi = P[i][i] + radius;
+        if (disc_lo < lo) lo = disc_lo;
+        if (disc_hi > hi) hi = disc_hi;
+    }
+    if (lo <= 1e-9f) return RLS_P_CLAMP_MAX / RLS_P_CLAMP_MIN; /* ~1e12 -> "ill-conditioned" */
+    return hi / lo;
+}
+
 float g6_brain_get_cov_condition(const G6BrainState *brain)
 {
     if (!brain) return 0.0f;
-    float min_diag = 1e30f, max_diag = 0.0f;
-    for (int i = 0; i < RLS_N; i++) {
-        if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
-        if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
-    }
-    return (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
+    return cov_condition_estimate(brain->P);
 }
 
 esp_err_t g6_brain_self_test(const G6BrainState *brain)
@@ -700,18 +752,15 @@ esp_err_t g6_brain_self_test(const G6BrainState *brain)
     if (!brain) return ESP_ERR_INVALID_ARG;
 
     bool ok = true;
-    float min_diag = 1e30f, max_diag = 0.0f;
 
     for (int i = 0; i < RLS_N; i++) {
         if (brain->P[i][i] < RLS_P_CLAMP_MIN || brain->P[i][i] > RLS_P_CLAMP_MAX) ok = false;
-        if (brain->P[i][i] < min_diag) min_diag = brain->P[i][i];
-        if (brain->P[i][i] > max_diag) max_diag = brain->P[i][i];
         for (int j = i + 1; j < RLS_N; j++)
             if (fabsf(brain->P[i][j] - brain->P[j][i]) > RLS_SYMMETRY_TOLERANCE) ok = false;
     }
 
-    float cond = (min_diag > 1e-9f) ? (max_diag / min_diag) : 0.0f;
-    if (cond > 5e5f) ok = false;
+    float cond = cov_condition_estimate(brain->P);
+    if (!isfinite(cond) || cond > 5e5f) ok = false;
 
     return ok ? ESP_OK : ESP_FAIL;
 }
