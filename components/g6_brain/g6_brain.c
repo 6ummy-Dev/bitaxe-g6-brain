@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta6
+ * Bitaxe G6 Brain — v1.0.0-beta6.5
  */
 
 #include "g6_brain.h"
@@ -492,6 +492,32 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 
     float y_pred = evaluate_quadratic(brain->theta, fn, vn);
     float err = hr_ths - y_pred;
+
+    /* Covariance divergence guard (non-PSD detection).
+     *
+     * xPx is the predicted variance xᵀPx; for any valid (positive-semidefinite)
+     * covariance it is always >= 0. A strictly negative value is impossible for
+     * a healthy P and is the unambiguous signature of an indefinite covariance.
+     *
+     * This can arise at a fixed operating point: with no variation in f/v the
+     * six-term quadratic basis is unidentifiable, P grows extremely
+     * ill-conditioned, and the diagonal-only clamp in
+     * rls_symmetrize_clamp_and_stabilize() cannot keep it PSD. The trace-based
+     * divergence check below does NOT catch this — the trace stays bounded while
+     * the matrix loses definiteness. Left unguarded, a negative xPx falls
+     * through to the innovation gate (which tests "> threshold"), is silently
+     * treated as "insignificant", and freezes the estimator while still
+     * reporting G6_SAFETY_OK. In efficiency mode the power-channel gate runs
+     * before the hashrate update, so a degenerate power_P would freeze BOTH
+     * channels.
+     *
+     * Route it to the same recovery path the trace check uses: re-cold-start
+     * (preserving operator config) and surface G6_SAFETY_P_MATRIX_SINGULAR so a
+     * fixed-point stall is visible and self-healing instead of silent. */
+    if (xPx < 0.0f || (brain->use_efficiency_mode && power_xPx < 0.0f)) {
+        g6_brain_recover_cold_start(brain);
+        goto safety_layer;
+    }
 
     if (!has_significant_innovation(brain->P, x)) goto safety_layer;
     if (brain->use_efficiency_mode && !has_significant_innovation(brain->power_P, x)) goto safety_layer;
