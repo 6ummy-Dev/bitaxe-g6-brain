@@ -1,4 +1,4 @@
-# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta6
+# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta6.5
 
 **This is not a happy-path optimizer.** The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
 
@@ -25,10 +25,11 @@ The following safety behaviors are **fully active**:
 
 4. **Stabilized Covariance Update** The P-matrix update uses the full Joseph form — a symmetric congruence transform plus the measurement-noise (`k kᵀ`, R=1) injection term — followed by ridge regularization, symmetrization, and per-diagonal clamping (`RLS_P_CLAMP_MIN`..`RLS_P_CLAMP_MAX`). Including the injection term makes the update the exact RLS posterior covariance (an earlier revision computed only `(M P Mᵀ)/λ` and omitted the term, which biased P downward and shrank the gain faster than RLS prescribes); the congruence-plus-clamp structure keeps P symmetric and positive-definite under floating-point arithmetic.
 
-5. **Trace Accumulation Recovery** If the covariance trace exceeds `RLS_TRACE_MAX` due to unbounded learning, the brain runs `g6_brain_recover_cold_start()` to safely zero both polynomial surfaces (`theta`, `power_theta`), reset matrix confidence to the cold-start diagonal, and surface the event:
+5. **Covariance Divergence Recovery** The brain runs `g6_brain_recover_cold_start()` on either of two covariance-divergence signatures — (a) the trace exceeds `RLS_TRACE_MAX` (unbounded learning), or (b) the predicted variance `xᵀPx` (or `xᵀ·power_Px`) goes strictly negative, the unambiguous mark of a covariance that has lost positive-definiteness. Case (b) arises at a fixed operating point, where the six-term quadratic basis is unidentifiable and the diagonal-only clamp cannot keep the matrix PSD; the trace check alone misses it because the trace stays bounded. Either way the recovery zeros both polynomial surfaces (`theta`, `power_theta`), resets matrix confidence to the cold-start diagonal, and surfaces the event:
    - Sets `last_safety_status = G6_SAFETY_P_MATRIX_SINGULAR` so operators monitoring telemetry see the recovery happened (the status may still be overwritten by a more urgent thermal condition firing on the same tick — that priority is intentional).
    - Emits a single `ESP_LOGW`: `"P matrix diverged — cold-start recovery applied"`.
    - Preserves operator-configured runtime state across the recovery: `control_mode`, `best_f`, `best_v`, `ner_threshold`, both thermal ceilings, both proactive margins, `dfs_step_mhz`, and `use_efficiency_mode`. The recovery zeroes the learning state without disturbing the operating point or any tunables the operator set.
+   - Note: at a genuinely fixed operating point case (b) can recur periodically — this is expected and correct (the surface is unidentifiable without f/v variation); the brain re-cold-starts and reports it rather than silently freezing. A little operating-point movement (even a few MHz/mV) eliminates it.
    - Suppresses NVS save for the next interval (the freshly-zeroed model isn't worth persisting).
 
 6. **Statistical Outlier Gating** 3-Sigma innovation variance validation. Corrupted sensor frames are rejected before updating the model.
@@ -77,7 +78,7 @@ The `last_safety_status` field (exposed via `G6BrainTelemetry.safety_status`) re
 | `G6_SAFETY_POWER_SANITY` | `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model statistical outlier was rejected. |
 | `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25 so quality-gated features (J/TH solver) re-arm only after observable recovery, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate (`lambda = 0.985`). If `update_count > 25` at the time of the event, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges. |
 | `G6_SAFETY_SAMPLE_QUALITY` | Hashrate-model statistical outlier rejected by the 3-sigma gate. |
-| `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance trace diverged and the brain ran auto-recovery (see item 5 above). |
+| `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance diverged — either the trace exceeded `RLS_TRACE_MAX` or the predicted variance `xᵀPx` went negative (non-PSD, typical at a fixed operating point) — and the brain ran auto-recovery (see item 5 above). |
 | `G6_SAFETY_INPUT_RANGE` | Input telemetry failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds. |
 
 **Same-tick priority:** if multiple conditions fire on one tick, the helpers run last in the safety layer (proactive VR thermal, then proactive ASIC thermal) and may overwrite earlier statuses. If both ASIC and VR thermal conditions fire on the same tick, ASIC wins. The recovery status (`P_MATRIX_SINGULAR`) can be overwritten by a same-tick thermal condition — that is intentional, since thermal is the more urgent operator alert.
@@ -118,5 +119,5 @@ Monitor these values in production:
 
 ---
 
-**Version:** v1.0.0-beta6 (May 2026)  
+**Version:** v1.0.0-beta6.5 (May 2026)  
 **Philosophy:** Start safe. Learn. Then optimize. ⚡

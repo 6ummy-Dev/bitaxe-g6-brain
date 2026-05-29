@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta6**
+**G6 Brain v1.0.0-beta6.5**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 
@@ -53,7 +53,7 @@ The following safety behaviors are **now implemented and enforced**:
 
 11. **Fail-Closed Execution**: Safety handlers unconditionally run. Per manifesto non-negotiable 3.7 (*"Every safety check executes even on invalid or rejected samples"*), out-of-bounds telemetry, NaN/Inf sensor anomalies, and rejected samples are explicitly routed through the safety layer rather than bypassing it. The only call that returns an error code without running the safety layer is `brain == NULL` — and at that point no brain exists to apply safety to.
 
-12. **P-Matrix Singular Recovery**: When `trace(P) > RLS_TRACE_MAX` (estimator divergence), `g6_brain_recover_cold_start()` zeros both response surfaces (`theta`, `power_theta`), reseeds the covariance diagonals at the cold-start value, and surfaces the event via `G6_SAFETY_P_MATRIX_SINGULAR` plus a single `ESP_LOGW`. Operator-configured fields (`control_mode`, `best_f`, `best_v`, both thermal ceilings, both proactive margins, `dfs_step_mhz`, `ner_threshold`, `use_efficiency_mode`) are explicitly snapshotted and restored across recovery — the brain re-enters cold-start without disturbing the operating point or any runtime tunables.
+12. **P-Matrix Singular Recovery**: On either covariance-divergence signature — `trace(P) > RLS_TRACE_MAX` (unbounded learning) **or** a strictly negative predicted variance `xᵀPx`/`xᵀ·power_Px` (loss of positive-definiteness, e.g. at a fixed operating point where the quadratic basis is unidentifiable and the diagonal-only clamp cannot keep `P` PSD; the trace check misses this because the trace stays bounded) — `g6_brain_recover_cold_start()` zeros both response surfaces (`theta`, `power_theta`), reseeds the covariance diagonals at the cold-start value, and surfaces the event via `G6_SAFETY_P_MATRIX_SINGULAR` plus a single `ESP_LOGW`. The negative-variance guard runs before the innovation gate specifically so a non-PSD matrix triggers recovery instead of being silently swallowed as "insignificant innovation" (which would freeze the estimator — both channels, in efficiency mode — while still reporting `OK`). Operator-configured fields (`control_mode`, `best_f`, `best_v`, both thermal ceilings, both proactive margins, `dfs_step_mhz`, `ner_threshold`, `use_efficiency_mode`) are explicitly snapshotted and restored across recovery — the brain re-enters cold-start without disturbing the operating point or any runtime tunables.
 
 ---
 

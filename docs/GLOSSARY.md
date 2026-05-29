@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta6**
+**G6 Brain v1.0.0-beta6.5**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -68,7 +68,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 - `G6_SAFETY_POWER_SANITY` — `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model 3-sigma outlier was rejected during efficiency-mode learning.
 - `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate. If the brain has already accumulated more than 25 updates, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges.
 - `G6_SAFETY_SAMPLE_QUALITY` — Hashrate sample was rejected by the 3-sigma statistical outlier gate before reaching the RLS update.
-- `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance trace diverged; brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
+- `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance diverged (trace exceeded `RLS_TRACE_MAX`, or predicted variance `xᵀPx` went negative — non-PSD, typical at a fixed operating point); brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
 - `G6_SAFETY_INPUT_RANGE` — Input failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds.
 
 **P-Matrix Singular Recovery** The automatic recovery flow triggered when `trace(P) > RLS_TRACE_MAX`. Zeros both `theta` arrays and re-seeds the P diagonals at `1e5`, then restores operator-set fields (mode, ceilings, margins, efficiency mode, etc.). The brain re-enters cold-start. See `SAFETY.md` item 5.
@@ -103,4 +103,4 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ---
 
-**Last updated:** May 2026 (v1.0.0-beta6)
+**Last updated:** May 2026 (v1.0.0-beta6.5)

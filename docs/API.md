@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0.0-beta6
+# G6 Brain Public API — v1.0.0-beta6.5
 
 **Adaptive RLS optimizer with real-time quadratic modeling and analytical J/TH solver for BM1370.**
 
@@ -120,7 +120,7 @@ The `G6BrainTelemetry` struct exposes a consistent point-in-time view of brain s
 | `G6_SAFETY_POWER_SANITY` | Reported `power_w` outside the physically plausible range, or a power-model outlier was rejected |
 | `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `G6_NER_THRESHOLD`; conservative back-off applied |
 | `G6_SAFETY_SAMPLE_QUALITY` | Hashrate-model statistical outlier rejected by the 3-sigma gate |
-| `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance matrix trace diverged; the brain auto-recovered into a fresh cold-start (preserving operator config). Telemetry exposes this so operators know recovery happened |
+| `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance diverged — trace exceeded `RLS_TRACE_MAX`, or predicted variance `xᵀPx` went negative (non-PSD, typical at a fixed operating point) — and the brain auto-recovered into a fresh cold-start (preserving operator config). Telemetry exposes this so operators know recovery happened |
 | `G6_SAFETY_INPUT_RANGE` | Input telemetry failed validation: non-finite, `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds |
 
 Status priority on a single tick: thermal/VR-thermal helpers run last in the safety layer and may overwrite earlier statuses. If both ASIC and VR thermal conditions fire on the same tick, ASIC wins.

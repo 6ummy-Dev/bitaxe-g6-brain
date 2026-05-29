@@ -1,4 +1,4 @@
-# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta6)
+# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta6.5)
 
 **How to know if your G6 Brain is healthy, learning, and staying safe.**
 
@@ -12,7 +12,7 @@ These are the only log lines emitted from inside `g6_brain.c`. Tag is `G6_BRAIN`
 
 | Log message (verbatim) | Severity | Meaning | What to do |
 |---|---|---|---|
-| `P matrix diverged — cold-start recovery applied` | WARN | Covariance trace exceeded `RLS_TRACE_MAX`; brain auto-recovered into a fresh cold-start while preserving your operator config. See `SAFETY.md` item 5. | Investigate if this appears more than once per day — chronic divergence indicates an estimator-tuning issue (lambda min, ridge, or trace bound). One-off events are expected over long uptimes and the brain handles them. |
+| `P matrix diverged — cold-start recovery applied` | WARN | Covariance diverged (trace exceeded `RLS_TRACE_MAX`, **or** predicted variance `xᵀPx` went negative — typical when running at a fixed operating point); brain auto-recovered into a fresh cold-start while preserving your operator config. See `SAFETY.md` item 5. | Occasional events are expected over long uptimes, and at a genuinely fixed setpoint the negative-variance case can recur periodically by design. If it appears frequently *while the operating point is varying*, that indicates an estimator-tuning issue (lambda min, ridge, or trace bound). A little operating-point movement (even a few MHz/mV) stops the fixed-point case. |
 | `Power Outlier Rejected` | WARN | A power-model 3-sigma gate caught a glitched `power_w` reading. The frame was dropped before updating the power model. | Frequent occurrences → inspect power sensor (INA219/INA260) wiring, sampling rate, or PSU noise. Sporadic single events are normal. |
 | `NVS schema mismatch (got vN, expected vM) — erasing` | WARN | The NVS fingerprint blob is from an older brain version. The brain erased it and starts cold. | None — automatic, one-time per upgrade. |
 | `NVS blob size mismatch (got X, expected Y) — erasing` | WARN | The NVS blob is the right schema version but wrong byte size (struct evolution or partial write). Brain erased it and starts cold. | None — automatic. |
@@ -63,7 +63,7 @@ The key fields to surface in dashboards or alerts:
 - `G6_SAFETY_INPUT_RANGE` → upstream telemetry is feeding the brain bad values (NaN, out-of-bounds). Your integration code has a bug or a sensor failed. If you enabled the optional temperature plausibility band (`G6_ENABLE_TEMP_PLAUSIBILITY`), a finite-but-implausible temperature (stuck-low/stuck-high sensor) outside the configured band also surfaces here.
 - `G6_SAFETY_POWER_SANITY` → `power_w` is implausible or a power outlier fired. Inspect the power sensor.
 - `G6_SAFETY_SAMPLE_QUALITY` → hashrate outlier rejected. Usually transient noise; chronic occurrences mean instability.
-- `G6_SAFETY_P_MATRIX_SINGULAR` → covariance recovery just fired (see also the `WARN` log line above).
+- `G6_SAFETY_P_MATRIX_SINGULAR` → covariance recovery just fired — trace divergence or a negative predicted variance `xᵀPx` (non-PSD, common at a fixed operating point); see also the `WARN` log line above.
 - `G6_SAFETY_VOLTAGE` → not currently set by any code path; reserved for a future VRM-ripple check. You can ignore this value today.
 
 ### Distinguishing accepted vs rejected samples
@@ -118,4 +118,4 @@ g6_brain_reset(&brain);
 
 ---
 
-**Version:** v1.0.0-beta6 (May 2026)
+**Version:** v1.0.0-beta6.5 (May 2026)
