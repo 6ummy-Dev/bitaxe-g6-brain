@@ -1,4 +1,4 @@
-# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta6.5)
+# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta7)
 
 **How to know if your G6 Brain is healthy, learning, and staying safe.**
 
@@ -46,6 +46,8 @@ The key fields to surface in dashboards or alerts:
 | `last_innovation` | Most recent prediction error on hashrate. Sustained large values indicate the model isn't tracking. |
 | `safety_status` | Current `G6SafetyStatus`. See [Safety Status Monitoring](#safety-status-monitoring). |
 | `efficiency_mode_active` | Whether the power model + Dinkelbach solver are running this boot. |
+| `cov_condition` | Gershgorin condition-number estimate of the hashrate covariance (same value as `g6_brain_get_cov_condition()`). ~1 when fresh; climbs without bound when the operating point does not vary. |
+| `model_under_excited` | `true` once past cold start and `cov_condition` exceeds `G6_EXCITATION_COND_WARN` — the operating point has not varied enough to identify the surface, so recommendations are not yet trustworthy *even if `model_quality` is high*. Observability only; see [Is the brain's recommendation trustworthy?](#is-the-brains-recommendation-trustworthy) |
 
 ### Model Quality Thresholds
 
@@ -74,6 +76,12 @@ The key fields to surface in dashboards or alerts:
 2. Insignificant innovation (`xPx < RLS_INNOVATION_THRESHOLD` — the new sample is too close to an existing training point to add information).
 
 In both cases `update_count` is not incremented and no RLS update happens. The canonical "is the brain actually accepting samples?" signal is therefore the **rising `update_count` with `safety_status = G6_SAFETY_OK`** combination, not the status alone. If `safety_status` stays at OK but `update_count` is flat for many ticks, your integration is probably feeding the brain low-share windows or repetitive operating points — not a fault, but worth knowing.
+
+### Is the brain's recommendation trustworthy?
+
+A rising `update_count` and a high `model_quality` tell you the brain is *learning the point it's seeing* — not that its recommended `best_f`/`best_v` are optimized. Those are different questions. The optimizer can only locate a better operating point once it has identified the response surface, and that requires the operating point to **vary**. At a fixed `(f, v)` the six-coefficient quadratic is under-identified: `model_quality` still climbs toward 1 (the model fits the one point it keeps seeing), but the surface — and therefore the recommendation — is undetermined.
+
+`model_under_excited` is the signal for this. When it is `true`, treat `best_f`/`best_v` as *not yet optimized* regardless of how good `model_quality` looks, and either introduce some operating-point variation or wait for it. `cov_condition` is the underlying number (≈1 fresh, climbing without bound under fixed-point operation); `model_under_excited` is just the thresholded convenience flag. Both are observability only — they never change what the brain does. A genuinely fixed setpoint may also surface periodic `G6_SAFETY_P_MATRIX_SINGULAR` recoveries; that is the same root cause at its extreme (see `SAFETY.md` item 5). The on-device exploration that will supply the needed variation is on the roadmap (`docs/ROADMAP.md`).
 
 ---
 
@@ -118,4 +126,4 @@ g6_brain_reset(&brain);
 
 ---
 
-**Version:** v1.0.0-beta6.5 (May 2026)
+**Version:** v1.0.0-beta7 (May 2026)

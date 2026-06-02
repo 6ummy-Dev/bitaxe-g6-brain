@@ -1,5 +1,5 @@
 /*
- * G6 Brain Integration Example — v1.0.0-beta6.5
+ * G6 Brain Integration Example — v1.0.0-beta7
  * Bitaxe ESP-Miner (Gamma 602+ / BM1370)
  */
 

@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta6.5**
+**G6 Brain v1.0.0-beta7**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -81,7 +81,9 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **last_efficiency** The most recent `power_w / hr_ths` ratio (W/TH). Only updated when `power_w` is within sanity bounds — on fail-closed paths the field retains its last known-good value rather than reporting a garbage ratio.
 
-**model_quality / power_model_quality** Independent fit confidence metrics (0.0–1.0) for the hashrate and power RLS models. Both must be at or above `0.6` for the Dinkelbach J/TH solver to run. Exposed via the telemetry snapshot.
+**model_quality / power_model_quality** Independent fit confidence metrics (0.0–1.0) for the hashrate and power RLS models. Both must be at or above `0.6` for the Dinkelbach J/TH solver to run. Exposed via the telemetry snapshot. Note: quality measures prediction error at the *visited* operating point, not whether the response surface is identified — at a fixed operating point quality reads high while the surface is undetermined (see **Under-excitation / Identifiability**).
+
+**Under-excitation / Identifiability** The six-coefficient quadratic surface can only be identified if the operating point varies; at a fixed `(f, v)` only one parameter direction is excited, five stay undetermined, and the covariance ill-conditions. `G6BrainTelemetry.model_under_excited` (true once past cold start and `cov_condition > G6_EXCITATION_COND_WARN`) flags when this makes the optimizer's recommendations untrustworthy despite a high `model_quality`. `cov_condition` is the underlying Gershgorin condition-number estimate. Both are observability-only (no control effect). The on-device exploration that supplies the needed variation is tracked in `docs/ROADMAP.md`.
 
 **update_count** Monotonic counter of accepted hashrate RLS updates since last reset. A flat `update_count` paired with `safety_status = G6_SAFETY_OK` indicates samples are being rejected on the non-anomaly quality gates (low share count or insignificant innovation) — a normal startup/post-pool-change pattern, not an error.
 
@@ -103,4 +105,4 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ---
 
-**Last updated:** May 2026 (v1.0.0-beta6.5)
+**Last updated:** May 2026 (v1.0.0-beta7)

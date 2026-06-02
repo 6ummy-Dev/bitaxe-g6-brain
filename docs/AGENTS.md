@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta6.5**
+**G6 Brain v1.0.0-beta7**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 

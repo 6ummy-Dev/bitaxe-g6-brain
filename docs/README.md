@@ -1,4 +1,4 @@
-# G6 Brain ⚡ Documentation — v1.0.0-beta6.5
+# G6 Brain ⚡ Documentation — v1.0.0-beta7
 
 Welcome to the official documentation for the **G6 Brain** — a modular adaptive RLS quadratic optimizer for real-time J/TH scaling on the BM1370.
 
@@ -33,6 +33,7 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 
 - [`CHANGELOG.md`](../CHANGELOG.md) — Version history
 - [`MANIFESTO.md`](../MANIFESTO.md) — Project philosophy and non-negotiables
+- [`ROADMAP.md`](ROADMAP.md) — What's next: scope, version plans, and engineering follow-ups
 
 ---
 
@@ -53,7 +54,7 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 
 ## Status
 
-- **Version:** v1.0.0-beta6.5 (May 2026)
+- **Version:** v1.0.0-beta7 (May 2026)
 - **Maturity:** Beta — ready for field testing (48h+ soak recommended before v1.0 tag)
 - **License:** MIT
 

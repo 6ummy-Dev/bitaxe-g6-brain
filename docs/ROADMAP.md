@@ -40,7 +40,9 @@ elegance*:
   silently freezing) — but it does not make the model *identifiable*. A small, bounded amount
   of deliberate operating-point variation is therefore a **precondition for the brain to learn
   a real surface at all**, not merely a way to optimize better. Treat exploration as
-  load-bearing for the math, and prioritize it accordingly.
+  load-bearing for the math, and prioritize it accordingly. (beta7 added the passive
+  `model_under_excited` telemetry signal so operators can *see* the unidentified state and
+  withhold trust from the recommendations; it does not supply the variation. This feature does.)
 - **Puzzle-solver features.**
 - **More advanced active-learning techniques**, building on the exploration primitive above.
 
@@ -66,7 +68,11 @@ Smaller, concrete items surfaced during QA — not blockers, but good hygiene as
   (`G6_HR_OUTLIER_VAR_FLOOR_THS2`, `G6_PW_OUTLIER_VAR_FLOOR_W2`,
   `G6_QUALITY_DENOM_FLOOR_*`) are physically-reasoned and validated against baseline sensor
   noise with comfortable headroom. The power floor in particular is looser than it needs to
-  be and can be tightened once closed-loop field data is in hand.
+  be and can be tightened once closed-loop field data is in hand. The beta7 under-excitation
+  warn level (`G6_EXCITATION_COND_WARN`) belongs in the same calibration pass: it is set
+  conservatively high pending a closed-loop soak, where the genuinely-converged covariance
+  condition number can be measured and the threshold tuned to fire on real under-excitation
+  without crying wolf on a healthy model.
 - **PSD maintenance vs. recovery (optional).** beta6.5 *recovers* from a non-PSD covariance.
   If we ever want to *prevent* it rather than recover, eigenvalue flooring in the stabilizer
   is the principled (heavier) option. Not needed today; revisit only if field data shows the

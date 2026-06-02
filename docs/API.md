@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0.0-beta6.5
+# G6 Brain Public API — v1.0.0-beta7
 
 **Adaptive RLS optimizer with real-time quadratic modeling and analytical J/TH solver for BM1370.**
 
@@ -104,6 +104,14 @@ The `G6BrainTelemetry` struct exposes a consistent point-in-time view of brain s
 | `safety_status` | `G6SafetyStatus` | Current operational state (see [Safety Status Reference](#safety-status-reference)) |
 | `efficiency_mode_active` | `bool` | `true` when `use_efficiency_mode` is set at runtime |
 | `last_recommended_voltage` | `float` | Backward-compatibility alias — mirrors `best_v` exactly |
+| `cov_condition` | `float` | Gershgorin upper-bound estimate of the hashrate covariance condition number — identical to `g6_brain_get_cov_condition()`, surfaced in the snapshot so health can be read in one call. ~1 for a fresh model; climbs without bound when the operating point does not vary (the basis becomes under-identified) |
+| `model_under_excited` | `bool` | Observability flag: `true` once past cold start **and** `cov_condition > G6_EXCITATION_COND_WARN`. Signals that the operating point has not varied enough to identify the response surface, so the optimizer's recommendations are not yet trustworthy — even when `model_quality` reads high (quality measures fit at the visited point, not identifiability). Telemetry only; changes no control behavior. See [Model identifiability](#model-identifiability--under-excitation) |
+
+### Model identifiability & under-excitation
+
+The brain identifies a six-coefficient quadratic surface by recursive least squares, and that identification only works if the operating point **varies**. At a single fixed `(f, v)` only one direction of the parameter space is ever excited, so five of the six coefficients stay undetermined and the covariance `P` ill-conditions. Two things make this easy to miss without a dedicated signal: `model_quality` reads **high** in this state (it measures prediction error at the *visited* point, not whether the surface is identified), and the covariance only trips `G6_SAFETY_P_MATRIX_SINGULAR` recovery at the extreme (fully indefinite), leaving a wide band where recommendations are untrustworthy but nothing warns.
+
+`model_under_excited` fills that gap. When it is `true`, do not act on `best_f`/`best_v` as if they were optimized — the operating point needs to vary so the surface can be identified. The flag and `cov_condition` are observability only and change no control behavior; the threshold is a conservative starting value pending closed-loop field calibration. The full account, and the planned on-device exploration that supplies the needed variation, are in `docs/ROADMAP.md`.
 
 ---
 
