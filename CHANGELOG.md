@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.0.0-beta7] — 2026-06-02
+
+Observability on-ramp for the operating-point identifiability limitation, plus the CI-honesty relabel that the beta6.5 entry described but never actually landed in the workflow file, and two version/link consistency fixes. No control behavior changed and no public API signatures changed — the new telemetry fields are appended to `G6BrainTelemetry`. (Active on-device exploration, which supplies the operating-point variation this release only *measures the absence of*, remains a separate later cycle — see `docs/ROADMAP.md`.)
+
+### Added
+- **Under-excitation observability (telemetry only).** Two fields appended to `G6BrainTelemetry`: `cov_condition` (the Gershgorin condition-number estimate of the hashrate `P`, same value as `g6_brain_get_cov_condition()`, now readable from the snapshot directly) and `model_under_excited` (a `bool`, `true` once past cold start and `cov_condition > G6_EXCITATION_COND_WARN`). At a fixed operating point the six-coefficient quadratic basis is unidentifiable, so the optimizer's recommended `best_f`/`best_v` are undetermined — but `model_quality` reads *high* in that state because it measures fit at the single visited point, not identifiability, and the covariance only trips `G6_SAFETY_P_MATRIX_SINGULAR` at the fully-indefinite extreme. `model_under_excited` surfaces the wide intermediate band where recommendations are not yet trustworthy. **This changes no control behavior** — both fields are pure reads of `P` computed in `g6_brain_get_telemetry()`. New constant `G6_EXCITATION_COND_WARN` (`1e5`) is a conservative starting threshold pending closed-loop field calibration (tracked in `docs/ROADMAP.md`), and is gated on `!cold_start` so a fresh, well-conditioned-but-uninformed model is not mislabelled.
+- **Test: "Telemetry exposes cov_condition and under-excitation flag (observability)."** Asserts `cov_condition` mirrors `g6_brain_get_cov_condition()` exactly, that a fresh fixture reports `cov_condition ≈ 1` with the flag clear, that an ill-conditioned covariance past the threshold sets the flag once out of cold start, and that the same ill-conditioning stays unflagged while still in cold start.
+
+### Changed
+- **CI workflow relabeled to reflect compile-and-link-only (now actually applied).** The beta6.5 changelog claimed this relabel, but the workflow file still read `name: Build & Test` with a `"Build + Unity tests compiled and linked successfully"` verify step — i.e. the doc described a change that was never made. Now corrected in the file: workflow is `Build (compile + link test suite)`, the job is `Build & link (no test execution)`, and the verify step states explicitly that the Unity suite is compiled and linked but **not executed** (a green build is not a green test run), points at `docs/TESTING.md`, and gives the `idf.py -T g6_brain build flash monitor` command. Added a commented-out `qemu-test` job skeleton documenting the real on-target execution path. Directly serves manifesto non-negotiable 3.7.
+- **Documentation for the new observability fields.** `API.md` and `MONITORING.md` gain telemetry-table rows and a "Model identifiability & under-excitation" / "Is the brain's recommendation trustworthy?" subsection each; `GLOSSARY.md` gains an "Under-excitation / Identifiability" entry and a clarifying note on `model_quality`. All frame the fields as observability-only and point at `docs/ROADMAP.md` for the planned exploration.
+
+### Fixed
+- **Stale `Kconfig` version stamp.** `components/g6_brain/Kconfig` still read `# G6 Brain Configuration — v1.0.0-beta6` — it was missed in the beta6.5 version bump (only the `KCONFIG.md` doc was updated). Now `v1.0.0-beta7`.
+- **`docs/README.md` did not link `ROADMAP.md`.** The roadmap was wired into the root `README.md` and `MANIFESTO.md` when it was split out, but the docs-folder index never got the entry. Added to its project-root link list.
+
+---
+
 ## [1.0.0-beta6.5] — 2026-05-29
 
 Correctness pass on the RLS covariance math and the efficiency-mode unit contract, plus the test/CI integrity gaps that let two covariance-dependent test failures ship undetected, and a covariance-divergence guard for the fixed-operating-point case surfaced by real baseline telemetry. No public API signatures changed. Validated against 2,190 samples of real BM1370 baseline telemetry (fixed 815 MHz / 1210 mV); see the validation notes under each item.
