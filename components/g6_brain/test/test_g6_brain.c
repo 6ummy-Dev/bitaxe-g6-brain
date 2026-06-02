@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta6.5
+ * Unity test suite for G6 Brain v1.0.0-beta7
  *
  * Validates tracking model updates, safety thresholds,
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
@@ -11,7 +11,8 @@
  * Dinkelbach J/TH efficiency optimization end-to-end, RLS quadratic
  * convergence on a known noiseless surface (estimator-learns regression
  * guard at the real BM1370 TH/s scale), covariance-divergence recovery on a
- * non-PSD (negative predicted-variance) covariance, and telemetry snapshot.
+ * non-PSD (negative predicted-variance) covariance, and telemetry snapshot
+ * (including the beta7 cov_condition / model_under_excited observability fields).
  */
 
 #include "unity.h"
@@ -704,6 +705,42 @@ TEST_CASE("g6_brain_get_telemetry snapshot captures all operator fields", "[g6_b
     /* Backward-compat alias must mirror best_v. */
     TEST_ASSERT_EQUAL_FLOAT(t.best_v, t.last_recommended_voltage);
     TEST_ASSERT_GREATER_THAN(0u, t.update_count);
+}
+
+TEST_CASE("Telemetry exposes cov_condition and under-excitation flag (observability)", "[g6_brain]") {
+    /* beta7 observability fields. cov_condition must mirror the standalone
+     * accessor exactly, and model_under_excited must follow the documented
+     * rule: (!cold_start) && cov_condition > G6_EXCITATION_COND_WARN. These
+     * are telemetry-only and must not perturb control state. */
+
+    /* Fresh fixture: cold_start true, P = 1e5·I so the condition number is ~1
+     * (well-conditioned). Flag must be false (a fresh model is uninformed, not
+     * under-excited — that early phase is covered by model_quality). */
+    G6BrainTelemetry t0;
+    g6_brain_get_telemetry(&test_brain, &t0);
+    TEST_ASSERT_EQUAL_FLOAT(g6_brain_get_cov_condition(&test_brain), t0.cov_condition);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, t0.cov_condition);
+    TEST_ASSERT_FALSE(t0.model_under_excited);
+
+    /* Force an ill-conditioned covariance past the warn threshold and clear
+     * cold start. cov_condition_estimate returns its large sentinel when the
+     * Gershgorin lower bound is non-positive, which exceeds the warn level. */
+    test_brain.cold_start = false;
+    test_brain.P[0][0] = 1.0e3f;   /* small diagonal vs large off-diagonal -> lower bound <= 0 -> sentinel */
+    test_brain.P[0][1] = 1.0e5f;
+    test_brain.P[1][0] = 1.0e5f;
+
+    G6BrainTelemetry t1;
+    g6_brain_get_telemetry(&test_brain, &t1);
+    TEST_ASSERT_EQUAL_FLOAT(g6_brain_get_cov_condition(&test_brain), t1.cov_condition);
+    TEST_ASSERT_TRUE(t1.cov_condition > G6_EXCITATION_COND_WARN);
+    TEST_ASSERT_TRUE(t1.model_under_excited);
+
+    /* Same ill-conditioning but still in cold start -> flag suppressed. */
+    test_brain.cold_start = true;
+    G6BrainTelemetry t2;
+    g6_brain_get_telemetry(&test_brain, &t2);
+    TEST_ASSERT_FALSE(t2.model_under_excited);
 }
 
 TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain]") {
