@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta6.5
+ * Bitaxe G6 Brain — v1.0.0-beta7
  */
 #pragma once
 
@@ -99,6 +99,32 @@ typedef enum {
  * at TH/s scale. Validate against real telemetry. */
 #define G6_QUALITY_DENOM_FLOOR_HR_THS 0.1f
 #define G6_QUALITY_DENOM_FLOOR_PW_W   1.0f
+
+/* Observability-only under-excitation warn level (beta7).
+ *
+ * The covariance condition number (Gershgorin estimate, see
+ * g6_brain_get_cov_condition) is low for a fresh model (~1 at the 1e5·I cold
+ * start) and for a well-excited, well-conditioned one, but climbs without
+ * bound when the operating point does not vary: at a fixed (f, v) the six-term
+ * quadratic basis is unidentifiable, so most parameter directions are never
+ * excited and the matrix ill-conditions. Crucially, model_quality is NOT a
+ * trustworthiness signal in that regime — it measures fit at the single
+ * visited point and reads HIGH even though the surface (and therefore the
+ * optimizer's recommended setpoint) is undetermined.
+ *
+ * When cov_condition exceeds this level AND the model is past cold start,
+ * G6BrainTelemetry.model_under_excited is set so an operator/integrator knows
+ * the recommendations are not yet trustworthy and the operating point needs to
+ * vary (the beta8 on-device exploration feature will supply that variation
+ * directly). This is telemetry only — it changes NO control behavior.
+ *
+ * Escalation ladder on cov_condition: > this warn (advisory, here) <
+ * self_test fail (5e5, "degraded") < indefinite/negative-variance
+ * (P_MATRIX_SINGULAR recovery). STARTING VALUE: the genuinely-converged
+ * condition number is not known until a closed-loop AUTO soak; set
+ * conservatively high to avoid false "untrustworthy" alarms and calibrate
+ * against field data (tracked in docs/ROADMAP.md). */
+#define G6_EXCITATION_COND_WARN 1.0e5f
 
 #if defined(CONFIG_G6_JTH_MAX_OUTER_ITERS)
 #define G6_JTH_MAX_OUTER_ITERS CONFIG_G6_JTH_MAX_OUTER_ITERS
@@ -215,6 +241,9 @@ typedef struct {
     G6SafetyStatus safety_status;
     bool efficiency_mode_active;
     float last_recommended_voltage; /* kept for backward compat — mirrors best_v */
+    /* Observability (beta7, appended to preserve prior field offsets) */
+    float cov_condition;       /* Gershgorin condition-number estimate of the hashrate P (same value as g6_brain_get_cov_condition) */
+    bool  model_under_excited; /* true when past cold start AND cov_condition > G6_EXCITATION_COND_WARN: recommendations not yet trustworthy (operating point under-varied). Telemetry only — no control effect. */
 } G6BrainTelemetry;
 
 /* Public API */

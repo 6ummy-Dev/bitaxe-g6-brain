@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta6.5
+ * Bitaxe G6 Brain — v1.0.0-beta7
  */
 
 #include "g6_brain.h"
@@ -811,4 +811,13 @@ void g6_brain_get_telemetry(const G6BrainState *brain, G6BrainTelemetry *out)
     out->safety_status = brain->last_safety_status;
     out->efficiency_mode_active = brain->use_efficiency_mode;
     out->last_recommended_voltage = brain->best_v;
+
+    /* Observability-only (beta7): expose the covariance conditioning and a
+     * derived under-excitation flag so operators can tell when the optimizer's
+     * recommendations are not yet trustworthy. Pure reads of P — no control
+     * effect. The flag is gated on !cold_start so a fresh (well-conditioned but
+     * uninformed) model is not mislabelled; that early phase is already covered
+     * by model_quality / cold_start. See G6_EXCITATION_COND_WARN. */
+    out->cov_condition = cov_condition_estimate(brain->P);
+    out->model_under_excited = (!brain->cold_start) && (out->cov_condition > G6_EXCITATION_COND_WARN);
 }
