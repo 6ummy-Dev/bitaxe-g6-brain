@@ -1,4 +1,4 @@
-name: Build & Test
+name: Build (compile + link test suite)
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 
 jobs:
   build-and-test:
+    name: Build & link (no test execution)
     runs-on: ubuntu-latest
 
     steps:
@@ -76,5 +77,22 @@ jobs:
               idf.py build
             "
 
-      - name: Verify
-        run: echo "✅ Build + Unity tests compiled and linked successfully"
+      - name: Build result (compile/link only — tests NOT executed)
+        run: |
+          echo "✅ Build + Unity test suite COMPILED AND LINKED."
+          echo "⚠️  Tests were NOT executed in CI — this job is compile/link only."
+          echo "    A green build is NOT a green test run (MANIFESTO §3)."
+          echo "    The suite must be RUN on hardware or QEMU before tagging — see docs/TESTING.md."
+          echo "    Run: idf.py -T g6_brain build flash monitor"
+
+  # qemu-test:
+  #   # Planned execution path so CI can prove the Unity suite RUNS, not just
+  #   # compiles. Blocked on a stable esp32s3 QEMU + Unity runner image; until
+  #   # then, on-target execution (idf.py -T g6_brain build flash monitor) is the
+  #   # gate, per docs/TESTING.md and the MANIFESTO §3 testing non-negotiable.
+  #   needs: build-and-test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Run Unity suite under QEMU
+  #       run: echo "TODO: execute the Unity suite under esp32s3 QEMU"
