@@ -675,10 +675,10 @@ safety_layer:
     g6_safety_proactive_thermal_scale(brain, temp_c);
 
     /* Only update efficiency telemetry when power_w is within sanity bounds.
-     * On fail-closed paths reached via bad voltage/frequency (line 405), the
-     * power_w sanity check at line 412 was bypassed and the value may be
-     * out-of-range. Skipping the update preserves the last known-good value
-     * in telemetry rather than reporting a garbage ratio. */
+     * On fail-closed paths reached via the f/v bounds check above, the power_w
+     * sanity check was bypassed and the value may be out-of-range. Skipping the
+     * update preserves the last known-good value in telemetry rather than
+     * reporting a garbage ratio. */
     if (hr_ths > 0.0f && power_w >= 0.0f && power_w <= 100.0f) {
         brain->last_efficiency = power_w / hr_ths;
     }

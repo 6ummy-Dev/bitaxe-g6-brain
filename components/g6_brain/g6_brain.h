@@ -115,8 +115,8 @@ typedef enum {
  * When cov_condition exceeds this level AND the model is past cold start,
  * G6BrainTelemetry.model_under_excited is set so an operator/integrator knows
  * the recommendations are not yet trustworthy and the operating point needs to
- * vary (the beta8 on-device exploration feature will supply that variation
- * directly). This is telemetry only — it changes NO control behavior.
+ * vary (the planned on-device exploration feature will supply that variation
+ * directly — see docs/ROADMAP.md). This is telemetry only — it changes NO control behavior.
  *
  * Escalation ladder on cov_condition: > this warn (advisory, here) <
  * self_test fail (5e5, "degraded") < indefinite/negative-variance
