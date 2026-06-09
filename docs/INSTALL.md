@@ -124,7 +124,7 @@ If you see any of these, investigate before continuing:
 
 ---
 
-**Version:** v1.0.0-beta7 (May 2026)
+**Version:** v1.0.0-beta7 (June 2026)
 
 ---
 

@@ -22,7 +22,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **Stabilized Covariance Update** The full Joseph-form P-matrix update applied on each RLS step: a symmetric congruence transform plus the measurement-noise (`k kᵀ`, R=1) injection term, followed by ridge regularization, symmetrization, and per-diagonal clamping. Including the injection term makes the update the exact RLS posterior covariance; the congruence-plus-clamp structure preserves symmetry and positive-definiteness of P under floating-point arithmetic. (An earlier revision omitted the injection term and computed only `(M P Mᵀ)/λ`, which biased P downward.)
 
-**Trace Accumulation Recovery** A safety mechanism that automatically arrests covariance matrix divergence during unbounded learning loops. It zeroes the active polynomial surface and resets matrix confidence to prevent recursive gain explosions, forcing a safe cold-start.
+**Trace Accumulation Recovery** A safety mechanism that automatically arrests covariance matrix divergence during unbounded learning loops. It zeroes the active polynomial surface and resets matrix confidence to prevent recursive gain explosions, forcing a safe cold-start. Recovery also fires on the companion non-PSD trigger — a strictly negative predicted variance `xᵀPx` (loss of positive semi-definiteness, typical at a fixed operating point), which the trace bound does not catch. See `G6_SAFETY_P_MATRIX_SINGULAR` and `SAFETY.md` item 5.
 
 **Statistical Outlier Gating** A data validation layer that calculates expected innovation variance and rejects samples exceeding a 3-sigma statistical bound.
 
@@ -71,7 +71,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 - `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance diverged (trace exceeded `RLS_TRACE_MAX`, or predicted variance `xᵀPx` went negative — non-PSD, typical at a fixed operating point); brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
 - `G6_SAFETY_INPUT_RANGE` — Input failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds.
 
-**P-Matrix Singular Recovery** The automatic recovery flow triggered when `trace(P) > RLS_TRACE_MAX`. Zeros both `theta` arrays and re-seeds the P diagonals at `1e5`, then restores operator-set fields (mode, ceilings, margins, efficiency mode, etc.). The brain re-enters cold-start. See `SAFETY.md` item 5.
+**P-Matrix Singular Recovery** The automatic recovery flow triggered when `trace(P) > RLS_TRACE_MAX` **or** when predicted variance `xᵀPx` goes strictly negative (loss of PSD — non-PSD, typical at a fixed operating point; the trace bound does not catch this). Zeros both `theta` arrays and re-seeds the P diagonals at `1e5`, then restores operator-set fields (mode, ceilings, margins, efficiency mode, etc.). The brain re-enters cold-start. See `SAFETY.md` item 5.
 
 ---
 
@@ -105,4 +105,4 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 ---
 
-**Last updated:** May 2026 (v1.0.0-beta7)
+**Last updated:** June 2026 (v1.0.0-beta7)

@@ -54,7 +54,7 @@ A clean, modular ESP-IDF control component that uses **Recursive Least Squares (
 
 ## Status
 
-- **Version:** v1.0.0-beta7 (May 2026)
+- **Version:** v1.0.0-beta7 (June 2026)
 - **Maturity:** Beta — ready for field testing (48h+ soak recommended before v1.0 tag)
 - **License:** MIT
 

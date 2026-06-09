@@ -72,4 +72,4 @@ The Unity test suite is compiled by CI but not executed on hardware or QEMU. See
 
 ---
 
-**Version:** v1.0.0-beta7 (May 2026)
+**Version:** v1.0.0-beta7 (June 2026)

@@ -37,8 +37,8 @@ The following safety behaviors are **fully active**:
 7. **Power Sanity Check** Rejects physically impossible power values and routes them directly into the fail-closed safety layer, triggering a `G6_SAFETY_POWER_SANITY` freeze.
 
 8. **Control Mode Enforcement**
-   - `G6_MODE_OBSERVE_ONLY`: Safety only — no `best_f` / `best_v` mutation
-   - `G6_MODE_RECOMMEND` (default): Computes optimal but never mutates setpoints
+   - `G6_MODE_OBSERVE_ONLY`: the optimizer/slew path never moves `best_f` / `best_v`. (The proactive thermal/VR derate still applies in every mode as a fail-safe.)
+   - `G6_MODE_RECOMMEND` (default): computes optimal setpoints; the optimizer/slew path does not move `best_f` / `best_v`. (Proactive thermal/VR derate still applies in every mode.)
    - `G6_MODE_AUTO`: Full optimizer with internal slew-rate limiting
 
 9. **Internal Slew Limiting & Slew Amnesia Protection** Slew-rate logic is embedded directly within the tracking update loop. Upward slew is strictly frozen if *any* safety anomaly is active (thermal, VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery), preventing the controller from stepping targets upward based on stale mathematical optimums during unstable physical conditions.
@@ -119,5 +119,5 @@ Monitor these values in production:
 
 ---
 
-**Version:** v1.0.0-beta7 (May 2026)  
+**Version:** v1.0.0-beta7 (June 2026)  
 **Philosophy:** Start safe. Learn. Then optimize. ⚡

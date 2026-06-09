@@ -85,7 +85,7 @@ All options live under: **Component config → G6 Brain Configuration**
 ### `G6_ENABLE_EFFICIENCY_MODE`
 - **Type:** bool
 - **Default:** `n`
-- **Description:** Configures the tracking loop to search for the absolute minimum Watts per TH/s operating coordinate using a parallel power estimator surface and an exact algebraic fractional optimization solver.
+- **Description:** Configures the tracking loop to minimize Watts per TH/s using a parallel power-estimator surface and a bounded analytical Dinkelbach J/TH solver — O(1)-per-step fractional minimization (exact closed form for interior optima; clamped boundary point otherwise), gated on both model qualities ≥ 0.6.
 
 ### `G6_JTH_MAX_OUTER_ITERS`
 - **Type:** int (3–15)
