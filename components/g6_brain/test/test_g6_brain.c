@@ -55,21 +55,44 @@ TEST_CASE("g6_brain_init initializes correctly with Kconfig + control_mode", "[g
 }
 
 TEST_CASE("g6_brain_update with valid synthetic data respects control_mode", "[g6_brain]") {
-    float f = 650.0f, v = 1220.0f, hr = 120.0f, pwr = 15.0f, temp = 55.0f, err = 0.5f;
+    float f = 650.0f, v = 1220.0f, hr = 1.2f, pwr = 15.0f, temp = 55.0f, err = 0.5f;
     uint32_t shares = 50;
 
     esp_err_t ret = g6_brain_update(&test_brain, f, v, hr, pwr, temp, G6_VR_TEMP_NO_SENSOR, err, shares);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
-    TEST_ASSERT_GREATER_THAN(0.0f, test_brain.model_quality);
+    /* model_quality is a float in (0,1] here — use a float-true check, not the
+       integer TEST_ASSERT_GREATER_THAN (which casts a sub-1.0 quality to 0). */
+    TEST_ASSERT_TRUE(test_brain.model_quality > 0.0f);
     /* Clean telemetry, no safety conditions firing → status should be OK. */
     TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
+    /* RECOMMEND (default fixture mode): the optimizer/slew path must not move
+       best_f. (temp is below the proactive zone, so no safety derate either.) */
+    TEST_ASSERT_EQUAL_FLOAT(650.0f, test_brain.best_f);
+
+    /* Switch to AUTO and preset a concave-down response surface whose interior
+       optimum is in-bounds and differs from best_f, so the slew clamp has a real
+       target (mirrors "Internal Slew-Rate Limiting"). Two off-center samples
+       alone leave the 6-coefficient quadratic underdetermined with an
+       out-of-bounds optimum, so get_optimal falls back to best_f and the slew is
+       a silent no-op — the historical B3/B5 slew-test failure mode. */
+    test_brain.control_mode = G6_MODE_AUTO;
+    test_brain.best_f = 650.0f;
+    test_brain.best_v = 1220.0f;
+    test_brain.theta[0] = -1.0f;   /* a < 0                               */
+    test_brain.theta[1] = -0.5f;   /* b < 0  → Hessian negative-definite  */
+    test_brain.theta[2] =  0.0f;   /* c                                   */
+    test_brain.theta[3] =  1.2f;   /* d → fn* = 0.6 → f_cand = 800 MHz     */
+    test_brain.theta[4] =  0.0f;   /* e → vn* = 0   → v_cand = 1220 mV     */
 
     float original_best_f = test_brain.best_f;
 
-    test_brain.control_mode = G6_MODE_AUTO;
-    ret = g6_brain_update(&test_brain, 700.0f, 1250.0f, 1.25f, 16.0f, 56.0f, G6_VR_TEMP_NO_SENSOR, 0.4f, 60);
+    /* AUTO update at the basis center: x = [0,0,0,0,0,1], so the single RLS step
+       only nudges theta[5] and the preset surface shape survives. */
+    ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f, 55.0f, G6_VR_TEMP_NO_SENSOR, 0.5f, 50);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
+    /* AUTO must slew best_f toward the in-bounds optimum, clamped to one step. */
     TEST_ASSERT_NOT_EQUAL(original_best_f, test_brain.best_f);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 675.0f, test_brain.best_f);  /* 650 + dfs_step (25) */
     TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
 }
 
@@ -314,7 +337,12 @@ TEST_CASE("Runtime vr_temp_proactive_margin change alters proactive zone", "[g6_
     TEST_ASSERT_GREATER_OR_EQUAL(800.0f - test_brain.dfs_step_mhz, test_brain.best_f);
 }
 
-TEST_CASE("NER blocks RLS update via is_sample_valid defense-in-depth", "[g6_brain]") {
+TEST_CASE("NER backoff fires on the upstream err_pct > ner_threshold check", "[g6_brain]") {
+    /* err_pct above threshold trips the explicit upstream NER check in
+       g6_brain_update (which calls g6_asic_error_handle_non_blocking and routes
+       to the safety layer). The redundant NER branch inside is_sample_valid() is
+       genuine defense-in-depth but is unreachable from the public API on this
+       path, because the upstream check fires first. */
     uint32_t count_before = test_brain.update_count;
 
     esp_err_t ret = g6_brain_update(&test_brain, 650.0f, 1220.0f, 1.2f, 15.0f,
