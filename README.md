@@ -51,7 +51,7 @@ Full integration example → [`docs/INTEGRATION_EXAMPLE.c`](docs/INTEGRATION_EXA
 | Mode                  | Behaviour |
 |-----------------------|-----------|
 | `G6_MODE_OBSERVE_ONLY` | Safety monitoring only |
-| `G6_MODE_RECOMMEND` *(default)* | Computes optimal setpoints without mutating `best_f` / `best_v` |
+| `G6_MODE_RECOMMEND` *(default)* | Computes optimal setpoints; optimizer/slew does not move `best_f` / `best_v` (safety derate still applies in all modes) |
 | `G6_MODE_AUTO`        | Applies internally slew-rate-limited setpoints |
 
 All modes run the complete safety layer on every update.
