@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta7
+ * Bitaxe G6 Brain — v1.0.0-beta7.1
  */
 #pragma once
 
