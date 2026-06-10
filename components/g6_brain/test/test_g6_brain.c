@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta7
+ * Unity test suite for G6 Brain v1.0.0-beta7.1
  *
  * Validates tracking model updates, safety thresholds,
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
