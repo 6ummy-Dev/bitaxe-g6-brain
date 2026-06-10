@@ -1,4 +1,4 @@
-# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta7)
+# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta7.1)
 
 **How to know if your G6 Brain is healthy, learning, and staying safe.**
 
@@ -126,4 +126,4 @@ g6_brain_reset(&brain);
 
 ---
 
-**Version:** v1.0.0-beta7 (June 2026)
+**Version:** v1.0.0-beta7.1 (June 2026)

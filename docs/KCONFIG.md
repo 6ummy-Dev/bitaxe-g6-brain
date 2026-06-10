@@ -1,4 +1,4 @@
-# G6 Brain Configuration — v1.0.0-beta7
+# G6 Brain Configuration — v1.0.0-beta7.1
 
 All options live under: **Component config → G6 Brain Configuration**
 

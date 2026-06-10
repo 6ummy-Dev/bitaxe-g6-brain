@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0.0-beta7
+# G6 Brain Public API — v1.0.0-beta7.1
 
 **Adaptive RLS optimizer with real-time quadratic modeling and analytical J/TH solver for BM1370.**
 

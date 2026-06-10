@@ -1,4 +1,4 @@
-# G6 Brain Installation & Integration Guide — v1.0.0-beta7
+# G6 Brain Installation & Integration Guide — v1.0.0-beta7.1
 
 **Target:** Bitaxe ESP-Miner (Gamma 602+ / BM1370)
 
@@ -124,7 +124,7 @@ If you see any of these, investigate before continuing:
 
 ---
 
-**Version:** v1.0.0-beta7 (June 2026)
+**Version:** v1.0.0-beta7.1 (June 2026)
 
 ---
 
