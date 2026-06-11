@@ -1,5 +1,5 @@
 /*
- * Unity test suite for G6 Brain v1.0.0-beta7.1
+ * Unity test suite for G6 Brain v1.0.0-beta7.5
  *
  * Validates tracking model updates, safety thresholds,
  * full G6SafetyStatus enum coverage (OK / THERMAL / VR_THERMAL /
@@ -7,12 +7,16 @@
  * INPUT_RANGE), outlier gating, input validation (fail-closed routing),
  * non-anomaly rejection paths (low shares, insignificant innovation —
  * status stays OK, update_count unchanged),
- * NVS round-trip and corruption recovery, internal slew rate limits,
+ * NVS round-trip and corruption recovery (bad-size and oversized blobs),
+ * internal slew rate limits,
  * Dinkelbach J/TH efficiency optimization end-to-end, RLS quadratic
  * convergence on a known noiseless surface (estimator-learns regression
  * guard at the real BM1370 TH/s scale), covariance-divergence recovery on a
  * non-PSD (negative predicted-variance) covariance, and telemetry snapshot
  * (including the beta7 cov_condition / model_under_excited observability fields).
+ *
+ * Tests are NVS-isolated: setUp erases the fingerprint key before init, so
+ * every case cold-starts clean-room — order-independent and re-run-stable.
  */
 
 #include "unity.h"
@@ -36,6 +40,21 @@ void setUp(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    /* Per-test NVS isolation: erase any fingerprint left by a previous test
+     * (or by a previous run of the suite on the same flash). g6_brain_init()
+     * warm-starts from NVS, so without this erase every test that runs after
+     * the save/load round-trip inherits its blob — cold_start arrives false
+     * ("Cold start flag clears" fails on its first assert) and P[0][0]
+     * arrives at 12345 (the fresh-fixture cov_condition ~= 1 check fails).
+     * The same mechanism failed the whole suite from the second run onward
+     * on unerased flash. Invisible under compile-only CI. */
+    nvs_handle_t iso;
+    if (nvs_open("g6_brain", NVS_READWRITE, &iso) == ESP_OK) {
+        nvs_erase_key(iso, "theta_fingerprint");
+        nvs_commit(iso);
+        nvs_close(iso);
+    }
 
     ret = g6_brain_init(&test_brain);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
@@ -315,12 +334,14 @@ TEST_CASE("VR hard ceiling steps back both best_v and best_f", "[g6_brain]") {
 
 TEST_CASE("vr_temp_proactive_margin field is initialized from Kconfig default", "[g6_brain]") {
     TEST_ASSERT_EQUAL_FLOAT(G6_VR_TEMP_PROACTIVE_MARGIN_DEFAULT, test_brain.vr_temp_proactive_margin);
-    TEST_ASSERT_GREATER_THAN(0.0f, test_brain.vr_temp_proactive_margin);
+    /* Float-true check: the generic GREATER_THAN macro compares as int. */
+    TEST_ASSERT_TRUE(test_brain.vr_temp_proactive_margin > 0.0f);
 }
 
 TEST_CASE("temp_proactive_margin field is initialized from Kconfig default", "[g6_brain]") {
     TEST_ASSERT_EQUAL_FLOAT(G6_TEMP_PROACTIVE_MARGIN_DEFAULT, test_brain.temp_proactive_margin);
-    TEST_ASSERT_GREATER_THAN(0.0f, test_brain.temp_proactive_margin);
+    /* Float-true check: the generic GREATER_THAN macro compares as int. */
+    TEST_ASSERT_TRUE(test_brain.temp_proactive_margin > 0.0f);
 }
 
 TEST_CASE("Runtime vr_temp_proactive_margin change alters proactive zone", "[g6_brain]") {
@@ -438,8 +459,8 @@ TEST_CASE("g6_brain_update accepts G6_VR_TEMP_NO_SENSOR sentinel", "[g6_brain]")
  * Two code paths inside g6_brain_update reject a sample WITHOUT setting a
  * safety status — by design, since they are not safety events:
  *
- *   1. share_count < MIN_SHARE_COUNT  (line ~444, via is_sample_valid)
- *   2. xPx < RLS_INNOVATION_THRESHOLD (line ~471, has_significant_innovation)
+ *   1. share_count < MIN_SHARE_COUNT  (the share gate in is_sample_valid)
+ *   2. xPx < RLS_INNOVATION_THRESHOLD (the has_significant_innovation gate)
  *
  * The contract on these paths is:
  *   - ESP_OK is returned
@@ -502,6 +523,36 @@ TEST_CASE("NVS bad-size blob is erased on load (B5-NIT-2 actually fires)", "[g6_
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 
     /* Re-open and confirm the bad blob is actually gone. */
+    ret = nvs_open("g6_brain", NVS_READONLY, &nvs);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    size_t blob_size = 0;
+    esp_err_t get_err = nvs_get_blob(nvs, "theta_fingerprint", NULL, &blob_size);
+    nvs_close(nvs);
+    TEST_ASSERT_EQUAL(ESP_ERR_NVS_NOT_FOUND, get_err);
+}
+
+TEST_CASE("NVS oversized blob (exceeds read buffer) is erased on load", "[g6_brain]") {
+    /* Regression for the ESP_ERR_NVS_INVALID_LENGTH path: a blob LARGER than
+     * the load path's read buffer (1024 bytes) makes nvs_get_blob fail with
+     * INVALID_LENGTH instead of returning ESP_OK, so the old code matched
+     * neither mismatch branch and silently kept the stale blob forever —
+     * every boot, no log, no erase. The load path now treats INVALID_LENGTH
+     * as a size mismatch: WARN, erase, cold start. (If the internal buffer
+     * ever grows past 2048, this blob degrades into an ordinary in-buffer
+     * size mismatch — still erased, so the test stays valid either way.) */
+    nvs_handle_t nvs;
+    esp_err_t ret = nvs_open("g6_brain", NVS_READWRITE, &nvs);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+
+    static uint8_t big_blob[2048] = {0xA5};
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_set_blob(nvs, "theta_fingerprint", big_blob, sizeof(big_blob)));
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_commit(nvs));
+    nvs_close(nvs);
+
+    ret = g6_brain_load_nvs_fingerprint(&test_brain);
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_TRUE(test_brain.cold_start);
+
     ret = nvs_open("g6_brain", NVS_READONLY, &nvs);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     size_t blob_size = 0;
@@ -632,10 +683,14 @@ TEST_CASE("Dinkelbach optimizer improves J/TH over naive hashrate-only point", "
     float pw_opt = test_brain.power_theta[0]*fn_opt*fn_opt + test_brain.power_theta[3]*fn_opt + test_brain.power_theta[5];
     float jth_opt = pw_opt / hr_opt;
 
-    /* The optimizer's point must be meaningfully more efficient (>1% better). */
-    TEST_ASSERT_LESS_THAN(jth_start * 0.99f, jth_opt);
-    /* And the predicted HR must be above the minimum viable threshold. */
-    TEST_ASSERT_GREATER_OR_EQUAL(G6_EFFICIENCY_MIN_HR_THS, pred_hr);
+    /* The optimizer's point must be meaningfully more efficient (>1% better).
+     * Float-true check: the integer-comparing generic macro only passed here
+     * because 15.35 vs 17.73 happen to still differ after truncation. */
+    TEST_ASSERT_TRUE(jth_opt < jth_start * 0.99f);
+    /* And the predicted HR must be above the minimum viable threshold.
+     * Float-true check: with the 0.5f floor truncating to 0, the old integer
+     * compare accepted ANY pred_hr > -1 — it asserted nothing. */
+    TEST_ASSERT_TRUE(pred_hr >= G6_EFFICIENCY_MIN_HR_THS);
 }
 
 TEST_CASE("Dinkelbach does not fire below model quality threshold", "[g6_brain]") {
@@ -705,8 +760,12 @@ TEST_CASE("RLS converges to a known quadratic surface (noiseless)", "[g6_brain]"
     for (int i = 0; i < RLS_N; i++) {
         TEST_ASSERT_FLOAT_WITHIN(0.02f, th_true[i], test_brain.theta[i]);
     }
-    /* Model quality should be high once converged on clean data. */
-    TEST_ASSERT_GREATER_THAN(0.6f, test_brain.model_quality);
+    /* Model quality should be high once converged on clean data. Float-true
+     * check: the generic TEST_ASSERT_GREATER_THAN compares as int, so 0.6f
+     * and a converged ~0.99 quality both truncate to 0 and `0 > 0` fails at
+     * runtime even on a perfect model — the same integer-macro trap the
+     * beta7.1 control-mode fix removed, surviving here under compile-only CI. */
+    TEST_ASSERT_TRUE(test_brain.model_quality > 0.6f);
 }
 
 /* ====================== TELEMETRY SNAPSHOT ====================== */
