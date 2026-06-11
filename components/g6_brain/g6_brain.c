@@ -1,6 +1,6 @@
 /*
  * g6_brain.c
- * Bitaxe G6 Brain — v1.0.0-beta7.1
+ * Bitaxe G6 Brain — v1.0.0-beta7.5
  */
 
 #include "g6_brain.h"
@@ -20,6 +20,16 @@ static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
 static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE 1024
+
+/* The serialized fingerprint frame (version + size header + both theta vectors
+ * + both P matrices) must fit the stack buffer used by save/load. Today the
+ * frame is 344 bytes; this guard turns a future RLS_N growth that would
+ * silently overflow the buffer in save/load into a compile error instead. */
+_Static_assert(sizeof(uint32_t)*2 +
+               sizeof(((G6BrainState *)0)->theta) + sizeof(((G6BrainState *)0)->P) +
+               sizeof(((G6BrainState *)0)->power_theta) + sizeof(((G6BrainState *)0)->power_P)
+               <= G6_NVS_FINGERPRINT_BUFFER_SIZE,
+               "NVS fingerprint frame exceeds G6_NVS_FINGERPRINT_BUFFER_SIZE");
 
 static inline float evaluate_quadratic(const float theta[RLS_N], float fn, float vn)
 {
@@ -198,14 +208,26 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
                      stored_version, (unsigned)G6_NVS_SCHEMA_VERSION);
             brain->cold_start = true;
             esp_err_t erase_err = nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
-            if (erase_err == ESP_OK) nvs_commit(nvs);
+            if (erase_err == ESP_OK) erase_err = nvs_commit(nvs);
+            if (erase_err != ESP_OK)
+                ESP_LOGE(TAG, "NVS erase failed: %s", esp_err_to_name(erase_err));
         }
-    } else if (err == ESP_OK && blob_size != expected_blob_size) {
+    } else if ((err == ESP_OK && blob_size != expected_blob_size) ||
+               err == ESP_ERR_NVS_INVALID_LENGTH) {
+        /* Wrong-sized blob. ESP_ERR_NVS_INVALID_LENGTH is the oversized case:
+         * the stored blob exceeds the read buffer, nvs_get_blob fails before
+         * the size comparison can run, and blob_size holds the actual stored
+         * size. Previously this matched neither mismatch branch, so the stale
+         * blob was silently retained on every boot — never loaded, never
+         * erased — contradicting the documented bad-blob auto-erase. Treat it
+         * exactly like an in-buffer size mismatch: WARN, erase, cold start. */
         ESP_LOGW(TAG, "NVS blob size mismatch (got %u, expected %u) — erasing",
                  (unsigned)blob_size, (unsigned)expected_blob_size);
         brain->cold_start = true;
         esp_err_t erase_err = nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
-        if (erase_err == ESP_OK) nvs_commit(nvs);
+        if (erase_err == ESP_OK) erase_err = nvs_commit(nvs);
+        if (erase_err != ESP_OK)
+            ESP_LOGE(TAG, "NVS erase failed: %s", esp_err_to_name(erase_err));
     }
     nvs_close(nvs);
     return ESP_OK;
@@ -662,7 +684,7 @@ safety_layer:
         brain->best_f += df;
 
         float dv = candidate_v - brain->best_v;
-        if (fabsf(dv) > 5.0f) dv = copysignf(5.0f, dv);
+        if (fabsf(dv) > G6_SLEW_STEP_MV_MAX) dv = copysignf(G6_SLEW_STEP_MV_MAX, dv);
         brain->best_v += dv;
     }
 

@@ -1,6 +1,6 @@
 /*
  * g6_brain.h
- * Bitaxe G6 Brain — v1.0.0-beta7.1
+ * Bitaxe G6 Brain — v1.0.0-beta7.5
  */
 #pragma once
 
@@ -75,6 +75,15 @@ typedef enum {
 #define G6_EFFICIENCY_MIN_HR_THS 0.5f
 
 #define MIN_SHARE_COUNT 20
+
+/* AUTO-mode per-tick voltage slew clamp (mV). The frequency counterpart is
+ * runtime-configurable (Kconfig G6_DFS_STEP_MHZ -> dfs_step_mhz); the voltage
+ * step has been a fixed 5 mV since the slew limiter landed in beta3 and stays
+ * compile-time for now — but it sits directly in the safety-relevant slew
+ * path, so it gets a name instead of a bare literal. Promotion to a Kconfig
+ * tunable is deliberately deferred to the exploration cycle, where per-axis
+ * step sizing gets revisited as a whole. */
+#define G6_SLEW_STEP_MV_MAX 5.0f
 
 /* Statistical outlier-gate noise-variance floors (the "+sigma^2" term added to
  * the innovation variance xPx before the 3-sigma test err^2 > 9*(xPx+floor)).
@@ -196,7 +205,7 @@ typedef struct {
     /* Internal Timing / State */
     uint32_t last_update_timestamp;
     uint32_t nvs_last_write_tick;
-    uint32_t last_setting_change_tick;
+    uint32_t last_setting_change_tick; /* Tick of the most recent AUTO-mode setpoint movement. Written, never read yet — reserved for the future settle/measure window; kept out of telemetry until it has a consumer. */
 
     /* Telemetry */
     float last_efficiency;
