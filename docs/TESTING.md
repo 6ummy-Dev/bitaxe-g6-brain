@@ -1,6 +1,6 @@
 # G6 Brain Testing Guide
 
-This guide is intended for community members testing the **v1.0.0-beta7.1** release.
+This guide is intended for community members testing the **v1.0.0-beta7.5** release.
 
 ## What to Test
 
@@ -8,7 +8,7 @@ Read [`CHANGELOG.md`](../CHANGELOG.md) for the full list of changes by release. 
 
 - **Fail-closed input handling.** Every bad numeric input (NaN, Inf, out-of-bounds, `hr_ths <= 0`) routes through the safety layer with `G6_SAFETY_INPUT_RANGE` rather than being silently dropped. `ESP_ERR_INVALID_ARG` is reserved for `brain == NULL`. Confirm via telemetry: a sensor glitch should be visible as a status, never as a missed tick.
 - **Two-tier thermal protection.** ASIC die temperature gates RLS learning; VR regulator temperature is enforced on the setpoint path. Both have configurable hard ceilings and proactive margins. If your board has a VR sensor, pass `vr_temp_c` and verify both proactive and hard-ceiling derating; otherwise pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`).
-- **Slew-rate amnesia.** Upward slew is frozen during *any* active safety condition. After a fault clears, the controller resumes from the constrained setpoint, not from the pre-fault optimum.
+- **Slew-rate amnesia.** The optimizer's slew step is suspended (both directions) during *any* active safety condition — only the safety derates move setpoints mid-anomaly. After a fault clears, the controller resumes from the constrained setpoint, not from the pre-fault optimum.
 - **P-matrix divergence recovery.** When the covariance trace exceeds bounds, the brain re-cold-starts while preserving operator config (mode, ceilings, margins, efficiency mode, slew step, NER threshold). One `WARN`-level log line and `G6_SAFETY_P_MATRIX_SINGULAR` on the recovery tick — hard to reach in practice, but if it happens you should see exactly this signature.
 - **Telemetry-as-primary-signal.** The brain logs almost nothing during normal operation; the `G6BrainTelemetry` snapshot is the canonical health signal. Watch `update_count` deltas alongside `safety_status` — see [`MONITORING.md`](MONITORING.md) for the "distinguishing accepted vs rejected samples" guidance.
 
@@ -38,7 +38,7 @@ When testing, pay attention to:
 
 ### 2. Fail-Closed Validation & Slew Protection
 - Intentionally feed the brain an out-of-bounds parameter (e.g., `f_mhz = 1500`).
-- Verify that the internal tracking logic halts upward optimization, enforces strict hardware clamps (`best_f` clamped to 950), and reports a `G6_SAFETY_INPUT_RANGE` status via telemetry rather than simply ignoring the frame.
+- Verify that the brain reports a `G6_SAFETY_INPUT_RANGE` status via telemetry rather than simply ignoring the frame, and that optimizer movement is suspended for that tick. Note what does *not* happen: `best_f` is not dragged toward the bad input or snapped to a bound — it stays where it was. The hardware clamps guarantee `best_f`/`best_v` can never *leave* 400–950 MHz / 1050–1350 mV; they do not retarget the recommendation in response to bad telemetry.
 - Repeat with a NaN input (e.g., `power_w = NAN`) and confirm the same fail-closed behavior — `safety_status` reports `G6_SAFETY_INPUT_RANGE`, the safety layer still ran (proactive thermal helpers fired if conditions were met), and `ESP_OK` was returned. Only `brain == NULL` should ever return `ESP_ERR_INVALID_ARG`.
 
 ### 3. Safety Status Telemetry
@@ -68,8 +68,8 @@ When reporting logs or anomalies, please include:
 
 ### Note on CI test coverage
 
-The Unity test suite is compiled by CI but not executed on hardware or QEMU. See the CHANGELOG for the current test case count per release. Tests that pass compile-check but fail at runtime have slipped through in the past (see B5-BUG-20 in the changelog for a worked example). If you are doing serious testing on real hardware, run the test suite locally with `idf.py -T g6_brain build flash monitor` against a known-good Bitaxe Gamma — that is the most authoritative validation we currently have.
+The Unity test suite is compiled by CI but not executed on hardware or QEMU. See the CHANGELOG for the current test case count per release. Tests that pass compile-check but fail at runtime have slipped through repeatedly — see the beta6.5 entry's two latent covariance-dependent failures and the beta7.5 entry's NVS cross-test contamination in `CHANGELOG.md` for worked examples. If you are doing serious testing on real hardware, run the test suite locally with `idf.py -T g6_brain build flash monitor` against a known-good Bitaxe Gamma — that is the most authoritative validation we currently have.
 
 ---
 
-**Version:** v1.0.0-beta7.1 (June 2026)
+**Version:** v1.0.0-beta7.5 (June 2026)

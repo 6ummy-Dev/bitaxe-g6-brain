@@ -1,6 +1,6 @@
 # GLOSSARY.md — Terminology
 
-**G6 Brain v1.0.0-beta7.1**
+**G6 Brain v1.0.0-beta7.5**
 
 This glossary defines key terms used throughout the codebase, documentation, and discussions.
 
@@ -66,7 +66,7 @@ This glossary defines key terms used throughout the codebase, documentation, and
 - `G6_SAFETY_VR_THERMAL` — Voltage regulator at or near its ceiling. Proactive zone steps back voltage only; hard ceiling steps back both voltage and frequency.
 - `G6_SAFETY_VOLTAGE` — *Reserved.* Allocated for a future VRM-ripple check; not currently set by any code path. Present in the enum so operators compiled against earlier beta versions don't see integer-mapping changes.
 - `G6_SAFETY_POWER_SANITY` — `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model 3-sigma outlier was rejected during efficiency-mode learning.
-- `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate. If the brain has already accumulated more than 25 updates, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges.
+- `G6_SAFETY_NER_BACKOFF` — Nonce Error Rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate. If the brain has already accumulated more than 25 updates, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update. `model_quality` is an instantaneous fit metric (not an EMA), so the 0.25 value lasts only until the next accepted update recomputes it — on a well-fit model a single clean sample can lift it back over the 0.6 solver gate.
 - `G6_SAFETY_SAMPLE_QUALITY` — Hashrate sample was rejected by the 3-sigma statistical outlier gate before reaching the RLS update.
 - `G6_SAFETY_P_MATRIX_SINGULAR` — Covariance diverged (trace exceeded `RLS_TRACE_MAX`, or predicted variance `xᵀPx` went negative — non-PSD, typical at a fixed operating point); brain auto-recovered into a fresh cold-start while preserving operator config. Also emits `"P matrix diverged — cold-start recovery applied"` at WARN level.
 - `G6_SAFETY_INPUT_RANGE` — Input failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds.
@@ -101,8 +101,8 @@ This glossary defines key terms used throughout the codebase, documentation, and
 
 **G6_EFFICIENCY_MIN_HR_THS** Minimum predicted hashrate (`0.5` TH/s) below which the Dinkelbach J/TH solver skips a candidate point. Prevents near-zero division and guards against optimizing in regions where the power model has no physical meaning. Must sit well below the BM1370's real hashrate (~1.0–1.2 TH/s); the prior `8.0` value exceeded real hashrate and silently disabled efficiency mode on hardware. Compile-time macro, not a Kconfig option.
 
-**Slew Rate** The internally controlled rate of change for frequency and voltage. Upward slew is frozen during safety anomalies.
+**Slew Rate** The internally controlled rate of change for frequency and voltage. The optimizer's slew step is suspended in both directions while any safety anomaly is active; during an anomaly the only setpoint movement comes from the safety derates.
 
 ---
 
-**Last updated:** June 2026 (v1.0.0-beta7.1)
+**Last updated:** June 2026 (v1.0.0-beta7.5)

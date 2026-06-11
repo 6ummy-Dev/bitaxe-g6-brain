@@ -67,5 +67,5 @@ This file provides proper academic credit and stable references for the core tec
 
 ---
 
-**Last updated:** May 2026  
+**Last updated:** June 2026 (v1.0.0-beta7.5)  
 **Maintainer:** 6ummy-Dev

@@ -1,4 +1,4 @@
-# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta7.1
+# G6 Brain Safety & Unhappy-Path Engineering — v1.0.0-beta7.5
 
 **This is not a happy-path optimizer.** The G6 Brain is deliberately engineered to **fail safe** under real-world conditions on Bitaxe Gamma hardware.
 
@@ -41,7 +41,7 @@ The following safety behaviors are **fully active**:
    - `G6_MODE_RECOMMEND` (default): computes optimal setpoints; the optimizer/slew path does not move `best_f` / `best_v`. (Proactive thermal/VR derate still applies in every mode.)
    - `G6_MODE_AUTO`: Full optimizer with internal slew-rate limiting
 
-9. **Internal Slew Limiting & Slew Amnesia Protection** Slew-rate logic is embedded directly within the tracking update loop. Upward slew is strictly frozen if *any* safety anomaly is active (thermal, VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery), preventing the controller from stepping targets upward based on stale mathematical optimums during unstable physical conditions.
+9. **Internal Slew Limiting & Slew Amnesia Protection** Slew-rate logic is embedded directly within the tracking update loop. The optimizer's slew step is suspended in **both directions** while *any* safety anomaly is active (thermal, VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery): the controller neither steps targets upward on stale mathematical optimums nor chases a lower optimum mid-anomaly — while an anomaly is active, the only setpoint movement comes from the safety derates themselves.
 
 10. **Analytical J/TH Solver Bounding** The analytical efficiency fractional solver runs in $O(1)$ per outer step (no iterative line search): for an *interior* optimum the Dinkelbach inner step is an exact closed-form minimizer, while at the bounding box the result is the clamped boundary point. Generated normalized coordinates are strictly clamped to the physical limits to prevent mathematical overshoot or bounding-box stalls when traversing degraded power surfaces. 
 
@@ -76,7 +76,7 @@ The `last_safety_status` field (exposed via `G6BrainTelemetry.safety_status`) re
 | `G6_SAFETY_VR_THERMAL` | VR regulator at or near its ceiling. Triggers voltage step-back; both voltage and frequency step back at the hard ceiling. |
 | `G6_SAFETY_VOLTAGE` | Reserved for a future VRM-ripple check. Currently never set by any code path. Operators can ignore this value. |
 | `G6_SAFETY_POWER_SANITY` | `power_w` outside the physically plausible range (`< 0` or `> 100 W`), or a power-model statistical outlier was rejected. |
-| `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25 so quality-gated features (J/TH solver) re-arm only after observable recovery, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate (`lambda = 0.985`). If `update_count > 25` at the time of the event, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update; the `model_quality = 0.25` floor persists until the model re-converges. |
+| `G6_SAFETY_NER_BACKOFF` | Nonce error rate exceeded `ner_threshold`. The brain applies a conservative ~8% frequency back-off, forces `model_quality` down to 0.25 so quality-gated features (J/TH solver) re-arm only after observable recovery, and momentarily re-enters cold-start so the next RLS update runs at the conservative learning rate (`lambda = 0.985`). If `update_count > 25` at the time of the event, the cold-start flag clears on the very next clean update — the conservative learning rate is in effect for that one update. `model_quality` is an instantaneous fit metric (not an EMA), so the 0.25 value lasts only until the next accepted update recomputes it — on a well-fit model a single clean sample can lift it back over the 0.6 solver gate. |
 | `G6_SAFETY_SAMPLE_QUALITY` | Hashrate-model statistical outlier rejected by the 3-sigma gate. |
 | `G6_SAFETY_P_MATRIX_SINGULAR` | Covariance diverged — either the trace exceeded `RLS_TRACE_MAX` or the predicted variance `xᵀPx` went negative (non-PSD, typical at a fixed operating point) — and the brain ran auto-recovery (see item 5 above). |
 | `G6_SAFETY_INPUT_RANGE` | Input telemetry failed validation: non-finite (NaN/Inf), `hr_ths <= 0`, or `f_mhz`/`v_mv` outside BM1370 hardware bounds. |
@@ -119,5 +119,5 @@ Monitor these values in production:
 
 ---
 
-**Version:** v1.0.0-beta7.1 (June 2026)  
+**Version:** v1.0.0-beta7.5 (June 2026)  
 **Philosophy:** Start safe. Learn. Then optimize. ⚡

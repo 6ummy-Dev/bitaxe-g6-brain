@@ -77,6 +77,19 @@ Smaller, concrete items surfaced during QA — not blockers, but good hygiene as
   If we ever want to *prevent* it rather than recover, eigenvalue flooring in the stabilizer
   is the principled (heavier) option. Not needed today; revisit only if field data shows the
   recovery cadence is disruptive.
+- **Innovation-gate deduplication.** `g6_brain_update()` computes the predicted variance
+  `xᵀPx` for the covariance-divergence guard, then `has_significant_innovation()` recomputes
+  the identical quadratic form (and again for the power channel in efficiency mode).
+  Bit-identical today — same per-element accumulation order, verified by hand-trace — so this
+  is pure redundancy: ~70 extra FLOPs per tick and a duplicated expression that could drift
+  apart under future edits. Deliberately not touched in the beta7.5 point release (it sits in
+  the estimator hot path); fold into the next cycle that touches the update loop, with an
+  equivalence assertion in the suite when it lands.
+- **`model_quality` smoothing (EMA).** Quality is an instantaneous per-sample fit metric, so
+  the NER back-off's 0.25 clamp lasts exactly one accepted update and the ≥ 0.6 solver gate
+  can re-arm (or flicker) on a single sample. An EMA or windowed quality would make the
+  back-off's "re-arm only after observable recovery" intent real and de-noise the gate.
+  Control-behavior change — exploration-cycle material, not a point release.
 
 ---
 

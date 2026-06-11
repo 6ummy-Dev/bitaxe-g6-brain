@@ -1,4 +1,4 @@
-# G6 Brain Public API — v1.0.0-beta7.1
+# G6 Brain Public API — v1.0.0-beta7.5
 
 **Adaptive RLS optimizer with real-time quadratic modeling and analytical J/TH solver for BM1370.**
 
@@ -44,7 +44,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
 | `temp_c` | °C | Current ASIC die temperature. Validated as finite only — see [Sensor Sanity](#sensor-sanity) below. |
 | `vr_temp_c` | °C | Voltage regulator temperature. Pass `G6_VR_TEMP_NO_SENSOR` (`-1.0f`) if no VR sensor is available — all VR thermal checks are silently skipped. Validated as finite only. |
 | `err_pct` | % | Nonce error rate (0..100). Validated as finite only. |
-| `share_count` | count | Shares observed during the measurement window. Pass `0` if unknown. |
+| `share_count` | count | Shares observed during the measurement window. Pass `0` if unknown — but note the consequence: any value below `MIN_SHARE_COUNT` (20) is rejected by the share gate on every tick, so the RLS never updates and the brain runs as a safety monitor only (`safety_status` stays `G6_SAFETY_OK`, `update_count` stays flat). Feed a real per-window count for the brain to learn. |
 
 - **Returns:**
   - `ESP_OK` on every call where `brain` is a valid pointer — **including** calls with bad numeric inputs. Out-of-bounds, non-finite (NaN/Inf), or otherwise unusable telemetry is routed fail-closed to the safety layer per manifesto non-negotiable 3.7 ("Every safety check executes even on invalid or rejected samples"). The caller should inspect `last_safety_status` (or the telemetry snapshot) to see how the frame was handled — see the [Safety Status Reference](#safety-status-reference) below.
@@ -139,7 +139,7 @@ Status priority on a single tick: thermal/VR-thermal helpers run last in the saf
 
 ### `esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)`
 
-- **Purpose:** Loads warm-start data from NVS. On schema or blob-size mismatch the stale blob is erased and the brain begins from a fresh cold start.
+- **Purpose:** Loads warm-start data from NVS. On schema or blob-size mismatch (including a blob larger than the internal read buffer) the stale blob is erased and the brain begins from a fresh cold start. If the erase itself fails, the documented `NVS erase failed: <esp_err>` ERROR line is emitted (see `MONITORING.md`).
 
 ### `esp_err_t g6_brain_save_nvs_fingerprint(const G6BrainState *brain)`
 
@@ -157,5 +157,6 @@ Defined in `g6_brain.h`. Useful for callers that want to check input ranges or i
 | `BM1370_V_MIN` / `BM1370_V_MAX` | 1050 / 1350 mV | Hardware voltage bounds |
 | `G6_VR_TEMP_NO_SENSOR` | `-1.0f` | Sentinel for `vr_temp_c` when no VR sensor is wired |
 | `G6_EFFICIENCY_MIN_HR_THS` | `0.5f` TH/s | Minimum predicted hashrate below which the Dinkelbach solver skips a candidate point (prevents near-zero division and degenerate efficiency calculations). Must sit well below the BM1370's real hashrate (~1.0–1.2 TH/s stock, ~1.5 OC); the prior `8.0` value silently disabled efficiency mode on real hardware. Feed `hr_ths` in TH/s — convert AxeOS GH/s by dividing by 1000. |
+| `G6_SLEW_STEP_MV_MAX` | `5.0f` mV | AUTO-mode per-tick voltage slew clamp. Frequency's counterpart is the Kconfig-backed `dfs_step_mhz`; the voltage step is compile-time for now (named in beta7.5 — previously a bare literal in the slew path) |
 | `MIN_SHARE_COUNT` | 20 | Minimum shares before a sample is considered for RLS update |
 | `RLS_N` | 6 | Number of RLS coefficients (quadratic in two variables) |

@@ -1,4 +1,4 @@
-# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta7.1)
+# MONITORING.md — Real-Time G6 Brain Observability (v1.0.0-beta7.5)
 
 **How to know if your G6 Brain is healthy, learning, and staying safe.**
 
@@ -15,7 +15,7 @@ These are the only log lines emitted from inside `g6_brain.c`. Tag is `G6_BRAIN`
 | `P matrix diverged — cold-start recovery applied` | WARN | Covariance diverged (trace exceeded `RLS_TRACE_MAX`, **or** predicted variance `xᵀPx` went negative — typical when running at a fixed operating point); brain auto-recovered into a fresh cold-start while preserving your operator config. See `SAFETY.md` item 5. | Occasional events are expected over long uptimes, and at a genuinely fixed setpoint the negative-variance case can recur periodically by design. If it appears frequently *while the operating point is varying*, that indicates an estimator-tuning issue (lambda min, ridge, or trace bound). A little operating-point movement (even a few MHz/mV) stops the fixed-point case. |
 | `Power Outlier Rejected` | WARN | A power-model 3-sigma gate caught a glitched `power_w` reading. The frame was dropped before updating the power model. | Frequent occurrences → inspect power sensor (INA219/INA260) wiring, sampling rate, or PSU noise. Sporadic single events are normal. |
 | `NVS schema mismatch (got vN, expected vM) — erasing` | WARN | The NVS fingerprint blob is from an older brain version. The brain erased it and starts cold. | None — automatic, one-time per upgrade. |
-| `NVS blob size mismatch (got X, expected Y) — erasing` | WARN | The NVS blob is the right schema version but wrong byte size (struct evolution or partial write). Brain erased it and starts cold. | None — automatic. |
+| `NVS blob size mismatch (got X, expected Y) — erasing` | WARN | The NVS blob is the right schema version but wrong byte size (struct evolution, partial write, or a blob larger than the read buffer). Brain erased it and starts cold. | None — automatic. |
 | `NVS erase failed: <esp_err>` | ERROR | NVS subsystem failed to erase a stale blob. The brain still starts cold this boot, but the bad blob persists across reboots. | Inspect NVS partition health. |
 
 **Grep recipe** (matches every line the brain actually emits):
@@ -126,4 +126,4 @@ g6_brain_reset(&brain);
 
 ---
 
-**Version:** v1.0.0-beta7.1 (June 2026)
+**Version:** v1.0.0-beta7.5 (June 2026)

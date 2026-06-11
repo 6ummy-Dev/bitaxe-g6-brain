@@ -1,6 +1,6 @@
 # AGENTS.md — Engineering Principles & Safety Invariants
 
-**G6 Brain v1.0.0-beta7.1**
+**G6 Brain v1.0.0-beta7.5**
 
 This document defines the engineering rules and safety philosophy for the Bitaxe G6 Brain project.
 
@@ -32,7 +32,7 @@ The following safety behaviors are **now implemented and enforced**:
 
 4. **Fail-Closed Input Range Protection**: BM1370 hard limits (`BM1370_F_MIN`/`MAX`, `BM1370_V_MIN`/`MAX`) and finiteness are strictly enforced on every input. Telemetry violating these bounds is never dismissed via an early return; it triggers an explicit `goto safety_layer` with `G6_SAFETY_INPUT_RANGE` so hardware clamps and the safety helpers still run. `G6_SAFETY_VOLTAGE` is reserved in the enum for a future real VRM-ripple check.
 
-5. **Internal Slew Limiting & Amnesia Protection**: Slew-rate constraints are managed directly inside the tracking loop. Upward slew is completely frozen during *any* safety anomaly (ASIC or VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery) to prevent the controller from advancing blindly on stale optimums.
+5. **Internal Slew Limiting & Amnesia Protection**: Slew-rate constraints are managed directly inside the tracking loop. The optimizer's slew step is suspended in both directions during *any* safety anomaly (thermal, VR thermal, input-range violation, power sanity, NER back-off, statistical outlier, or P-matrix recovery) — the controller neither advances on stale optimums nor tracks downward mid-anomaly; the safety derates are the only setpoint movers while an anomaly is active.
 
 6. **Numerical Stability**:
    - Full Joseph-form covariance update (symmetric congruence + measurement-noise `k kᵀ` injection + ridge regularization + symmetrization + per-diagonal clamping) — equals the exact RLS posterior covariance
