@@ -42,13 +42,15 @@ void setUp(void) {
     ESP_ERROR_CHECK(ret);
 
     /* Per-test NVS isolation: erase any fingerprint left by a previous test
-     * (or by a previous run of the suite on the same flash). g6_brain_init()
-     * warm-starts from NVS, so without this erase every test that runs after
-     * the save/load round-trip inherits its blob — cold_start arrives false
-     * ("Cold start flag clears" fails on its first assert) and P[0][0]
-     * arrives at 12345 (the fresh-fixture cov_condition ~= 1 check fails).
-     * The same mechanism failed the whole suite from the second run onward
-     * on unerased flash. Invisible under compile-only CI. */
+     * (or by a previous, possibly partial, run of the suite on the same
+     * flash). g6_brain_init() warm-starts from NVS, so without this erase
+     * every test between the save/load round-trip and the bad-size-blob test
+     * inherits the round-trip's blob — cold_start arrives false and "Cold
+     * start flag clears" fails on its first assert. A full pass happens to
+     * self-clean (the bad-size test's load-path erase removes the key), but
+     * a partial/selective run that stops after the round-trip leaves the
+     * blob, and the next session starts warm — the init and cold-start tests
+     * then fail at session start. Invisible under compile-only CI. */
     nvs_handle_t iso;
     if (nvs_open("g6_brain", NVS_READWRITE, &iso) == ESP_OK) {
         nvs_erase_key(iso, "theta_fingerprint");
