@@ -5,12 +5,10 @@
 
 #include "g6_brain.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/portmacro.h"
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
@@ -18,7 +16,15 @@
 static const char *TAG = "G6_BRAIN";
 static const char *NVS_NAMESPACE = "g6_brain";
 static const char *NVS_FINGERPRINT_KEY = "theta_fingerprint";
-static const uint32_t NVS_SAVE_INTERVAL_TICKS = 300000UL;
+/* 50 minutes between periodic fingerprint saves. Expressed in wall time via
+ * pdMS_TO_TICKS so the interval is independent of configTICK_RATE_HZ; the
+ * previous raw-tick constant (300000UL) happened to equal 50 min only at the
+ * ESP-IDF default 100 Hz tick and silently became 5 min at 1000 Hz. 50 min is
+ * deliberate: gentle on NVS flash wear, and longer than the fixed-point
+ * recovery cycle, so a freshly re-cold-started (amnesic) model is never
+ * persisted over a previously learned fingerprint (see docs/MONITORING.md,
+ * "Fixed-point operation"). */
+static const uint32_t NVS_SAVE_INTERVAL_TICKS = pdMS_TO_TICKS(50UL * 60UL * 1000UL);
 #define G6_NVS_FINGERPRINT_BUFFER_SIZE 1024
 
 /* The serialized fingerprint frame (version + size header + both theta vectors
@@ -92,10 +98,14 @@ static bool is_thermal_safe(const G6BrainState *brain, float temp_c)
 static void g6_safety_proactive_thermal_scale(G6BrainState *brain, float temp_c)
 {
     if (!brain || !isfinite(temp_c)) return;
-    /* Ceiling and margin sanity — mirrors the VR helper's entry guards.
-     * Defense-in-depth against a future refactor that corrupts these fields;
-     * normal operation never hits these paths because both are set from
-     * Kconfig-defined defaults and validated at init/reset. */
+    /* Ceiling and margin sanity. This helper owns only the proactive tier
+     * (the ASIC hard ceiling lives in is_thermal_safe()), so a non-finite
+     * margin may safely no-op the whole function at entry. The VR helper owns
+     * both tiers in one function and therefore guards its margin on the
+     * proactive branch instead, keeping the hard-ceiling tier
+     * margin-independent. Defense-in-depth against a future refactor that
+     * corrupts these fields; normal operation never hits these paths because
+     * both are set from Kconfig-defined defaults and validated at init/reset. */
     if (!isfinite(brain->temp_ceiling) || brain->temp_ceiling <= 0.0f) return;
     if (!isfinite(brain->temp_proactive_margin)) return;
     if (temp_c > (brain->temp_ceiling - brain->temp_proactive_margin)) {
@@ -113,11 +123,17 @@ static void g6_safety_proactive_vr_thermal_scale(G6BrainState *brain, float vr_t
 
     float proactive_threshold = brain->vr_temp_ceiling - brain->vr_temp_proactive_margin;
 
+    /* The margin guard sits on the proactive branch, not at entry: the
+     * hard-ceiling tier must fire regardless of margin health, so an entry
+     * return on a bad margin would wrongly disable it. A NaN margin already
+     * no-opped the proactive comparison via NaN semantics; the explicit
+     * isfinite makes that intentional and also covers an Inf margin, which
+     * previously drove proactive_threshold to -Inf and derated every tick. */
     if (vr_temp_c >= brain->vr_temp_ceiling) {
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.985f);
         brain->best_f = fmaxf(BM1370_F_MIN, brain->best_f * 0.96f);
         brain->last_safety_status = G6_SAFETY_VR_THERMAL;
-    } else if (vr_temp_c > proactive_threshold) {
+    } else if (isfinite(brain->vr_temp_proactive_margin) && vr_temp_c > proactive_threshold) {
         brain->best_v = fmaxf(BM1370_V_MIN, brain->best_v * 0.992f);
         brain->last_safety_status = G6_SAFETY_VR_THERMAL;
     }
@@ -192,7 +208,11 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
         uint32_t stored_version = 0;
         memcpy(&stored_version, buffer, sizeof(uint32_t));
 
-        if (stored_version == G6_NVS_SCHEMA_VERSION) {
+        uint32_t stored_size = 0;
+        memcpy(&stored_size, buffer + sizeof(uint32_t), sizeof(uint32_t));
+        uint32_t expected_payload = (uint32_t)(expected_blob_size - sizeof(uint32_t)*2);
+
+        if (stored_version == G6_NVS_SCHEMA_VERSION && stored_size == expected_payload) {
             size_t offset = sizeof(uint32_t)*2;
             memcpy(brain->theta, buffer + offset, sizeof(brain->theta));
             offset += sizeof(brain->theta);
@@ -203,6 +223,19 @@ esp_err_t g6_brain_load_nvs_fingerprint(G6BrainState *brain)
             memcpy(brain->power_P, buffer + offset, sizeof(brain->power_P));
             brain->nvs_valid = true;
             brain->cold_start = false;
+        } else if (stored_version == G6_NVS_SCHEMA_VERSION) {
+            /* Right version, right blob length, wrong in-frame payload size:
+             * interior header corruption. The size field was previously
+             * written but never read; verifying it costs nothing and turns a
+             * silently-trusted frame into the same WARN/erase/cold-start path
+             * as every other bad-blob case. */
+            ESP_LOGW(TAG, "NVS payload size field mismatch (got %" PRIu32 ", expected %" PRIu32 ") — erasing",
+                     stored_size, expected_payload);
+            brain->cold_start = true;
+            esp_err_t erase_err = nvs_erase_key(nvs, NVS_FINGERPRINT_KEY);
+            if (erase_err == ESP_OK) erase_err = nvs_commit(nvs);
+            if (erase_err != ESP_OK)
+                ESP_LOGE(TAG, "NVS erase failed: %s", esp_err_to_name(erase_err));
         } else {
             ESP_LOGW(TAG, "NVS schema mismatch (got v%" PRIu32 ", expected v%u) — erasing",
                      stored_version, (unsigned)G6_NVS_SCHEMA_VERSION);
@@ -439,6 +472,14 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     float entry_best_f = brain->best_f;
     float entry_best_v = brain->best_v;
 
+    /* Declared before any goto so they are initialized on every path that can
+     * reach safety_layer. This tick's 3-sigma verdicts; consumed by the
+     * last_efficiency gate at the tail. Paths that fail closed before the
+     * outlier test leave them false, preserving the pre-existing telemetry
+     * behavior on those paths. */
+    bool hr_outlier = false;
+    bool pw_outlier = false;
+
     if (!isfinite(f_mhz) || !isfinite(v_mv) || !isfinite(hr_ths) ||
         !isfinite(power_w) || !isfinite(temp_c) || !isfinite(vr_temp_c) ||
         !isfinite(err_pct) ||
@@ -544,8 +585,7 @@ esp_err_t g6_brain_update(G6BrainState *brain,
     if (!has_significant_innovation(brain->P, x)) goto safety_layer;
     if (brain->use_efficiency_mode && !has_significant_innovation(brain->power_P, x)) goto safety_layer;
 
-    bool hr_outlier = (err * err > 9.0f * (xPx + G6_HR_OUTLIER_VAR_FLOOR_THS2));
-    bool pw_outlier = false;
+    hr_outlier = (err * err > 9.0f * (xPx + G6_HR_OUTLIER_VAR_FLOOR_THS2));
     if (brain->use_efficiency_mode) {
         float y_power_pred = evaluate_quadratic(brain->power_theta, fn, vn);
         float power_err = power_w - y_power_pred;
@@ -696,12 +736,16 @@ safety_layer:
     g6_safety_proactive_vr_thermal_scale(brain, vr_temp_c);
     g6_safety_proactive_thermal_scale(brain, temp_c);
 
-    /* Only update efficiency telemetry when power_w is within sanity bounds.
-     * On fail-closed paths reached via the f/v bounds check above, the power_w
-     * sanity check was bypassed and the value may be out-of-range. Skipping the
-     * update preserves the last known-good value in telemetry rather than
-     * reporting a garbage ratio. */
-    if (hr_ths > 0.0f && power_w >= 0.0f && power_w <= 100.0f) {
+    /* Only update efficiency telemetry when power_w is within sanity bounds
+     * AND this tick's sample was not rejected as a 3-sigma outlier. On
+     * fail-closed paths reached via the f/v bounds check above, the power_w
+     * sanity check was bypassed and the value may be out-of-range; on the
+     * outlier path, hr_ths/power_w are finite and in-bounds yet judged
+     * implausible by the brain's own gate — a 5000 TH/s spike previously
+     * still wrote power/hr here. Skipping the update in both cases preserves
+     * the last known-good value in telemetry rather than a garbage ratio. */
+    if (!hr_outlier && !pw_outlier &&
+        hr_ths > 0.0f && power_w >= 0.0f && power_w <= 100.0f) {
         brain->last_efficiency = power_w / hr_ths;
     }
 
@@ -763,20 +807,61 @@ float g6_brain_get_model_quality(const G6BrainState *brain)
     return brain ? brain->model_quality : 0.0f;
 }
 
-/* Gershgorin upper-bound estimate of the covariance 2-norm condition number.
- * Eigenvalues of a symmetric P lie in the union of Gershgorin discs
- *     [P_ii - R_i, P_ii + R_i],   R_i = sum_{j!=i} |P_ij|,
- * so lambda_max <= max_i(P_ii + R_i) and lambda_min >= min_i(P_ii - R_i).
- * The ratio hi/lo (for lo > 0) is therefore a true upper bound on the condition
- * number. This is O(N^2), needs no iteration, and — unlike a bare
- * max_diag/min_diag ratio, which ignores all off-diagonal mass — cannot report
- * a near-singular matrix as well-conditioned. If the lower bound is
- * non-positive the matrix is (near-)indefinite/ill-conditioned and we return a
- * large sentinel so callers and self_test flag it rather than treating it as
- * healthy. */
+/* In-place-free Cholesky attempt on a symmetric matrix. Succeeds iff the
+ * matrix is numerically positive-definite (all pivots strictly positive).
+ * O(N^3) with N=6 is 6 multiply-accumulates x 21 entries — negligible, and it
+ * runs only on telemetry/self_test reads, never in the RLS update path. This
+ * is the definiteness certificate the previous Gershgorin sentinel tried to
+ * be: a non-positive pivot is positive evidence of a (near-)indefinite
+ * covariance, with no false alarms on healthy correlated matrices. */
+static bool cov_is_positive_definite(const float P[RLS_N][RLS_N])
+{
+    float L[RLS_N][RLS_N] = {{0}};
+    for (int j = 0; j < RLS_N; j++) {
+        float d = P[j][j];
+        for (int k = 0; k < j; k++) d -= L[j][k] * L[j][k];
+        if (!(d > 0.0f)) return false;   /* non-positive or NaN pivot */
+        L[j][j] = sqrtf(d);
+        for (int i = j + 1; i < RLS_N; i++) {
+            float s = P[i][j];
+            for (int k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+            L[i][j] = s / L[j][j];
+        }
+    }
+    return true;
+}
+
+/* Certified estimate of the covariance 2-norm condition number.
+ *
+ * Two regimes, both returning a certified one-sided bound:
+ *
+ *   1. Near-diagonal P (all Gershgorin lower discs positive): return
+ *      hi/lo with R_i = sum_{j!=i}|P_ij|, a true UPPER bound on cond(P),
+ *      tight for the fresh 1e5*I covariance (reads ~1).
+ *
+ *   2. Otherwise — which is every covariance that has absorbed at least one
+ *      update, since the correlated quadratic basis (fn^2, vn^2, fn*vn, fn,
+ *      vn, 1) puts off-diagonal mass into P immediately — Gershgorin's lower
+ *      bound is non-positive and therefore UNINFORMATIVE, not evidence of
+ *      indefiniteness. (The pre-beta7.5 code conflated the two: it returned
+ *      the ill-conditioned sentinel here, which made self_test fail and
+ *      model_under_excited read true on provably healthy converged models —
+ *      a measured true condition number of 7.3 reported as 1e12.) Instead:
+ *      certify definiteness directly via Cholesky, and if PD, return
+ *      max_diag/min_diag, a true LOWER bound on cond(P) (for symmetric P,
+ *      lambda_min <= P_ii <= lambda_max for every i). Exceeding the warn/fail
+ *      thresholds on a lower bound is positive evidence of ill-conditioning;
+ *      at a fixed operating point the collapse of variance along the single
+ *      excited direction drives this ratio up by orders of magnitude, which
+ *      is exactly the under-excitation signature the beta7 observability
+ *      feature exists to expose.
+ *
+ * Only a failed Cholesky — certified loss of positive-definiteness — returns
+ * the RLS_P_CLAMP_MAX/RLS_P_CLAMP_MIN sentinel (~1e12). */
 static float cov_condition_estimate(const float P[RLS_N][RLS_N])
 {
     float lo = 1e30f, hi = 0.0f;
+    float dmin = 1e30f, dmax = 0.0f;
     for (int i = 0; i < RLS_N; i++) {
         float radius = 0.0f;
         for (int j = 0; j < RLS_N; j++) if (j != i) radius += fabsf(P[i][j]);
@@ -784,9 +869,17 @@ static float cov_condition_estimate(const float P[RLS_N][RLS_N])
         float disc_hi = P[i][i] + radius;
         if (disc_lo < lo) lo = disc_lo;
         if (disc_hi > hi) hi = disc_hi;
+        if (P[i][i] < dmin) dmin = P[i][i];
+        if (P[i][i] > dmax) dmax = P[i][i];
     }
-    if (lo <= 1e-9f) return RLS_P_CLAMP_MAX / RLS_P_CLAMP_MIN; /* ~1e12 -> "ill-conditioned" */
-    return hi / lo;
+
+    if (lo > 1e-9f) return hi / lo;                       /* certified upper bound */
+
+    if (!cov_is_positive_definite(P))
+        return RLS_P_CLAMP_MAX / RLS_P_CLAMP_MIN;         /* certified indefinite */
+
+    if (dmin < RLS_P_CLAMP_MIN) dmin = RLS_P_CLAMP_MIN;   /* hand-fixtured guard */
+    return dmax / dmin;                                   /* certified lower bound */
 }
 
 float g6_brain_get_cov_condition(const G6BrainState *brain)
