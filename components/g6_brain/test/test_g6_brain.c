@@ -675,7 +675,9 @@ TEST_CASE("Dinkelbach optimizer improves J/TH over naive hashrate-only point", "
     /* Compute J/TH at starting point and at the optimizer's result. */
     float fn_start = (775.0f - BM1370_F_CENTER) / BM1370_F_SCALE;
     float fn_opt   = (opt_f  - BM1370_F_CENTER) / BM1370_F_SCALE;
-    float vn       = (1220.0f - BM1370_V_CENTER) / BM1370_V_SCALE;
+    /* v is held at BM1370_V_CENTER (1220 mV) throughout this fixture, so
+     * vn = 0 and every vn term of the quadratic vanishes; the manual J/TH
+     * expressions below therefore use the fn terms only. */
 
     float hr_start = test_brain.theta[0]*fn_start*fn_start + test_brain.theta[3]*fn_start + test_brain.theta[5];
     float pw_start = test_brain.power_theta[0]*fn_start*fn_start + test_brain.power_theta[3]*fn_start + test_brain.power_theta[5];
@@ -877,4 +879,169 @@ TEST_CASE("last_update_timestamp advances iff update_count advances", "[g6_brain
     TEST_ASSERT_GREATER_THAN(uc_after_accept, test_brain.update_count);
     TEST_ASSERT_GREATER_THAN(ts_after_accept, test_brain.last_update_timestamp);
     TEST_ASSERT_EQUAL(G6_SAFETY_OK, test_brain.last_safety_status);
+}
+
+/* ====================== CONDITIONING CERTIFICATES & TELEMETRY INTEGRITY ======================
+ * Added with the beta7.5 FQA-3/FQA-5 fixes. The common thread: every fixture
+ * here is a *reachable* operating state (or a corruption of one), where the
+ * pre-fix suite only ever queried cov_condition / self_test on fresh or
+ * hand-built diagonal matrices — the coverage hole that let a 100%
+ * false-positive conditioning sentinel ship through 42 green tests. */
+
+TEST_CASE("self_test and cov_condition stay healthy on a converged, well-excited model", "[g6_brain]") {
+    /* FQA-3 regression guard. A fully converged, richly excited model is the
+     * healthiest state the estimator can reach; the diagnostics must say so.
+     * Pre-fix, the first accepted update pushed the minimum Gershgorin disc
+     * non-positive and the estimate returned its ill-conditioned sentinel
+     * forever after: this exact fixture read cov_condition = 1e12 with a
+     * measured true condition number of 7.3, self_test returned ESP_FAIL, and
+     * model_under_excited read true — all three asserts below failed. */
+    float th_true[RLS_N] = { -0.05f, -0.02f, 0.01f, 0.06f, 0.0f, 1.15f };
+    for (int sweep = 0; sweep < 12; sweep++) {
+        for (int fi = 0; fi < 10; fi++) {
+            for (int vi = 0; vi < 7; vi++) {
+                float f = 450.0f + fi * 50.0f;
+                float v = 1100.0f + vi * 40.0f;
+                float fn = (f - BM1370_F_CENTER) / BM1370_F_SCALE;
+                float vn = (v - BM1370_V_CENTER) / BM1370_V_SCALE;
+                float hr = th_true[0]*fn*fn + th_true[1]*vn*vn + th_true[2]*fn*vn
+                         + th_true[3]*fn + th_true[4]*vn + th_true[5];
+                g6_brain_update(&test_brain, f, v, hr, 18.0f, 50.0f,
+                                G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+            }
+        }
+    }
+
+    TEST_ASSERT_FALSE(test_brain.cold_start);
+    TEST_ASSERT_EQUAL(ESP_OK, g6_brain_self_test(&test_brain));
+
+    G6BrainTelemetry t;
+    g6_brain_get_telemetry(&test_brain, &t);
+    /* Float-true checks: certified lower bound must be sane (>= 1) and far
+     * below the warn threshold on a healthy converged covariance. */
+    TEST_ASSERT_TRUE(t.cov_condition >= 1.0f);
+    TEST_ASSERT_TRUE(t.cov_condition < G6_EXCITATION_COND_WARN);
+    TEST_ASSERT_FALSE(t.model_under_excited);
+}
+
+TEST_CASE("Under-excitation flag fires on certified degeneracy before fixed-point recovery", "[g6_brain]") {
+    /* Fixed-point contract: when an unvaried operating point drives the
+     * covariance numerically indefinite, the telemetry flag and self_test
+     * must report it BEFORE the update path's own xPx < 0 guard self-heals
+     * (Cholesky certifies loss of definiteness strictly earlier than the
+     * single-direction xPx test can). Tick indices are intentionally not
+     * asserted — float32 rounding on other FPUs may shift the exact onset —
+     * only the ordering contract: certified-degenerate visibility, then
+     * recovery. On the host the flag fires ~5 samples before recovery. */
+    bool flag_seen = false;
+    bool recovered = false;
+    uint32_t prev_uc = 0;
+
+    for (int i = 0; i < 200 && !recovered; i++) {
+        g6_brain_update(&test_brain, 815.0f, 1210.0f, 1.21f, 19.0f, 55.0f,
+                        G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+        G6BrainTelemetry t;
+        g6_brain_get_telemetry(&test_brain, &t);
+
+        if (t.update_count < prev_uc) {
+            recovered = true;   /* cold-start recovery wiped the counter */
+            break;
+        }
+        prev_uc = t.update_count;
+
+        if (t.model_under_excited) {
+            flag_seen = true;
+            /* Flag and diagnostics must agree while degenerate. */
+            TEST_ASSERT_TRUE(t.cov_condition > G6_EXCITATION_COND_WARN);
+            TEST_ASSERT_EQUAL(ESP_FAIL, g6_brain_self_test(&test_brain));
+        }
+    }
+
+    TEST_ASSERT_TRUE(flag_seen);
+    TEST_ASSERT_TRUE(recovered);
+}
+
+TEST_CASE("self_test detects an indefinite covariance that passes diagonal and symmetry checks", "[g6_brain]") {
+    /* The definiteness certificate must catch what the older checks cannot:
+     * a symmetric matrix with every diagonal inside the clamp range that is
+     * nonetheless indefinite via off-diagonal correlation. The 2x2 block
+     * [[1,2],[2,1]] has eigenvalues {3, -1}. Pre-fix this also failed
+     * self_test, but only via the sentinel that fired on healthy matrices
+     * too; post-fix the sentinel is reserved for exactly this case. */
+    test_brain.P[0][0] = 1.0f;
+    test_brain.P[1][1] = 1.0f;
+    test_brain.P[0][1] = 2.0f;
+    test_brain.P[1][0] = 2.0f;
+
+    TEST_ASSERT_EQUAL(ESP_FAIL, g6_brain_self_test(&test_brain));
+
+    G6BrainTelemetry t;
+    g6_brain_get_telemetry(&test_brain, &t);
+    TEST_ASSERT_EQUAL_FLOAT(RLS_P_CLAMP_MAX / RLS_P_CLAMP_MIN, t.cov_condition);
+}
+
+TEST_CASE("last_efficiency retains last known-good value when the sample is a rejected outlier", "[g6_brain]") {
+    /* FQA-5 regression guard. A finite, in-bounds hashrate that the brain's
+     * own 3-sigma gate rejects must not reach the efficiency telemetry.
+     * Pre-fix, the tail gate checked only hr > 0 and power sanity, so a
+     * 500 TH/s spike against a ~1.2 TH/s model wrote power/hr = 0.03 W/TH
+     * into last_efficiency — a garbage ratio from a sample the brain itself
+     * had just refused to learn from. */
+    for (int i = 0; i < 20; i++) {
+        g6_brain_update(&test_brain, 700.0f, 1180.0f, 1.0f, 15.0f, 50.0f,
+                        G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+    }
+    G6BrainTelemetry t;
+    g6_brain_get_telemetry(&test_brain, &t);
+    TEST_ASSERT_EQUAL_FLOAT(15.0f, t.last_efficiency);
+
+    /* err^2 ~ 2.5e5 against 9*(xPx + 0.01) — unambiguous 3-sigma reject. */
+    g6_brain_update(&test_brain, 700.0f, 1180.0f, 500.0f, 15.0f, 50.0f,
+                    G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+    TEST_ASSERT_EQUAL(G6_SAFETY_SAMPLE_QUALITY, test_brain.last_safety_status);
+
+    g6_brain_get_telemetry(&test_brain, &t);
+    TEST_ASSERT_EQUAL_FLOAT(15.0f, t.last_efficiency);
+
+    /* A subsequent accepted sample must update it again. */
+    g6_brain_update(&test_brain, 700.0f, 1180.0f, 1.0f, 16.0f, 50.0f,
+                    G6_VR_TEMP_NO_SENSOR, 0.5f, 40);
+    g6_brain_get_telemetry(&test_brain, &t);
+    TEST_ASSERT_EQUAL_FLOAT(16.0f, t.last_efficiency);
+}
+
+TEST_CASE("NVS fingerprint with corrupt in-frame size field is rejected and erased", "[g6_brain]") {
+    /* The frame's payload-size field was written since the schema's
+     * introduction but never read back; a frame with a corrupted interior
+     * header loaded silently. Post-fix the loader verifies it and routes a
+     * mismatch through the same WARN/erase/cold-start path as every other
+     * bad-blob case. */
+    TEST_ASSERT_EQUAL(ESP_OK, g6_brain_save_nvs_fingerprint(&test_brain));
+
+    nvs_handle_t nvs;
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_open("g6_brain", NVS_READWRITE, &nvs));
+    uint8_t buffer[1024];
+    size_t blob_size = sizeof(buffer);
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_get_blob(nvs, "theta_fingerprint", buffer, &blob_size));
+
+    buffer[sizeof(uint32_t)] ^= 0xFF;   /* corrupt the size field, keep version + length intact */
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_set_blob(nvs, "theta_fingerprint", buffer, blob_size));
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_commit(nvs));
+    nvs_close(nvs);
+
+    /* Poison a coefficient so acceptance of the corrupt frame would be visible. */
+    test_brain.theta[0] = 42.0f;
+    test_brain.nvs_valid = false;
+
+    TEST_ASSERT_EQUAL(ESP_OK, g6_brain_load_nvs_fingerprint(&test_brain));
+    TEST_ASSERT_FALSE(test_brain.nvs_valid);
+    TEST_ASSERT_TRUE(test_brain.cold_start);
+    TEST_ASSERT_EQUAL_FLOAT(42.0f, test_brain.theta[0]);   /* frame was not applied */
+
+    /* The corrupt blob must be gone, exactly like the other bad-blob paths. */
+    TEST_ASSERT_EQUAL(ESP_OK, nvs_open("g6_brain", NVS_READONLY, &nvs));
+    size_t sz = 0;
+    esp_err_t get_err = nvs_get_blob(nvs, "theta_fingerprint", NULL, &sz);
+    nvs_close(nvs);
+    TEST_ASSERT_EQUAL(ESP_ERR_NVS_NOT_FOUND, get_err);
 }
