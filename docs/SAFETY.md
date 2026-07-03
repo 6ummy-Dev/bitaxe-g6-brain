@@ -105,7 +105,7 @@ Monitor these values in production:
 - `best_f` / `best_v`
 - `temp_c` and `vr_temp_c` (when available)
 - NVS auto-save messages
-- `g6_brain_get_cov_condition()` (Gershgorin upper-bound estimate of the condition number)
+- `g6_brain_get_cov_condition()` (certified bound on the covariance condition number — see `API.md` for the two-path semantics)
 - `safety_status` from telemetry
 - `update_count` deltas (the canonical signal for "is the brain actually accepting samples" — a rising `update_count` with `safety_status = G6_SAFETY_OK` is the steady-state happy path; a flat `update_count` with `safety_status = G6_SAFETY_OK` means samples are being rejected on the non-anomaly quality gates)
 

@@ -96,9 +96,10 @@ If you see any of these, investigate before continuing:
 ## Phase Recommendations
 
 **Phase 1 — Observation (first 24h):**
-- Start in `G6_MODE_RECOMMEND` (computes optimal but never mutates `best_f`/`best_v`).
+- Start in `G6_MODE_RECOMMEND` (computes recommendations without applying them; note that safety derates still adjust `best_f`/`best_v` in **every** mode — only the optimizer's slewed setpoint changes are mode-gated).
 - Or use `G6_MODE_OBSERVE_ONLY` for pure telemetry/safety validation if you don't yet want recommendations.
-- Watch `model_quality` climb. Below 0.60 is normal during early learning.
+- What this phase validates: integration wiring, telemetry plumbing, and safety-layer behavior. What it does **not** do: identify the response surface. At a fixed operating point the six-term model cannot become identified — the covariance periodically degenerates and the brain self-heals by design, so expect occasional `P matrix diverged — cold-start recovery applied` WARN lines and a sawtoothing `update_count`. That is normal at a fixed setpoint, not a fault (see `MONITORING.md`).
+- `model_quality` will read high quickly — it measures prediction fit at the visited point, not identifiability. Don't read it as "the model is ready"; identification needs operating-point variation (see [Model identifiability](API.md#model-identifiability--under-excitation)).
 - If your hardware provides VR temperature, pass the value to enable two-tier thermal protection.
 
 **Phase 2 — Validation (next 24h):**
